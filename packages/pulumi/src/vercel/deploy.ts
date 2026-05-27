@@ -2,6 +2,7 @@ import * as path from "node:path";
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 import { hashDirectory } from "../hash.js";
+import type { VercelProject } from "./project.js";
 import type { VercelProvider } from "./provider.js";
 
 /** Options type for VercelDeploy — replaces Pulumi's native `provider` field. */
@@ -11,12 +12,21 @@ type VercelDeployOptions = Omit<
 > & {
 	/** Vercel authentication context. */
 	provider: VercelProvider;
+
+	/**
+	 * VercelProject resource to source the project ID from.
+	 * When provided, `args.projectId` is optional and ignored if both are given.
+	 */
+	project?: VercelProject;
 };
 
 /** Args for VercelDeploy. */
 export interface VercelDeployArgs {
-	/** Vercel project ID (Output from `vercel.Project`). */
-	projectId: pulumi.Input<string>;
+	/**
+	 * Vercel project ID.
+	 * Required when `opts.project` is not provided.
+	 */
+	projectId?: pulumi.Input<string>;
 
 	/** Relative path from monorepo root to the app directory (e.g. `"apps/nexus"`). */
 	rootDirectory: string;
@@ -58,9 +68,19 @@ export class VercelDeploy extends pulumi.ComponentResource {
 		args: VercelDeployArgs,
 		opts: VercelDeployOptions,
 	) {
-		const { provider, ...pulumiOpts } = opts;
+		const { provider, project, ...pulumiOpts } = opts;
 
 		super("infracraft:vercel:Deploy", name, {}, pulumiOpts);
+
+		const projectId = project
+			? project.id
+			: (args.projectId as pulumi.Input<string>);
+
+		if (!projectId) {
+			throw new Error(
+				"VercelDeploy: either `args.projectId` or `opts.project` must be provided",
+			);
+		}
 
 		const appDir = path.join(args.monorepoRoot, args.rootDirectory);
 
@@ -95,7 +115,7 @@ export class VercelDeploy extends pulumi.ComponentResource {
 				environment: {
 					VERCEL_TOKEN: provider.token,
 					VERCEL_ORG_ID: provider.teamId,
-					VERCEL_PROJECT_ID: args.projectId,
+					VERCEL_PROJECT_ID: projectId,
 				},
 			},
 			{

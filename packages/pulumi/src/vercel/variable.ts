@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import type { VercelProject } from "./project.js";
 import type { VercelProvider } from "./provider.js";
 
 const VERCEL_API_URL = "https://api.vercel.com";
@@ -386,12 +387,21 @@ type VercelVariableOptions = Omit<
 > & {
 	/** Vercel authentication context. */
 	provider: VercelProvider;
+
+	/**
+	 * VercelProject resource to source the project ID from.
+	 * When provided, `args.projectId` is optional and ignored if both are given.
+	 */
+	project?: VercelProject;
 };
 
 /** Args for VercelVariable. */
 export interface VercelVariableArgs {
-	/** Vercel project ID (Output from `vercel.Project`). */
-	projectId: pulumi.Input<string>;
+	/**
+	 * Vercel project ID.
+	 * Required when `opts.project` is not provided.
+	 */
+	projectId?: pulumi.Input<string>;
 
 	/** Key-value map of environment variable names to their values. */
 	variables: pulumi.Input<Record<string, pulumi.Input<string>>>;
@@ -419,16 +429,26 @@ export class VercelVariable extends pulumi.ComponentResource {
 		args: VercelVariableArgs,
 		opts: VercelVariableOptions,
 	) {
-		const { provider, ...pulumiOpts } = opts;
+		const { provider, project, ...pulumiOpts } = opts;
 
 		super("infracraft:vercel:Variable", name, {}, pulumiOpts);
+
+		const projectId = project
+			? project.id
+			: (args.projectId as pulumi.Input<string>);
+
+		if (!projectId) {
+			throw new Error(
+				"VercelVariable: either `args.projectId` or `opts.project` must be provided",
+			);
+		}
 
 		const resource = new VercelVariableResource(
 			`${name}-resource`,
 			{
 				token: provider.token,
 				teamId: provider.teamId,
-				projectId: args.projectId,
+				projectId,
 				variables: args.variables,
 			},
 			{ parent: this },
