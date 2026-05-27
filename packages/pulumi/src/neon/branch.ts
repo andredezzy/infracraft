@@ -182,7 +182,7 @@ export interface NeonBranchArgs {
  */
 export class NeonBranch extends pulumi.ComponentResource {
 	/** Neon branch ID. */
-	public readonly branchId: pulumi.Output<string>;
+	public readonly id: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -197,14 +197,14 @@ export class NeonBranch extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
-				projectId: project.projectId,
+				projectId: project.id,
 				name: args.name,
 			},
 			{ parent: this },
 		);
 
-		this.branchId = resource.id;
+		this.id = resource.id;
 
-		this.registerOutputs({ branchId: this.branchId });
+		this.registerOutputs({ id: this.id });
 	}
 }

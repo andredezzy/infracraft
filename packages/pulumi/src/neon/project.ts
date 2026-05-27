@@ -191,7 +191,7 @@ export interface NeonProjectArgs {
  */
 export class NeonProject extends pulumi.ComponentResource {
 	/** Neon-assigned project ID. */
-	public readonly projectId: pulumi.Output<string>;
+	public readonly id: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -212,8 +212,8 @@ export class NeonProject extends pulumi.ComponentResource {
 			{ parent: this },
 		);
 
-		this.projectId = resource.projectId;
+		this.id = resource.projectId;
 
-		this.registerOutputs({ projectId: this.projectId });
+		this.registerOutputs({ id: this.id });
 	}
 }

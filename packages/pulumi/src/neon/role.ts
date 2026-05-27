@@ -237,8 +237,8 @@ export class NeonRole extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
-				projectId: project.projectId,
-				branchId: branch.branchId,
+				projectId: project.id,
+				branchId: branch.id,
 				name: args.name,
 			},
 			{ parent: this },
