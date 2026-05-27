@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { RailwayClient } from "./client.js";
+import type { RailwayProvider } from "./provider.js";
 
 /** Resolved inputs for the Railway project dynamic provider. */
 export interface RailwayProjectInputs {
@@ -173,7 +174,7 @@ async function getOrCreateProjectToken(
  * Deletion is a no-op (with a warning) to prevent accidental project removal.
  * Name changes trigger replacement.
  */
-class RailwayProjectProvider implements pulumi.dynamic.ResourceProvider {
+class RailwayProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: RailwayProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -347,55 +348,23 @@ class RailwayProjectProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
-/**
- * Manages a Railway project with adopt-or-create semantics.
- *
- * Discovers or creates the project, resolves the production environment ID,
- * and provisions a project-scoped token named "pulumi" for CLI deploys.
- * The token is exposed as a secret output — the consumer decides how to store it.
- *
- * @example
- * ```typescript
- * const project = new RailwayProject("railway-project", {
- *   token: railwayConfig.token,
- *   name: "my-app",
- *   description: "Railway services for my-app",
- * });
- *
- * // Use outputs downstream
- * const serviceVar = new RailwayVariable("...", {
- *   projectId: project.projectId,
- *   environmentId: project.productionEnvironmentId,
- *   ...
- * });
- * ```
- */
-export class RailwayProject extends pulumi.dynamic.Resource {
-	/** Railway project UUID. */
+/** Internal dynamic resource — not part of the public API. */
+class RailwayProjectResource extends pulumi.dynamic.Resource {
 	public declare readonly projectId: pulumi.Output<string>;
-
-	/** Railway production environment UUID. */
 	public declare readonly productionEnvironmentId: pulumi.Output<string>;
-
-	/** Railway project-scoped token (secret). */
 	public declare readonly projectToken: pulumi.Output<string>;
 
 	constructor(
 		name: string,
 		args: {
-			/** Railway API bearer token. */
 			token: pulumi.Input<string>;
-
-			/** Project display name to find and adopt or create. */
 			name: pulumi.Input<string>;
-
-			/** Optional description shown in Railway's dashboard. */
 			description?: pulumi.Input<string>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayProjectProvider(),
+			new RailwayProjectResourceProvider(),
 			name,
 			{
 				...args,
@@ -405,5 +374,78 @@ export class RailwayProject extends pulumi.dynamic.Resource {
 			},
 			opts,
 		);
+	}
+}
+
+/** Options type for RailwayProject — replaces Pulumi's native `provider` field. */
+type RailwayProjectOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Railway authentication context. */
+	provider: RailwayProvider;
+};
+
+/** Args for RailwayProject. */
+export interface RailwayProjectArgs {
+	/** Project display name to find and adopt or create. */
+	name: pulumi.Input<string>;
+
+	/** Optional description shown in Railway's dashboard. */
+	description?: pulumi.Input<string>;
+}
+
+/**
+ * Manages a Railway project with adopt-or-create semantics.
+ *
+ * Discovers or creates the project, resolves the production environment ID,
+ * and provisions a project-scoped token named "pulumi" for CLI deploys.
+ *
+ * @example
+ * ```typescript
+ * const project = new RailwayProject("my-project", {
+ *   name: "my-app",
+ *   description: "Railway services for my-app",
+ * }, { provider });
+ *
+ * // Use outputs downstream
+ * const environment = new RailwayEnvironment("production", {
+ *   name: "production",
+ * }, { provider, project });
+ * ```
+ */
+export class RailwayProject extends pulumi.ComponentResource {
+	/** Railway project UUID. */
+	public readonly projectId: pulumi.Output<string>;
+
+	/** Railway project-scoped token (secret). */
+	public readonly projectToken: pulumi.Output<string>;
+
+	constructor(
+		name: string,
+		args: RailwayProjectArgs,
+		opts: RailwayProjectOptions,
+	) {
+		const { provider, ...pulumiOpts } = opts;
+
+		super("infracraft:railway:Project", name, {}, pulumiOpts);
+
+		const resource = new RailwayProjectResource(
+			`${name}-resource`,
+			{
+				token: provider.token,
+				name: args.name,
+				description: args.description,
+			},
+			{ parent: this },
+		);
+
+		this.projectId = resource.projectId;
+		this.projectToken = resource.projectToken;
+
+		this.registerOutputs({
+			projectId: this.projectId,
+			projectToken: this.projectToken,
+		});
 	}
 }

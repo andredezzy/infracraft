@@ -1,5 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import { NeonClient } from "./client.js";
+import type { NeonBranch } from "./branch.js";
+import type { NeonProject } from "./project.js";
+import type { NeonProvider } from "./provider.js";
 
 /** Resolved inputs for the Neon endpoint dynamic provider. */
 export interface NeonEndpointInputs {
@@ -52,11 +55,6 @@ interface EndpointListResponse {
 
 /**
  * Finds an existing read-write endpoint for a branch.
- *
- * @param client Authenticated Neon API client
- * @param projectId Neon project ID
- * @param branchId Branch ID to search within
- * @returns The endpoint ID and host if found, `undefined` otherwise
  */
 async function findEndpointByBranch(
 	client: NeonClient,
@@ -78,13 +76,7 @@ async function findEndpointByBranch(
  * Uses adopt-or-create on `create()`: finds an existing read-write endpoint
  * on the target branch before creating a new one.
  */
-class NeonEndpointProvider implements pulumi.dynamic.ResourceProvider {
-	/**
-	 * Creates or adopts a Neon endpoint on the target branch.
-	 *
-	 * @param inputs Resolved endpoint configuration
-	 * @returns The Neon endpoint ID as the resource ID
-	 */
+class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: NeonEndpointInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -134,14 +126,6 @@ class NeonEndpointProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Updates endpoint compute settings in place.
-	 *
-	 * @param id Current Neon endpoint ID
-	 * @param _olds Previous persisted state
-	 * @param news New desired configuration
-	 * @returns Updated outputs with current host
-	 */
 	async update(
 		id: string,
 		_olds: NeonEndpointOutputs,
@@ -163,14 +147,6 @@ class NeonEndpointProvider implements pulumi.dynamic.ResourceProvider {
 		return { outs: { ...news, host: result.endpoint.host } };
 	}
 
-	/**
-	 * Reads current state for `pulumi refresh`.
-	 *
-	 * @param id Current Neon endpoint ID
-	 * @param props Last known persisted state
-	 * @returns Refreshed resource ID and properties
-	 * @throws {Error} If the endpoint no longer exists
-	 */
 	async read(
 		id: string,
 		props: NeonEndpointOutputs,
@@ -193,9 +169,6 @@ class NeonEndpointProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Deletes the Neon endpoint. Silently succeeds if already deleted.
-	 */
 	async delete(id: string, props: NeonEndpointOutputs): Promise<void> {
 		const client = new NeonClient(props.apiKey);
 
@@ -208,9 +181,6 @@ class NeonEndpointProvider implements pulumi.dynamic.ResourceProvider {
 		}
 	}
 
-	/**
-	 * Compares old and new inputs. Changing `projectId` or `branchId` triggers replacement.
-	 */
 	async diff(
 		_id: string,
 		olds: NeonEndpointOutputs,
@@ -236,56 +206,92 @@ class NeonEndpointProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
+/** Internal dynamic resource — not part of the public API. */
+class NeonEndpointResource extends pulumi.dynamic.Resource {
+	public declare readonly host: pulumi.Output<string>;
+
+	constructor(
+		name: string,
+		args: {
+			apiKey: pulumi.Input<string>;
+			projectId: pulumi.Input<string>;
+			branchId: pulumi.Input<string>;
+			minCu: pulumi.Input<number>;
+			maxCu: pulumi.Input<number>;
+			suspendTimeout: pulumi.Input<number>;
+		},
+		opts?: pulumi.CustomResourceOptions,
+	) {
+		super(new NeonEndpointResourceProvider(), name, { ...args, host: undefined }, opts);
+	}
+}
+
+/** Options type for NeonEndpoint — replaces Pulumi's native `provider` field. */
+type NeonEndpointOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Neon authentication context. */
+	provider: NeonProvider;
+
+	/** Neon project context. */
+	project: NeonProject;
+
+	/** Neon branch context. */
+	branch: NeonBranch;
+};
+
+/** Args for NeonEndpoint. */
+export interface NeonEndpointArgs {
+	/** Minimum compute units. */
+	minCu: pulumi.Input<number>;
+
+	/** Maximum compute units. */
+	maxCu: pulumi.Input<number>;
+
+	/** Seconds of inactivity before suspending. */
+	suspendTimeout: pulumi.Input<number>;
+}
+
 /**
  * Manages a Neon compute endpoint with adopt-or-create semantics.
  * Exposes `host` as an output for connection string composition.
  *
  * @example
  * ```typescript
- * const endpoint = new NeonEndpoint("neon-endpoint-production", {
- *   apiKey: config.requireSecret("neonApiKey"),
- *   projectId: "quiet-forest-69719462",
- *   branchId: branch.id,
+ * const endpoint = new NeonEndpoint("production", {
  *   minCu: 0.25,
- *   maxCu: 2,
+ *   maxCu: 1,
  *   suspendTimeout: 0,
- * });
- *
- * const host = endpoint.host;
+ * }, { provider, project, branch });
  * ```
  */
-export class NeonEndpoint extends pulumi.dynamic.Resource {
+export class NeonEndpoint extends pulumi.ComponentResource {
 	/** Endpoint hostname for connection strings. */
-	public declare readonly host: pulumi.Output<string>;
+	public readonly host: pulumi.Output<string>;
 
-	/**
-	 * @param name Pulumi resource name
-	 * @param args Endpoint configuration inputs
-	 * @param opts Standard Pulumi resource options
-	 */
 	constructor(
 		name: string,
-		args: {
-			/** Neon API key. */
-			apiKey: pulumi.Input<string>;
-
-			/** Neon project ID. */
-			projectId: pulumi.Input<string>;
-
-			/** Branch ID to attach the endpoint to. */
-			branchId: pulumi.Input<string>;
-
-			/** Minimum compute units. */
-			minCu: pulumi.Input<number>;
-
-			/** Maximum compute units. */
-			maxCu: pulumi.Input<number>;
-
-			/** Seconds of inactivity before suspending. */
-			suspendTimeout: pulumi.Input<number>;
-		},
-		opts?: pulumi.CustomResourceOptions,
+		args: NeonEndpointArgs,
+		opts: NeonEndpointOptions,
 	) {
-		super(new NeonEndpointProvider(), name, { ...args, host: undefined }, opts);
+		const { provider, project, branch, ...pulumiOpts } = opts;
+
+		super("infracraft:neon:Endpoint", name, {}, pulumiOpts);
+
+		const resource = new NeonEndpointResource(
+			`${name}-resource`,
+			{
+				apiKey: provider.apiKey,
+				projectId: project.projectId,
+				branchId: branch.branchId,
+				...args,
+			},
+			{ parent: this },
+		);
+
+		this.host = resource.host;
+
+		this.registerOutputs({ host: this.host });
 	}
 }

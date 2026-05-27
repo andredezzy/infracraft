@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import type { VercelProvider } from "./provider.js";
 
 const VERCEL_API_URL = "https://api.vercel.com";
 
@@ -28,10 +29,6 @@ interface VercelVariableOutputs extends VercelVariableInputs {
 
 /**
  * Computes a deterministic content hash of a variables map.
- * Uses dynamic import to avoid capturing `crypto` in the provider closure.
- *
- * @param variables Key-value map of environment variables
- * @returns Hex-encoded SHA-256 hash
  */
 async function hashVariables(
 	variables: Record<string, string>,
@@ -62,11 +59,6 @@ interface VercelEnvVar {
 
 /**
  * Fetches all environment variables for a Vercel project with decrypted values.
- *
- * @param token Vercel API token
- * @param teamId Vercel team ID
- * @param projectId Vercel project ID
- * @returns Array of env vars with decrypted values
  */
 async function fetchEnvVars(
 	token: string,
@@ -104,13 +96,6 @@ async function fetchEnvVars(
 
 /**
  * Creates a single Vercel env var targeting all environments.
- *
- * @param token Vercel API token
- * @param teamId Vercel team ID
- * @param projectId Vercel project ID
- * @param key Env var name
- * @param value Env var value
- * @returns The created env var with its Vercel-assigned ID
  */
 async function createEnvVar(
 	token: string,
@@ -164,12 +149,6 @@ async function createEnvVar(
 
 /**
  * Updates a single Vercel env var value.
- *
- * @param token Vercel API token
- * @param teamId Vercel team ID
- * @param projectId Vercel project ID
- * @param envId Vercel-assigned env var ID
- * @param value New value
  */
 async function updateEnvVar(
 	token: string,
@@ -199,11 +178,6 @@ async function updateEnvVar(
 
 /**
  * Deletes a single Vercel env var.
- *
- * @param token Vercel API token
- * @param teamId Vercel team ID
- * @param projectId Vercel project ID
- * @param envId Vercel-assigned env var ID
  */
 async function deleteEnvVar(
 	token: string,
@@ -228,19 +202,10 @@ async function deleteEnvVar(
 
 /**
  * Dynamic provider implementing CRUD for Vercel project environment variables.
- *
- * Manages all env vars for a project as a batch (like RailwayVariable).
- * The `read()` method fetches decrypted values from Vercel's API,
- * enabling drift detection during `pulumi refresh`.
  */
-class VercelVariableProvider implements pulumi.dynamic.ResourceProvider {
-	/**
-	 * Creates all env vars on the target Vercel project.
-	 * Handles ENV_CONFLICT by updating existing vars instead of failing.
-	 *
-	 * @param inputs Resolved variable configuration
-	 * @returns Composite ID in the form `{projectId}:variables`
-	 */
+class VercelVariableResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(
 		inputs: VercelVariableInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -268,15 +233,6 @@ class VercelVariableProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Updates variables by deleting removed keys, creating new keys,
-	 * and patching changed values.
-	 *
-	 * @param _id Current resource ID
-	 * @param olds Previous persisted state
-	 * @param news New desired configuration
-	 * @returns Updated outputs with current envIds
-	 */
 	async update(
 		_id: string,
 		olds: VercelVariableOutputs,
@@ -337,14 +293,6 @@ class VercelVariableProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Reads current state from Vercel API with decrypted values.
-	 * Enables drift detection during `pulumi refresh`.
-	 *
-	 * @param id Current resource ID
-	 * @param props Last known persisted state
-	 * @returns Refreshed properties with actual values from Vercel
-	 */
 	async read(
 		id: string,
 		props: VercelVariableOutputs,
@@ -378,12 +326,6 @@ class VercelVariableProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Deletes all managed env vars from Vercel.
-	 *
-	 * @param _id Current resource ID
-	 * @param props Last known persisted state
-	 */
 	async delete(_id: string, props: VercelVariableOutputs): Promise<void> {
 		for (const [key, envId] of Object.entries(props.envIds)) {
 			try {
@@ -396,14 +338,6 @@ class VercelVariableProvider implements pulumi.dynamic.ResourceProvider {
 		}
 	}
 
-	/**
-	 * Compares old and new variable maps by key set and value equality.
-	 *
-	 * @param _id Current resource ID
-	 * @param olds Previous persisted state
-	 * @param news New desired configuration
-	 * @returns Whether any keys or values changed
-	 */
 	async diff(
 		_id: string,
 		olds: VercelVariableOutputs,
@@ -422,59 +356,86 @@ class VercelVariableProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
-/**
- * Manages Vercel project environment variables as a batch with drift detection.
- *
- * Unlike `@pulumiverse/vercel`'s `ProjectEnvironmentVariable`, this provider
- * reads decrypted values from Vercel's API during `pulumi refresh`, enabling
- * detection of manually changed env var values.
- *
- * All variables target production, preview, and development environments.
- *
- * @example
- * ```typescript
- * new VercelVariable("vercel-variable-nexus", {
- *   token: vercelConfig.token,
- *   teamId: vercelConfig.teamId,
- *   projectId: project.id,
- *   variables: {
- *     NEXT_PUBLIC_API_URL: meshUrl,
- *     NEXTAUTH_SECRET: config.requireSecret("nextauthSecret"),
- *   },
- * });
- * ```
- */
-export class VercelVariable extends pulumi.dynamic.Resource {
-	/** SHA-256 hash of all key-value pairs. Use as a deploy trigger for drift-aware redeployment. */
+/** Internal dynamic resource — not part of the public API. */
+class VercelVariableResource extends pulumi.dynamic.Resource {
 	public declare readonly contentHash: pulumi.Output<string>;
 
-	/**
-	 * @param name Pulumi resource name
-	 * @param args Variable configuration inputs
-	 * @param opts Standard Pulumi resource options
-	 */
 	constructor(
 		name: string,
 		args: {
-			/** Vercel API bearer token. */
 			token: pulumi.Input<string>;
-
-			/** Vercel team/org ID. */
 			teamId: pulumi.Input<string>;
-
-			/** Vercel project ID. */
 			projectId: pulumi.Input<string>;
-
-			/** Key-value map of environment variable names to their values. */
 			variables: pulumi.Input<Record<string, pulumi.Input<string>>>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new VercelVariableProvider(),
+			new VercelVariableResourceProvider(),
 			name,
 			{ ...args, envIds: undefined, contentHash: undefined },
 			opts,
 		);
+	}
+}
+
+/** Options type for VercelVariable — replaces Pulumi's native `provider` field. */
+type VercelVariableOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Vercel authentication context. */
+	provider: VercelProvider;
+};
+
+/** Args for VercelVariable. */
+export interface VercelVariableArgs {
+	/** Vercel project ID (Output from `vercel.Project`). */
+	projectId: pulumi.Input<string>;
+
+	/** Key-value map of environment variable names to their values. */
+	variables: pulumi.Input<Record<string, pulumi.Input<string>>>;
+}
+
+/**
+ * Manages Vercel project environment variables as a batch with drift detection.
+ *
+ * @example
+ * ```typescript
+ * new VercelVariable("nexus-vars", {
+ *   projectId: vercelProject.id,
+ *   variables: {
+ *     NEXT_PUBLIC_API_URL: meshUrl,
+ *   },
+ * }, { provider });
+ * ```
+ */
+export class VercelVariable extends pulumi.ComponentResource {
+	/** SHA-256 hash of all key-value pairs. Use as a deploy trigger for drift-aware redeployment. */
+	public readonly contentHash: pulumi.Output<string>;
+
+	constructor(
+		name: string,
+		args: VercelVariableArgs,
+		opts: VercelVariableOptions,
+	) {
+		const { provider, ...pulumiOpts } = opts;
+
+		super("infracraft:vercel:Variable", name, {}, pulumiOpts);
+
+		const resource = new VercelVariableResource(
+			`${name}-resource`,
+			{
+				token: provider.token,
+				teamId: provider.teamId,
+				projectId: args.projectId,
+				variables: args.variables,
+			},
+			{ parent: this },
+		);
+
+		this.contentHash = resource.contentHash;
+
+		this.registerOutputs({ contentHash: this.contentHash });
 	}
 }

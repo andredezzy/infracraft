@@ -1,5 +1,9 @@
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
+import type { RailwayEnvironment } from "./environment.js";
+import type { RailwayProject } from "./project.js";
+import type { RailwayProvider } from "./provider.js";
+import type { RailwayService } from "./service.js";
 
 /** Build and deploy configuration for a Railway service. */
 export interface RailwayDeployConfig {
@@ -13,19 +17,8 @@ export interface RailwayDeployConfig {
 	preDeployCommand?: string;
 }
 
-interface RailwayDeployArgs {
-	/** Project-scoped Railway token for `railway up` CLI (stable across runs). */
-	projectToken: pulumi.Input<string>;
-
-	/** Railway project UUID. */
-	projectId: pulumi.Input<string>;
-
-	/** Railway service UUID to deploy to. */
-	serviceId: pulumi.Input<string>;
-
-	/** Railway environment UUID (e.g. production). */
-	environmentId: pulumi.Input<string>;
-
+/** Args for RailwayDeploy. */
+export interface RailwayDeployArgs {
 	/** Absolute path to the monorepo root (working directory for `railway up`). */
 	directory: string;
 
@@ -42,6 +35,24 @@ interface RailwayDeployArgs {
 	railpackConfig?: Record<string, unknown>;
 }
 
+/** Options type for RailwayDeploy — replaces Pulumi's native `provider` field. */
+type RailwayDeployOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Railway authentication context. */
+	provider: RailwayProvider;
+
+	/** Railway project context. */
+	project: RailwayProject;
+
+	/** Railway environment context. */
+	environment: RailwayEnvironment;
+
+	/** Railway service context. */
+	service: RailwayService;
+};
+
 const LOCK_DIR = "/tmp/.railway-upload-lock";
 
 /**
@@ -51,14 +62,25 @@ const LOCK_DIR = "/tmp/.railway-upload-lock";
  * Multiple deploys run in parallel — a mkdir lock serializes only the
  * brief upload phase (~5s) when `.railwayignore` must be consistent,
  * then releases so builds stream concurrently.
+ *
+ * @example
+ * ```typescript
+ * new RailwayDeploy("api-deploy", {
+ *   directory: monorepoRoot,
+ *   sourceHash,
+ *   env: { DATABASE_URL: dbUrl },
+ * }, { provider, project, environment, service });
+ * ```
  */
 export class RailwayDeploy extends pulumi.ComponentResource {
 	constructor(
 		name: string,
 		args: RailwayDeployArgs,
-		opts?: pulumi.ComponentResourceOptions,
+		opts: RailwayDeployOptions,
 	) {
-		super("infrakit:railway:Deploy", name, {}, opts);
+		const { provider, project, environment, service, ...pulumiOpts } = opts;
+
+		super("infracraft:railway:Deploy", name, {}, pulumiOpts);
 
 		const ignorePatterns = (args.excludePaths ?? [])
 			.map((dir) => {
@@ -96,7 +118,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 		// Flow: acquire lock → write config files → release lock after 5s (background) →
 		//       railway up --ci (blocks through upload, then streams build logs) →
 		//       cleanup on exit
-		const deployCmd = pulumi.interpolate`while ! mkdir ${LOCK_DIR} 2>/dev/null; do sleep 1; done; ${setupLines}; { sleep 5; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; } & railway up --ci --project ${args.projectId} --service ${args.serviceId} --environment ${args.environmentId}; EXIT=$?; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; wait; exit $EXIT`;
+		const deployCmd = pulumi.interpolate`while ! mkdir ${LOCK_DIR} 2>/dev/null; do sleep 1; done; ${setupLines}; { sleep 5; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; } & railway up --ci --project ${project.projectId} --service ${service.serviceId} --environment ${environment.environmentId}; EXIT=$?; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; wait; exit $EXIT`;
 
 		new command.local.Command(
 			`${name}-deploy`,
@@ -105,7 +127,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 				triggers: [args.sourceHash, envHash],
 				dir: args.directory,
 				environment: {
-					RAILWAY_TOKEN: args.projectToken,
+					RAILWAY_TOKEN: project.projectToken,
 				},
 			},
 			{ parent: this },

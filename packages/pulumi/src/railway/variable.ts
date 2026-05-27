@@ -1,5 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
 import { RailwayClient } from "./client.js";
+import type { RailwayEnvironment } from "./environment.js";
+import type { RailwayProject } from "./project.js";
+import type { RailwayProvider } from "./provider.js";
+import type { RailwayService } from "./service.js";
 
 /** Resolved inputs for the Railway variable dynamic provider. */
 export interface RailwayVariableInputs {
@@ -40,12 +44,11 @@ const VARIABLE_DELETE = `
  * Uses `skipDeploys: true` on all upsert operations to prevent
  * "Cannot redeploy without snapshot" errors on newly created services.
  */
-class RailwayVariableProvider implements pulumi.dynamic.ResourceProvider {
+class RailwayVariableResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	/**
 	 * Creates all variables on the target service via batch upsert.
-	 *
-	 * @param inputs Resolved variable configuration
-	 * @returns Composite ID in the form `{serviceId}:variables`
 	 */
 	async create(
 		inputs: RailwayVariableInputs,
@@ -69,11 +72,6 @@ class RailwayVariableProvider implements pulumi.dynamic.ResourceProvider {
 
 	/**
 	 * Updates variables by deleting removed keys individually, then upserting the rest.
-	 *
-	 * @param _id Current resource ID (unused)
-	 * @param olds Previous persisted variable state
-	 * @param news New desired variable configuration
-	 * @returns Updated outputs
 	 */
 	async update(
 		_id: string,
@@ -115,10 +113,6 @@ class RailwayVariableProvider implements pulumi.dynamic.ResourceProvider {
 	/**
 	 * Reads current state for `pulumi refresh`.
 	 * Returns persisted props since Railway has no single-call variable read API.
-	 *
-	 * @param id Current resource ID
-	 * @param props Last known persisted state
-	 * @returns Unchanged resource ID and properties
 	 */
 	async read(
 		id: string,
@@ -129,9 +123,6 @@ class RailwayVariableProvider implements pulumi.dynamic.ResourceProvider {
 
 	/**
 	 * Deletes all variables one by one. Silently succeeds if already deleted.
-	 *
-	 * @param _id Current resource ID (unused)
-	 * @param props Last known persisted state
 	 */
 	async delete(_id: string, props: RailwayVariableOutputs): Promise<void> {
 		const client = new RailwayClient(props.token);
@@ -156,11 +147,6 @@ class RailwayVariableProvider implements pulumi.dynamic.ResourceProvider {
 
 	/**
 	 * Compares old and new variable maps by key set and value equality.
-	 *
-	 * @param _id Current resource ID (unused)
-	 * @param olds Previous persisted state
-	 * @param news New desired configuration
-	 * @returns Whether any keys or values changed
 	 */
 	async diff(
 		_id: string,
@@ -180,50 +166,79 @@ class RailwayVariableProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
-/**
- * Manages Railway service environment variables with `skipDeploys` to prevent snapshot errors.
- *
- * Handles batch upsert on create/update and per-key deletion when variables are removed.
- * All mutations use `skipDeploys: true` to avoid triggering deploys before the service
- * has a build snapshot.
- *
- * @example
- * ```typescript
- * new RailwayVariable("railway-variable-api", {
- *   token: project.projectToken,
- *   projectId: project.projectId,
- *   serviceId: service.serviceId,
- *   environmentId: project.productionEnvironmentId,
- *   variables: { DATABASE_URL: databaseUrl, NODE_ENV: "production" },
- * });
- * ```
- */
-export class RailwayVariable extends pulumi.dynamic.Resource {
-	/**
-	 * @param name Pulumi resource name (logical identifier in state)
-	 * @param args Variable configuration inputs
-	 * @param opts Standard Pulumi resource options (e.g. `dependsOn`, `parent`)
-	 */
+/** Internal dynamic resource — not part of the public API. */
+class RailwayVariableResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			/** Railway API bearer token. */
 			token: pulumi.Input<string>;
-
-			/** Railway project UUID. */
 			projectId: pulumi.Input<string>;
-
-			/** Railway service UUID that owns these variables. */
 			serviceId: pulumi.Input<string>;
-
-			/** Railway environment UUID (e.g. production). */
 			environmentId: pulumi.Input<string>;
-
-			/** Key-value map of environment variable names to their values. */
 			variables: pulumi.Input<Record<string, pulumi.Input<string>>>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new RailwayVariableProvider(), name, { ...args }, opts);
+		super(new RailwayVariableResourceProvider(), name, { ...args }, opts);
+	}
+}
+
+/** Options type for RailwayVariable — replaces Pulumi's native `provider` field. */
+type RailwayVariableOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Railway authentication context. */
+	provider: RailwayProvider;
+
+	/** Railway project context. */
+	project: RailwayProject;
+
+	/** Railway environment context. */
+	environment: RailwayEnvironment;
+
+	/** Railway service context. */
+	service: RailwayService;
+};
+
+/** Args for RailwayVariable. */
+export interface RailwayVariableArgs {
+	/** Key-value map of environment variable names to their values. */
+	variables: pulumi.Input<Record<string, pulumi.Input<string>>>;
+}
+
+/**
+ * Manages Railway service environment variables with `skipDeploys` to prevent snapshot errors.
+ *
+ * @example
+ * ```typescript
+ * new RailwayVariable("api-vars", {
+ *   variables: { DATABASE_URL: databaseUrl, NODE_ENV: "production" },
+ * }, { provider, project, environment, service });
+ * ```
+ */
+export class RailwayVariable extends pulumi.ComponentResource {
+	constructor(
+		name: string,
+		args: RailwayVariableArgs,
+		opts: RailwayVariableOptions,
+	) {
+		const { provider, project, environment, service, ...pulumiOpts } = opts;
+
+		super("infracraft:railway:Variable", name, {}, pulumiOpts);
+
+		new RailwayVariableResource(
+			`${name}-resource`,
+			{
+				token: provider.token,
+				projectId: project.projectId,
+				serviceId: service.serviceId,
+				environmentId: environment.environmentId,
+				variables: args.variables,
+			},
+			{ parent: this },
+		);
+
+		this.registerOutputs({});
 	}
 }

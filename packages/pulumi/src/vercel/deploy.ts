@@ -2,12 +2,19 @@ import * as path from "node:path";
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 import { hashDirectory } from "../hash.js";
+import type { VercelProvider } from "./provider.js";
 
-/** Configuration for a Vercel project deploy via `vercel deploy` CLI. */
+/** Options type for VercelDeploy — replaces Pulumi's native `provider` field. */
+type VercelDeployOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Vercel authentication context. */
+	provider: VercelProvider;
+};
+
+/** Args for VercelDeploy. */
 export interface VercelDeployArgs {
-	/** Vercel API bearer token. */
-	token: pulumi.Input<string>;
-
 	/** Vercel project ID (Output from `vercel.Project`). */
 	projectId: pulumi.Input<string>;
 
@@ -16,9 +23,6 @@ export interface VercelDeployArgs {
 
 	/** Absolute path to the monorepo root (working directory for `vercel deploy`). */
 	monorepoRoot: string;
-
-	/** Vercel team/org ID. */
-	teamId: string;
 
 	/** Env var map used as deploy trigger. Hashes both keys and resolved values so value changes trigger redeploy. */
 	env: Record<string, pulumi.Input<string>>;
@@ -40,28 +44,23 @@ export interface VercelDeployArgs {
  *
  * @example
  * ```typescript
- * new VercelDeploy("vercel-deploy-nexus", {
- *   token: vercelConfig.token,
- *   projectId: project.id,
+ * new VercelDeploy("nexus-deploy", {
+ *   projectId: vercelProject.id,
  *   rootDirectory: "apps/nexus",
  *   monorepoRoot,
- *   teamId: vercelConfig.teamId,
  *   env: { NEXT_PUBLIC_API_URL: meshUrl },
- * });
+ * }, { provider });
  * ```
  */
 export class VercelDeploy extends pulumi.ComponentResource {
-	/**
-	 * @param name Pulumi resource name (logical identifier in state)
-	 * @param args Deploy configuration
-	 * @param opts Component resource options
-	 */
 	constructor(
 		name: string,
 		args: VercelDeployArgs,
-		opts?: pulumi.ComponentResourceOptions,
+		opts: VercelDeployOptions,
 	) {
-		super("infrakit:vercel:Deploy", name, {}, opts);
+		const { provider, ...pulumiOpts } = opts;
+
+		super("infracraft:vercel:Deploy", name, {}, pulumiOpts);
 
 		const appDir = path.join(args.monorepoRoot, args.rootDirectory);
 
@@ -94,8 +93,8 @@ export class VercelDeploy extends pulumi.ComponentResource {
 				triggers: [sourceHash, envHash],
 				dir: args.monorepoRoot,
 				environment: {
-					VERCEL_TOKEN: args.token,
-					VERCEL_ORG_ID: args.teamId,
+					VERCEL_TOKEN: provider.token,
+					VERCEL_ORG_ID: provider.teamId,
 					VERCEL_PROJECT_ID: args.projectId,
 				},
 			},
