@@ -275,16 +275,23 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 	 */
 	async update(
 		id: string,
-		_olds: RailwayServiceOutputs,
+		olds: RailwayServiceOutputs,
 		news: RailwayServiceInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
 		const client = new RailwayClient(news.token);
 
-		if (news.icon) {
-			await client.query(SERVICE_UPDATE, {
-				id,
-				input: { icon: news.icon },
-			});
+		const updateInput: Record<string, unknown> = {};
+
+		if (olds.name !== news.name) {
+			updateInput.name = news.name;
+		}
+
+		if (news.icon && olds.icon !== news.icon) {
+			updateInput.icon = news.icon;
+		}
+
+		if (Object.keys(updateInput).length > 0) {
+			await client.query(SERVICE_UPDATE, { id, input: updateInput });
 		}
 
 		await applyInstanceConfig(client, id, news.environmentId, news);
@@ -341,8 +348,8 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 	/**
 	 * Compares old and new inputs to determine what changed.
 	 *
-	 * Name, projectId, and environmentId changes trigger replacement.
-	 * Builder, commands, and healthcheck changes trigger in-place update.
+	 * ProjectId and environmentId changes trigger replacement.
+	 * Name, builder, commands, and healthcheck changes trigger in-place update.
 	 *
 	 * @param _id Current resource ID (unused)
 	 * @param olds Previous persisted state
@@ -357,7 +364,7 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 		const changes: string[] = [];
 
 		if (olds.name !== news.name) {
-			replaces.push("name");
+			changes.push("name");
 		}
 
 		if (olds.projectId !== news.projectId) {
