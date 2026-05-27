@@ -500,7 +500,7 @@ export interface RailwayServiceArgs {
  */
 export class RailwayService extends pulumi.ComponentResource {
 	/** Railway service UUID. */
-	public readonly serviceId: pulumi.Output<string>;
+	public readonly id: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -515,15 +515,15 @@ export class RailwayService extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
-				projectId: project.projectId,
-				environmentId: environment.environmentId,
+				projectId: project.id,
+				environmentId: environment.id,
 				...args,
 			},
 			{ parent: this },
 		);
 
-		this.serviceId = resource.serviceId;
+		this.id = resource.serviceId;
 
-		this.registerOutputs({ serviceId: this.serviceId });
+		this.registerOutputs({ id: this.id });
 	}
 }

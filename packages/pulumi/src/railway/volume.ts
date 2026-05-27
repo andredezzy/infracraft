@@ -276,9 +276,9 @@ export class RailwayVolume extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
-				projectId: project.projectId,
-				serviceId: service.serviceId,
-				environmentId: environment.environmentId,
+				projectId: project.id,
+				serviceId: service.id,
+				environmentId: environment.id,
 				mountPath: args.mountPath,
 			},
 			{ parent: this },

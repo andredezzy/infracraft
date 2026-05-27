@@ -416,7 +416,7 @@ export interface RailwayProjectArgs {
  */
 export class RailwayProject extends pulumi.ComponentResource {
 	/** Railway project UUID. */
-	public readonly projectId: pulumi.Output<string>;
+	public readonly id: pulumi.Output<string>;
 
 	/** Railway project-scoped token (secret). */
 	public readonly projectToken: pulumi.Output<string>;
@@ -440,11 +440,11 @@ export class RailwayProject extends pulumi.ComponentResource {
 			{ parent: this },
 		);
 
-		this.projectId = resource.projectId;
+		this.id = resource.projectId;
 		this.projectToken = resource.projectToken;
 
 		this.registerOutputs({
-			projectId: this.projectId,
+			id: this.id,
 			projectToken: this.projectToken,
 		});
 	}

@@ -214,7 +214,7 @@ export interface RailwayEnvironmentArgs {
  */
 export class RailwayEnvironment extends pulumi.ComponentResource {
 	/** Railway environment UUID. */
-	public readonly environmentId: pulumi.Output<string>;
+	public readonly id: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -229,14 +229,14 @@ export class RailwayEnvironment extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
-				projectId: project.projectId,
+				projectId: project.id,
 				name: args.name,
 			},
 			{ parent: this },
 		);
 
-		this.environmentId = resource.environmentId;
+		this.id = resource.environmentId;
 
-		this.registerOutputs({ environmentId: this.environmentId });
+		this.registerOutputs({ id: this.id });
 	}
 }

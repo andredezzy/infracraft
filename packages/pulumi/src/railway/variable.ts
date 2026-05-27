@@ -231,9 +231,9 @@ export class RailwayVariable extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
-				projectId: project.projectId,
-				serviceId: service.serviceId,
-				environmentId: environment.environmentId,
+				projectId: project.id,
+				serviceId: service.id,
+				environmentId: environment.id,
 				variables: args.variables,
 			},
 			{ parent: this },

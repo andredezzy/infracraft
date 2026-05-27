@@ -333,9 +333,9 @@ export class RailwayDomain extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
-				projectId: project.projectId,
-				serviceId: service.serviceId,
-				environmentId: environment.environmentId,
+				projectId: project.id,
+				serviceId: service.id,
+				environmentId: environment.id,
 				customDomain: args.customDomain,
 			},
 			{ parent: this },

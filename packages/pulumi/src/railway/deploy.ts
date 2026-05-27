@@ -118,7 +118,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 		// Flow: acquire lock → write config files → release lock after 5s (background) →
 		//       railway up --ci (blocks through upload, then streams build logs) →
 		//       cleanup on exit
-		const deployCmd = pulumi.interpolate`while ! mkdir ${LOCK_DIR} 2>/dev/null; do sleep 1; done; ${setupLines}; { sleep 5; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; } & railway up --ci --project ${project.projectId} --service ${service.serviceId} --environment ${environment.environmentId}; EXIT=$?; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; wait; exit $EXIT`;
+		const deployCmd = pulumi.interpolate`while ! mkdir ${LOCK_DIR} 2>/dev/null; do sleep 1; done; ${setupLines}; { sleep 5; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; } & railway up --ci --project ${project.id} --service ${service.id} --environment ${environment.id}; EXIT=$?; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; wait; exit $EXIT`;
 
 		new command.local.Command(
 			`${name}-deploy`,

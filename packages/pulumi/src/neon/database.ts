@@ -217,8 +217,8 @@ export class NeonDatabase extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
-				projectId: project.projectId,
-				branchId: branch.branchId,
+				projectId: project.id,
+				branchId: branch.id,
 				name: args.name,
 				ownerName: args.ownerName,
 			},
