@@ -1,0 +1,54 @@
+{
+	"name": "@infrakit/pulumi",
+	"version": "0.1.0",
+	"type": "module",
+	"exports": {
+		"./railway": {
+			"types": "./dist/railway/index.d.mts",
+			"default": "./dist/railway/index.mjs"
+		},
+		"./neon": {
+			"types": "./dist/neon/index.d.mts",
+			"default": "./dist/neon/index.mjs"
+		},
+		"./vercel": {
+			"types": "./dist/vercel/index.d.mts",
+			"default": "./dist/vercel/index.mjs"
+		},
+		"./hash": {
+			"types": "./dist/hash.d.mts",
+			"default": "./dist/hash.mjs"
+		},
+		"./git-guard": {
+			"types": "./dist/git-guard.d.mts",
+			"default": "./dist/git-guard.mjs"
+		}
+	},
+	"files": ["dist/**"],
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"lint": "biome check --write"
+	},
+	"peerDependencies": {
+		"@pulumi/pulumi": "^3",
+		"@pulumi/command": "^1"
+	},
+	"peerDependenciesMeta": {
+		"@pulumi/command": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@infrakit/config-tsdown": "workspace:*",
+		"@infrakit/config-test": "workspace:*",
+		"@infrakit/typescript-config": "workspace:*",
+		"@pulumi/command": "1.2.1",
+		"@pulumi/pulumi": "3.243.0",
+		"@types/node": "25.9.1",
+		"typescript": "6.0.3",
+		"vitest": "4.1.7"
+	}
+}
