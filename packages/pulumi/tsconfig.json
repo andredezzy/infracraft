@@ -1,0 +1,10 @@
+{
+	"extends": "@infrakit/typescript-config/base.json",
+	"compilerOptions": {
+		"rootDir": "./src",
+		"outDir": "./dist",
+		"composite": false
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
