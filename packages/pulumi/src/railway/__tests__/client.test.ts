@@ -45,6 +45,7 @@ describe("RailwayClient", () => {
 			ok: false,
 			status: 401,
 			statusText: "Unauthorized",
+			text: () => Promise.resolve("Unauthorized"),
 		});
 
 		const client = new RailwayClient("test-token");
