@@ -1,0 +1,13 @@
+{
+	"extends": "@infrakit/typescript-config/base.json",
+	"compilerOptions": {
+		"outDir": "dist",
+		"rootDir": "src",
+		"composite": false,
+		"incremental": false,
+		"module": "ESNext",
+		"moduleResolution": "bundler"
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist"]
+}

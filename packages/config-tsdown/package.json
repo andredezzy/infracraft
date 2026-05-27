@@ -1,0 +1,35 @@
+{
+	"name": "@infrakit/config-tsdown",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./*": {
+			"types": "./dist/*.d.mts",
+			"import": "./dist/*.mjs",
+			"require": "./dist/*.cjs",
+			"default": "./dist/*.mjs"
+		}
+	},
+	"typesVersions": {
+		"*": {
+			"*": [
+				"dist/*"
+			]
+		}
+	},
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"tsdown": "0.22.0"
+	},
+	"peerDependencies": {
+		"typescript": "^5.0.0"
+	},
+	"devDependencies": {
+		"@infrakit/typescript-config": "workspace:*"
+	}
+}
