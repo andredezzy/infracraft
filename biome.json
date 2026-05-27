@@ -1,0 +1,103 @@
+{
+	"$schema": "https://biomejs.dev/schemas/2.4.15/schema.json",
+	"vcs": {
+		"enabled": true,
+		"clientKind": "git",
+		"useIgnoreFile": true
+	},
+	"files": {
+		"ignoreUnknown": false,
+		"includes": ["**/*"]
+	},
+	"formatter": {
+		"enabled": true,
+		"includes": ["**/*"],
+		"indentStyle": "tab"
+	},
+	"linter": {
+		"enabled": true,
+		"includes": ["**/*"],
+		"rules": {
+			"recommended": true,
+			"correctness": {
+				"noUnusedImports": { "level": "error", "fix": "safe" },
+				"noUnusedVariables": { "level": "error", "fix": "none" }
+			},
+			"complexity": {
+				"noStaticOnlyClass": "off",
+				"noUselessConstructor": "off",
+				"noBannedTypes": "warn"
+			},
+			"suspicious": {
+				"noExplicitAny": "warn",
+				"noImplicitAnyLet": "warn",
+				"noRedeclare": "warn",
+				"noConsole": {
+					"level": "warn",
+					"options": {
+						"allow": ["log", "error", "warn", "info", "debug"]
+					}
+				}
+			},
+			"style": {
+				"useImportType": "off",
+				"noNonNullAssertion": "warn",
+				"useBlockStatements": "error",
+				"noNestedTernary": "error",
+				"useConst": "error",
+				"useTemplate": "error",
+				"useExponentiationOperator": "error",
+				"noParameterAssign": "warn"
+			},
+			"performance": {
+				"noBarrelFile": "warn",
+				"noReExportAll": "warn"
+			},
+			"nursery": {
+				"useSortedClasses": {
+					"level": "error",
+					"fix": "unsafe",
+					"options": {
+						"functions": ["cn", "clsx", "cva", "tw"]
+					}
+				}
+			}
+		}
+	},
+	"overrides": [
+		{
+			"includes": [
+				"packages/*/src/index.ts",
+				"packages/*/src/client.ts",
+				"packages/*/lib/index.ts"
+			],
+			"linter": {
+				"rules": {
+					"performance": {
+						"noBarrelFile": "off",
+						"noReExportAll": "off"
+					}
+				}
+			}
+		},
+		{
+			"includes": ["**/generated/**", "**/*.generated.*"],
+			"linter": { "enabled": false },
+			"formatter": { "enabled": false },
+			"assist": { "enabled": false }
+		}
+	],
+	"javascript": {
+		"formatter": { "quoteStyle": "double" },
+		"parser": { "unsafeParameterDecoratorsEnabled": true }
+	},
+	"assist": {
+		"enabled": true,
+		"includes": ["**/*"],
+		"actions": {
+			"source": {
+				"organizeImports": "on"
+			}
+		}
+	}
+}
