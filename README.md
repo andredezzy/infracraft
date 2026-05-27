@@ -12,7 +12,7 @@
 
 ---
 
-Native Pulumi providers with adopt-or-create semantics, deploy orchestration, and full CRUD. No Terraform bridge.
+Native Pulumi providers with adopt-or-create semantics and deploy orchestration. No Terraform bridge.
 
 ## Providers
 
@@ -38,13 +38,10 @@ Peer dependencies: `@pulumi/pulumi` ^3, `@pulumi/command` ^1 (optional)
 
 ```typescript
 import {
-  RailwayProvider,
-  RailwayProject,
-  RailwayEnvironment,
-  RailwayService,
-  RailwayVariable,
-  RailwayDeploy,
+  RailwayProvider, RailwayProject, RailwayEnvironment,
+  RailwayService, RailwayVariable, RailwayDeploy,
 } from "@infracraft/pulumi/railway"
+import { hashDirectory } from "@infracraft/pulumi/hash"
 
 const provider = new RailwayProvider("railway", {
   token: config.requireSecret("railwayToken"),
@@ -66,6 +63,13 @@ const service = new RailwayService("api", {
 
 new RailwayVariable("api-vars", {
   variables: { DATABASE_URL: dbUrl },
+}, { provider, project, environment, service })
+
+const sourceHash = hashDirectory("apps/api")
+
+new RailwayDeploy("api-deploy", {
+  directory: monorepoRoot,
+  triggers: [sourceHash, ...Object.values(env)],
 }, { provider, project, environment, service })
 ```
 
@@ -94,6 +98,7 @@ const connectionString = pulumi.interpolate`postgresql://${role.name}:${role.pas
 import {
   VercelProvider, VercelProject, VercelVariable, VercelDeploy,
 } from "@infracraft/pulumi/vercel"
+import { hashDirectory } from "@infracraft/pulumi/hash"
 
 const provider = new VercelProvider("vercel", {
   token: config.requireSecret("vercelToken"),
@@ -110,18 +115,21 @@ new VercelVariable("web-vars", {
   variables: { NEXT_PUBLIC_API_URL: apiUrl },
 }, { provider, project })
 
+const sourceHash = hashDirectory("apps/web")
+
 new VercelDeploy("web-deploy", {
-  rootDirectory: "apps/web",
-  monorepoRoot: "/app",
-  env: { NEXT_PUBLIC_API_URL: apiUrl },
+  monorepoRoot,
+  triggers: [sourceHash, ...Object.values(env)],
 }, { provider, project })
 ```
 
 ## Design
 
-Resources inherit context from their provider, project, and environment — no manual ID passing.
+**Context-based**: Resources inherit auth, project, and environment from their options — no manual ID passing.
 
-Every resource uses **adopt-or-create**: existing infrastructure is discovered by name and adopted into Pulumi state. Run `pulumi up` against a pre-existing project and it just works.
+**Adopt-or-create**: Existing infrastructure is discovered by name and adopted into Pulumi state. Run `pulumi up` against a pre-existing project and it just works.
+
+**Consumer-controlled triggers**: Deploy resources accept a `triggers` array — you decide what causes a redeploy. Hash source directories, env values, or anything else.
 
 ## Why
 
@@ -129,7 +137,7 @@ Every resource uses **adopt-or-create**: existing infrastructure is discovered b
 |---|---|---|
 | Railway | Nothing. Zero Pulumi providers exist. | **We are the Railway Pulumi provider.** |
 | Neon | Bridged TF provider — fails on pre-existing resources | Adopt-or-create without manual `import` blocks |
-| Vercel | `@pulumiverse/vercel` — no adopt-or-create on projects, no CLI deploys | Adopt-or-create projects + `[sourceHash, envHash]` deploy triggers |
+| Vercel | `@pulumiverse/vercel` — no adopt-or-create, no CLI deploys | Adopt-or-create projects + consumer-controlled deploy triggers |
 
 ## License
 
