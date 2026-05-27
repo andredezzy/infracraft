@@ -28,6 +28,8 @@ Native Pulumi providers with adopt-or-create semantics, deploy orchestration, an
 
 ```bash
 npm install @infracraft/pulumi
+# or
+bun add @infracraft/pulumi
 ```
 
 Peer dependencies: `@pulumi/pulumi` ^3, `@pulumi/command` ^1 (optional)
