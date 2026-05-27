@@ -99,7 +99,10 @@ export class VercelDeploy extends pulumi.ComponentResource {
 					VERCEL_PROJECT_ID: args.projectId,
 				},
 			},
-			{ parent: this, ...(commandOpts.dependsOn ? { dependsOn: commandOpts.dependsOn } : {}) },
+			{
+				parent: this,
+				...(commandOpts.dependsOn ? { dependsOn: commandOpts.dependsOn } : {}),
+			},
 		);
 
 		this.registerOutputs({});

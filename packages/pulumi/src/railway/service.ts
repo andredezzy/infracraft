@@ -135,9 +135,17 @@ async function applyInstanceConfig(
 ): Promise<void> {
 	const instanceInput: Record<string, unknown> = {};
 
-	if (inputs.builder) instanceInput.builder = inputs.builder;
-	if (inputs.buildCommand) instanceInput.buildCommand = inputs.buildCommand;
-	if (inputs.startCommand) instanceInput.startCommand = inputs.startCommand;
+	if (inputs.builder) {
+		instanceInput.builder = inputs.builder;
+	}
+
+	if (inputs.buildCommand) {
+		instanceInput.buildCommand = inputs.buildCommand;
+	}
+
+	if (inputs.startCommand) {
+		instanceInput.startCommand = inputs.startCommand;
+	}
 
 	if (inputs.restartPolicyType) {
 		instanceInput.restartPolicyType = inputs.restartPolicyType;
@@ -251,12 +259,7 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 			}
 		}
 
-		await applyInstanceConfig(
-			client,
-			serviceId,
-			inputs.environmentId,
-			inputs,
-		);
+		await applyInstanceConfig(client, serviceId, inputs.environmentId, inputs);
 
 		const outs: RailwayServiceOutputs = { ...inputs, serviceId };
 
@@ -327,9 +330,7 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 		try {
 			await client.query(SERVICE_DELETE, { id });
 
-			pulumi.log.info(
-				`Deleted Railway service "${props.name}" (${id})`,
-			);
+			pulumi.log.info(`Deleted Railway service "${props.name}" (${id})`);
 		} catch {
 			pulumi.log.warn(
 				`Failed to delete Railway service "${props.name}" (${id}) — may already be deleted`,
@@ -355,18 +356,49 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 		const replaces: string[] = [];
 		const changes: string[] = [];
 
-		if (olds.name !== news.name) replaces.push("name");
-		if (olds.projectId !== news.projectId) replaces.push("projectId");
-		if (olds.environmentId !== news.environmentId) replaces.push("environmentId");
+		if (olds.name !== news.name) {
+			replaces.push("name");
+		}
 
-		if (olds.builder !== news.builder) changes.push("builder");
-		if (olds.buildCommand !== news.buildCommand) changes.push("buildCommand");
-		if (olds.startCommand !== news.startCommand) changes.push("startCommand");
-		if (olds.restartPolicyType !== news.restartPolicyType) changes.push("restartPolicyType");
-		if (olds.healthcheckPath !== news.healthcheckPath) changes.push("healthcheckPath");
-		if (olds.healthcheckTimeout !== news.healthcheckTimeout) changes.push("healthcheckTimeout");
-		if (olds.preDeployCommand !== news.preDeployCommand) changes.push("preDeployCommand");
-		if (olds.icon !== news.icon) changes.push("icon");
+		if (olds.projectId !== news.projectId) {
+			replaces.push("projectId");
+		}
+
+		if (olds.environmentId !== news.environmentId) {
+			replaces.push("environmentId");
+		}
+
+		if (olds.builder !== news.builder) {
+			changes.push("builder");
+		}
+
+		if (olds.buildCommand !== news.buildCommand) {
+			changes.push("buildCommand");
+		}
+
+		if (olds.startCommand !== news.startCommand) {
+			changes.push("startCommand");
+		}
+
+		if (olds.restartPolicyType !== news.restartPolicyType) {
+			changes.push("restartPolicyType");
+		}
+
+		if (olds.healthcheckPath !== news.healthcheckPath) {
+			changes.push("healthcheckPath");
+		}
+
+		if (olds.healthcheckTimeout !== news.healthcheckTimeout) {
+			changes.push("healthcheckTimeout");
+		}
+
+		if (olds.preDeployCommand !== news.preDeployCommand) {
+			changes.push("preDeployCommand");
+		}
+
+		if (olds.icon !== news.icon) {
+			changes.push("icon");
+		}
 
 		return {
 			changes: replaces.length > 0 || changes.length > 0,

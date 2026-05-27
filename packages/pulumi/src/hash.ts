@@ -22,9 +22,7 @@ export function hashDirectory(dirPath: string, options?: HashOptions): string {
 	function walk(currentPath: string) {
 		const entries = fs.readdirSync(currentPath, { withFileTypes: true });
 
-		for (const entry of entries.sort((a, b) =>
-			a.name.localeCompare(b.name),
-		)) {
+		for (const entry of entries.sort((a, b) => a.name.localeCompare(b.name))) {
 			if (ignore.has(entry.name)) {
 				continue;
 			}

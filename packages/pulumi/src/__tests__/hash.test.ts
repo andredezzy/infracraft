@@ -56,6 +56,7 @@ describe("hashDirectory", () => {
 		fs.writeFileSync(path.join(tmpDir, "__tests__", "test.ts"), "test");
 
 		const withTests = hashDirectory(tmpDir);
+
 		const withoutTests = hashDirectory(tmpDir, {
 			ignore: new Set(["__tests__"]),
 		});

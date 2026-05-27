@@ -276,9 +276,17 @@ class RailwayDomainProvider implements pulumi.dynamic.ResourceProvider {
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
-		if (olds.serviceId !== news.serviceId) replaces.push("serviceId");
-		if (olds.customDomain !== news.customDomain) replaces.push("customDomain");
-		if (olds.environmentId !== news.environmentId) replaces.push("environmentId");
+		if (olds.serviceId !== news.serviceId) {
+			replaces.push("serviceId");
+		}
+
+		if (olds.customDomain !== news.customDomain) {
+			replaces.push("customDomain");
+		}
+
+		if (olds.environmentId !== news.environmentId) {
+			replaces.push("environmentId");
+		}
 
 		return {
 			changes: replaces.length > 0,

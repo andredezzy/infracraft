@@ -215,10 +215,21 @@ class RailwayVolumeProvider implements pulumi.dynamic.ResourceProvider {
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
-		if (olds.serviceId !== news.serviceId) replaces.push("serviceId");
-		if (olds.mountPath !== news.mountPath) replaces.push("mountPath");
-		if (olds.environmentId !== news.environmentId) replaces.push("environmentId");
-		if (olds.projectId !== news.projectId) replaces.push("projectId");
+		if (olds.serviceId !== news.serviceId) {
+			replaces.push("serviceId");
+		}
+
+		if (olds.mountPath !== news.mountPath) {
+			replaces.push("mountPath");
+		}
+
+		if (olds.environmentId !== news.environmentId) {
+			replaces.push("environmentId");
+		}
+
+		if (olds.projectId !== news.projectId) {
+			replaces.push("projectId");
+		}
 
 		return {
 			changes: replaces.length > 0,
