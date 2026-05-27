@@ -37,28 +37,58 @@ Peer dependencies: `@pulumi/pulumi` ^3, `@pulumi/command` ^1 (optional)
 ## Usage
 
 ```typescript
-import { RailwayProject, RailwayService, RailwayDeploy } from "@infracraft/pulumi/railway"
-import { NeonProject, NeonBranch, NeonRole } from "@infracraft/pulumi/neon"
-import { VercelDeploy, VercelVariable } from "@infracraft/pulumi/vercel"
-import { hashDirectory } from "@infracraft/pulumi/hash"
-import { gitGuard } from "@infracraft/pulumi/git-guard"
+import {
+  RailwayProvider,
+  RailwayProject,
+  RailwayEnvironment,
+  RailwayService,
+  RailwayVariable,
+  RailwayDeploy,
+} from "@infracraft/pulumi/railway"
 
-const project = new RailwayProject("my-project", {
+const provider = new RailwayProvider("railway", {
   token: config.requireSecret("railwayToken"),
-  name: "my-app",
 })
 
+const project = new RailwayProject("my-project", {
+  name: "my-app",
+}, { provider })
+
+const environment = new RailwayEnvironment("production", {
+  name: "production",
+}, { provider, project })
+
 const service = new RailwayService("api", {
-  token: project.token,
-  projectId: project.projectId,
-  environmentId: project.productionEnvironmentId,
   name: "api",
   builder: "RAILPACK",
   startCommand: "node dist/index.js",
-})
+}, { provider, project, environment })
+
+new RailwayVariable("api-vars", {
+  variables: { DATABASE_URL: dbUrl },
+}, { provider, project, environment, service })
 ```
 
-Every resource uses **adopt-or-create** — existing infrastructure is discovered by name and adopted into Pulumi state. Run `pulumi up` against a pre-existing project and it just works.
+Resources inherit context from their provider, project, and environment — no manual ID passing.
+
+Every resource uses **adopt-or-create**: existing infrastructure is discovered by name and adopted into Pulumi state.
+
+## Neon
+
+```typescript
+import { NeonProvider, NeonProject, NeonBranch, NeonRole } from "@infracraft/pulumi/neon"
+
+const provider = new NeonProvider("neon", {
+  apiKey: config.requireSecret("neonApiKey"),
+})
+
+const project = new NeonProject("db", { name: "my-app" }, { provider })
+const branch = new NeonBranch("prod", { name: "production" }, { provider, project })
+const role = new NeonRole("owner", { name: "neondb_owner" }, { provider, project, branch })
+
+// role.password is a secret output
+const connectionString = pulumi.interpolate`postgresql://neondb_owner:${role.password}@${endpoint.host}/neondb`
+```
 
 ## Why
 
