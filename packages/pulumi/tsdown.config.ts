@@ -1,4 +1,4 @@
-import { library } from "@infrakit/config-tsdown/library";
+import { library } from "@infracraft/config-tsdown/library";
 
 export default library({
 	entry: [

@@ -1,8 +1,8 @@
-# @infrakit/pulumi Implementation Plan
+# @infracraft/pulumi Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build and publish `@infrakit/pulumi` — a Pulumi provider library for Railway, Neon, and Vercel with adopt-or-create semantics, deploy orchestration, and preview-safe resources.
+**Goal:** Build and publish `@infracraft/pulumi` — a Pulumi provider library for Railway, Neon, and Vercel with adopt-or-create semantics, deploy orchestration, and preview-safe resources.
 
 **Architecture:** Single npm package with subpath exports (`/railway`, `/neon`, `/vercel`, `/hash`, `/git-guard`). All cloud mutations go through `dynamic.Resource` or `ComponentResource` — no pre-engine imperative code. Providers are extracted and generalized from two existing projects at `/Users/andrevictor/www/HAT-CREW/nodex/infrastructure/` and `/Users/andrevictor/www/HAT-CREW/mlm-rby/infrastructure/`.
 
@@ -180,15 +180,15 @@ git commit -m "chore: scaffold infrakit monorepo root"
 
 - [ ] **Step 1: Create `packages/config-typescript/`**
 
-Copy from `/Users/andrevictor/www/HAT-CREW/nodex/packages/config-typescript/`. Only need `package.json` (name: `@infrakit/typescript-config`, version `0.0.0`, private) and `base.json` (target ES2022, module NodeNext, strict, composite, declaration).
+Copy from `/Users/andrevictor/www/HAT-CREW/nodex/packages/config-typescript/`. Only need `package.json` (name: `@infracraft/typescript-config`, version `0.0.0`, private) and `base.json` (target ES2022, module NodeNext, strict, composite, declaration).
 
 - [ ] **Step 2: Create `packages/config-tsdown/`**
 
-Copy from `/Users/andrevictor/www/HAT-CREW/nodex/packages/config-tsdown/`. Change package name to `@infrakit/config-tsdown`. Change `@nodex/typescript-config` references to `@infrakit/typescript-config`. Keep source files: `base.ts` (baseConfig + TEST_EXCLUSIONS), `library.ts` (library preset), `merge.ts` (mergeConfig utility). Update `tsdown` dependency to `0.22.0`.
+Copy from `/Users/andrevictor/www/HAT-CREW/nodex/packages/config-tsdown/`. Change package name to `@infracraft/config-tsdown`. Change `@nodex/typescript-config` references to `@infracraft/typescript-config`. Keep source files: `base.ts` (baseConfig + TEST_EXCLUSIONS), `library.ts` (library preset), `merge.ts` (mergeConfig utility). Update `tsdown` dependency to `0.22.0`.
 
 - [ ] **Step 3: Create `packages/config-test/`**
 
-Copy from `/Users/andrevictor/www/HAT-CREW/mlm-rby/packages/config-test/`. Change package name to `@infrakit/config-test`. Change `@mlm/config-test` references to `@infrakit/config-test`. Change `@mlm/typescript-config` to `@infrakit/typescript-config`. Keep source files: `base.ts` (vitest base config), `unit.ts` (unit test preset), `setup.ts` (global test setup — stub `globalThis.Bun`). Update `vitest` dependency to `4.1.7`.
+Copy from `/Users/andrevictor/www/HAT-CREW/mlm-rby/packages/config-test/`. Change package name to `@infracraft/config-test`. Change `@mlm/config-test` references to `@infracraft/config-test`. Change `@mlm/typescript-config` to `@infracraft/typescript-config`. Keep source files: `base.ts` (vitest base config), `unit.ts` (unit test preset), `setup.ts` (global test setup — stub `globalThis.Bun`). Update `vitest` dependency to `4.1.7`.
 
 - [ ] **Step 4: Install and build config packages**
 
@@ -207,7 +207,7 @@ git commit -m "chore: add config-typescript, config-tsdown, config-test packages
 
 ---
 
-## Task 3: @infrakit/pulumi package scaffolding
+## Task 3: @infracraft/pulumi package scaffolding
 
 **Files:**
 - Create: `packages/pulumi/package.json`
@@ -219,7 +219,7 @@ git commit -m "chore: add config-typescript, config-tsdown, config-test packages
 
 ```json
 {
-	"name": "@infrakit/pulumi",
+	"name": "@infracraft/pulumi",
 	"version": "0.1.0",
 	"type": "module",
 	"exports": {
@@ -262,9 +262,9 @@ git commit -m "chore: add config-typescript, config-tsdown, config-test packages
 		}
 	},
 	"devDependencies": {
-		"@infrakit/config-tsdown": "workspace:*",
-		"@infrakit/config-test": "workspace:*",
-		"@infrakit/typescript-config": "workspace:*",
+		"@infracraft/config-tsdown": "workspace:*",
+		"@infracraft/config-test": "workspace:*",
+		"@infracraft/typescript-config": "workspace:*",
 		"@pulumi/command": "1.2.1",
 		"@pulumi/pulumi": "3.243.0",
 		"@types/node": "25.9.1",
@@ -278,7 +278,7 @@ git commit -m "chore: add config-typescript, config-tsdown, config-test packages
 
 ```json
 {
-	"extends": "@infrakit/typescript-config/base.json",
+	"extends": "@infracraft/typescript-config/base.json",
 	"compilerOptions": {
 		"rootDir": "./src",
 		"outDir": "./dist",
@@ -292,7 +292,7 @@ git commit -m "chore: add config-typescript, config-tsdown, config-test packages
 - [ ] **Step 3: Create `packages/pulumi/tsdown.config.ts`**
 
 ```ts
-import { library } from "@infrakit/config-tsdown/library";
+import { library } from "@infracraft/config-tsdown/library";
 
 export default library({
 	entry: [
@@ -308,7 +308,7 @@ export default library({
 - [ ] **Step 4: Create `packages/pulumi/vitest.config.ts`**
 
 ```ts
-import { unit } from "@infrakit/config-test/unit";
+import { unit } from "@infracraft/config-test/unit";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig(unit());
@@ -355,7 +355,7 @@ Expected: All packages build. No type errors.
 
 ```bash
 git add packages/pulumi bun.lock
-git commit -m "chore: scaffold @infrakit/pulumi package with subpath exports"
+git commit -m "chore: scaffold @infracraft/pulumi package with subpath exports"
 ```
 
 ---
@@ -442,7 +442,7 @@ describe("hashDirectory", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infrakit/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
 Expected: FAIL — `hashDirectory` is not exported.
 
 - [ ] **Step 3: Implement hashDirectory**
@@ -500,7 +500,7 @@ export function hashDirectory(dirPath: string, options?: HashOptions): string {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infrakit/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
 Expected: 4 tests PASS.
 
 - [ ] **Step 5: Commit**
@@ -590,7 +590,7 @@ describe("ensureGitignore", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infrakit/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
 Expected: FAIL — `ensureGitignore` and `GUARD_DIR` not exported.
 
 - [ ] **Step 3: Implement git-guard.ts**
@@ -668,7 +668,7 @@ export function ensureGitignore(gitignorePath: string): void {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infrakit/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
 Expected: All tests PASS (4 hash + 4 git-guard).
 
 - [ ] **Step 5: Commit**
@@ -751,7 +751,7 @@ describe("RailwayClient", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infrakit/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
 Expected: FAIL — `RailwayClient` not found.
 
 - [ ] **Step 3: Implement RailwayClient**
@@ -1286,7 +1286,7 @@ dist/
 |------|-------------|---------|
 | 1 | Root monorepo scaffolding | 1 |
 | 2 | Config packages (typescript, tsdown, test) | 1 |
-| 3 | @infrakit/pulumi package scaffolding | 1 |
+| 3 | @infracraft/pulumi package scaffolding | 1 |
 | 4 | hashDirectory + tests | 1 |
 | 5 | gitGuard + tests | 1 |
 | 6 | Railway client + tests | 1 |

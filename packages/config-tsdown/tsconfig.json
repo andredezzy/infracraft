@@ -1,6 +1,6 @@
 {
 	"$schema": "https://json.schemastore.org/tsconfig",
-	"extends": "@infrakit/typescript-config/base.json",
+	"extends": "@infracraft/typescript-config/base.json",
 	"compilerOptions": {
 		"rootDir": "./src",
 		"outDir": "./dist",

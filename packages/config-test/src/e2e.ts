@@ -7,7 +7,7 @@ export default mergeConfig(
 		test: {
 			include: ["src/**/*.e2e-test.ts"],
 			exclude: ["**/node_modules/**", "**/dist/**"],
-			setupFiles: ["@infrakit/config-test/setup"],
+			setupFiles: ["@infracraft/config-test/setup"],
 			testTimeout: 120000,
 			hookTimeout: 60000,
 			teardownTimeout: 30000,

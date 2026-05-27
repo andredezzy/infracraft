@@ -1,5 +1,5 @@
 {
-	"name": "@infrakit/pulumi",
+	"name": "@infracraft/pulumi",
 	"version": "0.1.0",
 	"type": "module",
 	"exports": {
@@ -44,9 +44,9 @@
 		}
 	},
 	"devDependencies": {
-		"@infrakit/config-tsdown": "workspace:*",
-		"@infrakit/config-test": "workspace:*",
-		"@infrakit/typescript-config": "workspace:*",
+		"@infracraft/config-tsdown": "workspace:*",
+		"@infracraft/config-test": "workspace:*",
+		"@infracraft/typescript-config": "workspace:*",
 		"@pulumi/command": "1.2.1",
 		"@pulumi/pulumi": "3.243.0",
 		"@types/node": "25.9.1",
