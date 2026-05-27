@@ -9,3 +9,5 @@ export { RailwayVolume } from "./volume.js";
 export type { RailwayVolumeInputs } from "./volume.js";
 export { RailwayDomain } from "./domain.js";
 export type { RailwayDomainInputs } from "./domain.js";
+export { RailwayDeploy } from "./deploy.js";
+export type { RailwayDeployConfig } from "./deploy.js";
