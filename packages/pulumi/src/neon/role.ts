@@ -240,6 +240,6 @@ export class NeonRole extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new NeonRoleProvider(), name, { ...args, password: undefined }, opts);
+		super(new NeonRoleProvider(), name, { ...args, password: pulumi.secret(undefined as unknown as string) }, opts);
 	}
 }

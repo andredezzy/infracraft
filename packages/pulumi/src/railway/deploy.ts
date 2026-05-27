@@ -18,13 +18,13 @@ interface RailwayDeployArgs {
 	projectToken: pulumi.Input<string>;
 
 	/** Railway project UUID. */
-	projectId: string;
+	projectId: pulumi.Input<string>;
 
 	/** Railway service UUID to deploy to. */
 	serviceId: pulumi.Input<string>;
 
 	/** Railway environment UUID (e.g. production). */
-	environmentId: string;
+	environmentId: pulumi.Input<string>;
 
 	/** Absolute path to the monorepo root (working directory for `railway up`). */
 	directory: string;
