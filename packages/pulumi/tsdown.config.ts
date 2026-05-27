@@ -8,4 +8,5 @@ export default library({
 		"src/hash.ts",
 		"src/git-guard.ts",
 	],
+	minify: false,
 });
