@@ -1,4 +1,3 @@
-import { unit } from "@infrakit/config-test/unit";
-import { defineConfig } from "vitest/config";
+import unit from "@infrakit/config-test/unit";
 
-export default defineConfig(unit());
+export default unit;
