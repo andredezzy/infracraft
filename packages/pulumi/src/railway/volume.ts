@@ -1,5 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
 import { RailwayClient } from "./client.js";
+import type { RailwayEnvironment } from "./environment.js";
+import type { RailwayProject } from "./project.js";
+import type { RailwayProvider } from "./provider.js";
+import type { RailwayService } from "./service.js";
 
 /** Resolved inputs for the Railway volume dynamic provider. */
 export interface RailwayVolumeInputs {
@@ -66,11 +70,6 @@ const VOLUMES_QUERY = `
 
 /**
  * Finds an existing volume attached to a specific service within a project.
- *
- * @param client Authenticated Railway API client
- * @param projectId Railway project UUID to search within
- * @param serviceId Railway service UUID to match volume instances against
- * @returns The volume UUID if found, `undefined` otherwise
  */
 async function findVolumeByService(
 	client: RailwayClient,
@@ -107,17 +106,10 @@ async function findVolumeByService(
  * Dynamic provider implementing CRUD for Railway persistent volumes.
  *
  * Uses adopt-or-create on `create()`: finds an existing volume by service
- * before creating a new one, making `pulumi up` idempotent from zero.
- * Volumes are immutable after creation — changing `serviceId`, `mountPath`,
- * `environmentId`, or `projectId` triggers replacement (delete + create).
+ * before creating a new one. Volumes are immutable after creation — changing
+ * `serviceId`, `mountPath`, `environmentId`, or `projectId` triggers replacement.
  */
-class RailwayVolumeProvider implements pulumi.dynamic.ResourceProvider {
-	/**
-	 * Creates or adopts a Railway volume for the target service.
-	 *
-	 * @param inputs Resolved volume configuration
-	 * @returns The Railway volume UUID as the resource ID
-	 */
+class RailwayVolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: RailwayVolumeInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -152,14 +144,6 @@ class RailwayVolumeProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Reads current state for `pulumi refresh` by looking up the volume.
-	 *
-	 * @param id Current Railway volume UUID
-	 * @param props Last known persisted state
-	 * @returns Refreshed resource ID and properties
-	 * @throws {Error} If the volume no longer exists in Railway
-	 */
 	async read(
 		_id: string,
 		props: RailwayVolumeOutputs,
@@ -179,12 +163,6 @@ class RailwayVolumeProvider implements pulumi.dynamic.ResourceProvider {
 		return { id: volumeId, props: { ...props, volumeId } };
 	}
 
-	/**
-	 * Deletes the Railway volume. Silently succeeds if already deleted.
-	 *
-	 * @param id Railway volume UUID to delete
-	 * @param props Last known persisted state (used for token)
-	 */
 	async delete(id: string, props: RailwayVolumeOutputs): Promise<void> {
 		const client = new RailwayClient(props.token);
 
@@ -197,17 +175,6 @@ class RailwayVolumeProvider implements pulumi.dynamic.ResourceProvider {
 		}
 	}
 
-	/**
-	 * Compares old and new inputs to determine what changed.
-	 *
-	 * All mutable properties trigger replacement since Railway volumes
-	 * cannot be moved between services, mount paths, environments, or projects.
-	 *
-	 * @param _id Current resource ID (unused)
-	 * @param olds Previous persisted state
-	 * @param news New desired configuration
-	 * @returns Diff result with replacement triggers
-	 */
 	async diff(
 		_id: string,
 		olds: RailwayVolumeOutputs,
@@ -239,55 +206,84 @@ class RailwayVolumeProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
-/**
- * Manages a Railway persistent volume with adopt-or-create semantics.
- *
- * Finds existing volumes attached to the target service before creating
- * new ones. Changing `serviceId`, `mountPath`, `environmentId`, or `projectId`
- * triggers replacement (delete + create with new settings).
- *
- * @example
- * ```typescript
- * new RailwayVolume("railway-volume-redis", {
- *   token: project.projectToken,
- *   projectId: project.projectId,
- *   serviceId: service.serviceId,
- *   environmentId: project.productionEnvironmentId,
- *   mountPath: "/data",
- * });
- * ```
- */
-export class RailwayVolume extends pulumi.dynamic.Resource {
-	/**
-	 * @param name Pulumi resource name (logical identifier in state)
-	 * @param args Volume configuration inputs
-	 * @param opts Standard Pulumi resource options (e.g. `dependsOn`, `parent`)
-	 */
+/** Internal dynamic resource — not part of the public API. */
+class RailwayVolumeResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			/** Railway API bearer token. */
 			token: pulumi.Input<string>;
-
-			/** Railway project UUID. */
 			projectId: pulumi.Input<string>;
-
-			/** Railway service UUID to attach the volume to. */
 			serviceId: pulumi.Input<string>;
-
-			/** Railway environment UUID (e.g. production). */
 			environmentId: pulumi.Input<string>;
-
-			/** Absolute path inside the container where the volume is mounted. */
 			mountPath: pulumi.Input<string>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayVolumeProvider(),
+			new RailwayVolumeResourceProvider(),
 			name,
 			{ ...args, volumeId: undefined },
 			opts,
 		);
+	}
+}
+
+/** Options type for RailwayVolume — replaces Pulumi's native `provider` field. */
+type RailwayVolumeOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Railway authentication context. */
+	provider: RailwayProvider;
+
+	/** Railway project context. */
+	project: RailwayProject;
+
+	/** Railway environment context. */
+	environment: RailwayEnvironment;
+
+	/** Railway service context. */
+	service: RailwayService;
+};
+
+/** Args for RailwayVolume. */
+export interface RailwayVolumeArgs {
+	/** Absolute path inside the container where the volume is mounted. */
+	mountPath: pulumi.Input<string>;
+}
+
+/**
+ * Manages a Railway persistent volume with adopt-or-create semantics.
+ *
+ * @example
+ * ```typescript
+ * new RailwayVolume("api-data", {
+ *   mountPath: "/data",
+ * }, { provider, project, environment, service });
+ * ```
+ */
+export class RailwayVolume extends pulumi.ComponentResource {
+	constructor(
+		name: string,
+		args: RailwayVolumeArgs,
+		opts: RailwayVolumeOptions,
+	) {
+		const { provider, project, environment, service, ...pulumiOpts } = opts;
+
+		super("infracraft:railway:Volume", name, {}, pulumiOpts);
+
+		new RailwayVolumeResource(
+			`${name}-resource`,
+			{
+				token: provider.token,
+				projectId: project.projectId,
+				serviceId: service.serviceId,
+				environmentId: environment.environmentId,
+				mountPath: args.mountPath,
+			},
+			{ parent: this },
+		);
+
+		this.registerOutputs({});
 	}
 }

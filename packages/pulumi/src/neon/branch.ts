@@ -1,5 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import { NeonClient } from "./client.js";
+import type { NeonProject } from "./project.js";
+import type { NeonProvider } from "./provider.js";
 
 /** Resolved inputs for the Neon branch dynamic provider. */
 export interface NeonBranchInputs {
@@ -44,11 +46,6 @@ interface BranchListResponse {
 
 /**
  * Finds an existing Neon branch by name within a project.
- *
- * @param client Authenticated Neon API client
- * @param projectId Neon project ID
- * @param name Exact branch name to match
- * @returns The branch ID if found, `undefined` otherwise
  */
 async function findBranchByName(
 	client: NeonClient,
@@ -68,15 +65,9 @@ async function findBranchByName(
  * Dynamic provider implementing CRUD for Neon branches.
  *
  * Uses adopt-or-create on `create()`: finds an existing branch by name
- * before creating a new one, making `pulumi up` idempotent from zero.
+ * before creating a new one.
  */
-class NeonBranchProvider implements pulumi.dynamic.ResourceProvider {
-	/**
-	 * Creates or adopts a Neon branch by name.
-	 *
-	 * @param inputs Resolved branch configuration
-	 * @returns The Neon branch ID as the resource ID
-	 */
+class NeonBranchResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(inputs: NeonBranchInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new NeonClient(inputs.apiKey);
 
@@ -102,14 +93,6 @@ class NeonBranchProvider implements pulumi.dynamic.ResourceProvider {
 		return { id: branchId, outs: inputs };
 	}
 
-	/**
-	 * Reads current state for `pulumi refresh`.
-	 *
-	 * @param id Current Neon branch ID
-	 * @param props Last known persisted state
-	 * @returns Refreshed resource ID and properties
-	 * @throws {Error} If the branch no longer exists
-	 */
 	async read(
 		id: string,
 		props: NeonBranchOutputs,
@@ -126,12 +109,6 @@ class NeonBranchProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Deletes the Neon branch. Silently succeeds if already deleted.
-	 *
-	 * @param id Neon branch ID to delete
-	 * @param props Last known persisted state
-	 */
 	async delete(id: string, props: NeonBranchOutputs): Promise<void> {
 		const client = new NeonClient(props.apiKey);
 
@@ -142,10 +119,6 @@ class NeonBranchProvider implements pulumi.dynamic.ResourceProvider {
 		}
 	}
 
-	/**
-	 * Compares old and new inputs to detect changes.
-	 * Changing `projectId` triggers replacement.
-	 */
 	async diff(
 		_id: string,
 		olds: NeonBranchOutputs,
@@ -165,38 +138,73 @@ class NeonBranchProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
+/** Internal dynamic resource — not part of the public API. */
+class NeonBranchResource extends pulumi.dynamic.Resource {
+	public declare readonly branchId: pulumi.Output<string>;
+
+	constructor(
+		name: string,
+		args: {
+			apiKey: pulumi.Input<string>;
+			projectId: pulumi.Input<string>;
+			name: pulumi.Input<string>;
+		},
+		opts?: pulumi.CustomResourceOptions,
+	) {
+		super(new NeonBranchResourceProvider(), name, { ...args }, opts);
+	}
+}
+
+/** Options type for NeonBranch — replaces Pulumi's native `provider` field. */
+type NeonBranchOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+	/** Neon authentication context. */
+	provider: NeonProvider;
+
+	/** Neon project context. */
+	project: NeonProject;
+};
+
+/** Args for NeonBranch. */
+export interface NeonBranchArgs {
+	/** Branch display name. */
+	name: pulumi.Input<string>;
+}
+
 /**
  * Manages a Neon branch with adopt-or-create semantics.
  *
  * @example
  * ```typescript
- * const branch = new NeonBranch("neon-branch-production", {
- *   apiKey: config.requireSecret("neonApiKey"),
- *   projectId: "quiet-forest-69719462",
+ * const branch = new NeonBranch("production", {
  *   name: "production",
- * });
+ * }, { provider, project });
  * ```
  */
-export class NeonBranch extends pulumi.dynamic.Resource {
-	/**
-	 * @param name Pulumi resource name
-	 * @param args Branch configuration inputs
-	 * @param opts Standard Pulumi resource options
-	 */
+export class NeonBranch extends pulumi.ComponentResource {
+	/** Neon branch ID. */
+	public readonly branchId: pulumi.Output<string>;
+
 	constructor(
 		name: string,
-		args: {
-			/** Neon API key. */
-			apiKey: pulumi.Input<string>;
-
-			/** Neon project ID. */
-			projectId: pulumi.Input<string>;
-
-			/** Branch display name. */
-			name: pulumi.Input<string>;
-		},
-		opts?: pulumi.CustomResourceOptions,
+		args: NeonBranchArgs,
+		opts: NeonBranchOptions,
 	) {
-		super(new NeonBranchProvider(), name, { ...args }, opts);
+		const { provider, project, ...pulumiOpts } = opts;
+
+		super("infracraft:neon:Branch", name, {}, pulumiOpts);
+
+		const resource = new NeonBranchResource(
+			`${name}-resource`,
+			{
+				apiKey: provider.apiKey,
+				projectId: project.projectId,
+				name: args.name,
+			},
+			{ parent: this },
+		);
+
+		this.branchId = resource.id;
+
+		this.registerOutputs({ branchId: this.branchId });
 	}
 }

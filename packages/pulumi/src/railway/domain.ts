@@ -1,5 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
 import { RailwayClient } from "./client.js";
+import type { RailwayEnvironment } from "./environment.js";
+import type { RailwayProject } from "./project.js";
+import type { RailwayProvider } from "./provider.js";
+import type { RailwayService } from "./service.js";
 
 /** Resolved inputs for the Railway domain dynamic provider. */
 export interface RailwayDomainInputs {
@@ -63,12 +67,6 @@ const SERVICE_DOMAIN_DELETE = `
 
 /**
  * Queries all existing domains (service and custom) for a Railway service.
- *
- * @param client Authenticated Railway API client
- * @param projectId Railway project UUID
- * @param serviceId Railway service UUID
- * @param environmentId Railway environment UUID
- * @returns Separate arrays of service domains and custom domains with their IDs and FQDNs
  */
 async function findExistingDomains(
 	client: RailwayClient,
@@ -92,22 +90,10 @@ async function findExistingDomains(
 /**
  * Dynamic provider implementing CRUD for Railway domains.
  *
- * Uses adopt-or-create: queries existing domains before creating new ones
- * to prevent duplicates. Uses the FQDN as the Pulumi resource ID so
- * `domain.id` returns the domain name directly (useful for URL composition).
- *
- * Supports both auto-generated Railway service domains and custom domains.
+ * Uses adopt-or-create: queries existing domains before creating new ones.
+ * Uses the FQDN as the Pulumi resource ID.
  */
-class RailwayDomainProvider implements pulumi.dynamic.ResourceProvider {
-	/**
-	 * Creates or adopts a Railway domain.
-	 *
-	 * If `customDomain` is set, creates/adopts a custom domain.
-	 * Otherwise, creates/adopts an auto-generated Railway service domain.
-	 *
-	 * @param inputs Resolved domain configuration
-	 * @returns The FQDN as the resource ID
-	 */
+class RailwayDomainResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: RailwayDomainInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -185,14 +171,6 @@ class RailwayDomainProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Reads current state for `pulumi refresh` by querying existing domains.
-	 *
-	 * @param id Current FQDN resource ID
-	 * @param props Last known persisted state
-	 * @returns Refreshed resource ID and properties
-	 * @throws {Error} If the domain no longer exists in Railway
-	 */
 	async read(
 		_id: string,
 		props: RailwayDomainOutputs,
@@ -235,13 +213,6 @@ class RailwayDomainProvider implements pulumi.dynamic.ResourceProvider {
 		throw new Error("Railway domain not found during refresh");
 	}
 
-	/**
-	 * Deletes the Railway domain. Uses `domainId` (UUID) for the API call.
-	 * Silently succeeds if already deleted.
-	 *
-	 * @param _id Current FQDN resource ID (unused for API call)
-	 * @param props Last known persisted state (contains `domainId` for deletion)
-	 */
 	async delete(_id: string, props: RailwayDomainOutputs): Promise<void> {
 		const client = new RailwayClient(props.token);
 
@@ -258,17 +229,6 @@ class RailwayDomainProvider implements pulumi.dynamic.ResourceProvider {
 		}
 	}
 
-	/**
-	 * Compares old and new inputs to determine what changed.
-	 *
-	 * Triggers replacement when `serviceId`, `customDomain`, or `environmentId` changes,
-	 * since domains cannot be moved between services or environments.
-	 *
-	 * @param _id Current resource ID (unused)
-	 * @param olds Previous persisted state
-	 * @param news New desired configuration
-	 * @returns Diff result with replacement triggers
-	 */
 	async diff(
 		_id: string,
 		olds: RailwayDomainOutputs,
@@ -296,55 +256,93 @@ class RailwayDomainProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
-/**
- * Manages a Railway domain (service or custom) with adopt-or-create semantics.
- *
- * Uses the FQDN as the Pulumi resource ID so `domain.id` returns the domain name
- * directly, enabling `pulumi.interpolate\`https://${domain.id}\`` for URL composition.
- *
- * @example
- * ```typescript
- * const domain = new RailwayDomain("railway-domain-api", {
- *   token: project.projectToken,
- *   projectId: project.projectId,
- *   serviceId: service.serviceId,
- *   environmentId: project.productionEnvironmentId,
- * });
- *
- * const url = pulumi.interpolate`https://${domain.id}`;
- * ```
- */
-export class RailwayDomain extends pulumi.dynamic.Resource {
-	/**
-	 * @param name Pulumi resource name (logical identifier in state)
-	 * @param args Domain configuration inputs
-	 * @param opts Standard Pulumi resource options (e.g. `dependsOn`, `parent`)
-	 */
+/** Internal dynamic resource — not part of the public API. */
+class RailwayDomainResource extends pulumi.dynamic.Resource {
+	public declare readonly fqdn: pulumi.Output<string>;
+
 	constructor(
 		name: string,
 		args: {
-			/** Railway API bearer token. */
 			token: pulumi.Input<string>;
-
-			/** Railway project UUID. */
 			projectId: pulumi.Input<string>;
-
-			/** Railway service UUID to attach the domain to. */
 			serviceId: pulumi.Input<string>;
-
-			/** Railway environment UUID (e.g. production). */
 			environmentId: pulumi.Input<string>;
-
-			/** Custom domain FQDN. Omit to create an auto-generated Railway service domain. */
 			customDomain?: pulumi.Input<string>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayDomainProvider(),
+			new RailwayDomainResourceProvider(),
 			name,
 			{ ...args, domainId: undefined, fqdn: undefined },
 			opts,
 		);
+	}
+}
+
+/** Options type for RailwayDomain — replaces Pulumi's native `provider` field. */
+type RailwayDomainOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Railway authentication context. */
+	provider: RailwayProvider;
+
+	/** Railway project context. */
+	project: RailwayProject;
+
+	/** Railway environment context. */
+	environment: RailwayEnvironment;
+
+	/** Railway service context. */
+	service: RailwayService;
+};
+
+/** Args for RailwayDomain. */
+export interface RailwayDomainArgs {
+	/** Custom domain FQDN. Omit to create an auto-generated Railway service domain. */
+	customDomain?: pulumi.Input<string>;
+}
+
+/**
+ * Manages a Railway domain (service or custom) with adopt-or-create semantics.
+ *
+ * @example
+ * ```typescript
+ * const domain = new RailwayDomain("api-domain", {}, {
+ *   provider, project, environment, service,
+ * });
+ *
+ * const url = pulumi.interpolate`https://${domain.fqdn}`;
+ * ```
+ */
+export class RailwayDomain extends pulumi.ComponentResource {
+	/** Fully qualified domain name. */
+	public readonly fqdn: pulumi.Output<string>;
+
+	constructor(
+		name: string,
+		args: RailwayDomainArgs,
+		opts: RailwayDomainOptions,
+	) {
+		const { provider, project, environment, service, ...pulumiOpts } = opts;
+
+		super("infracraft:railway:Domain", name, {}, pulumiOpts);
+
+		const resource = new RailwayDomainResource(
+			`${name}-resource`,
+			{
+				token: provider.token,
+				projectId: project.projectId,
+				serviceId: service.serviceId,
+				environmentId: environment.environmentId,
+				customDomain: args.customDomain,
+			},
+			{ parent: this },
+		);
+
+		this.fqdn = resource.fqdn;
+
+		this.registerOutputs({ fqdn: this.fqdn });
 	}
 }

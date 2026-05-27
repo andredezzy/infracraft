@@ -1,5 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import { NeonClient } from "./client.js";
+import type { NeonBranch } from "./branch.js";
+import type { NeonProject } from "./project.js";
+import type { NeonProvider } from "./provider.js";
 
 /** Resolved inputs for the Neon database dynamic provider. */
 export interface NeonDatabaseInputs {
@@ -43,12 +46,6 @@ interface DatabaseListResponse {
 
 /**
  * Finds an existing database by name on a branch.
- *
- * @param client Authenticated Neon API client
- * @param projectId Neon project ID
- * @param branchId Branch ID to search within
- * @param name Exact database name to match
- * @returns `true` if found, `false` otherwise
  */
 async function findDatabaseByName(
 	client: NeonClient,
@@ -69,13 +66,7 @@ async function findDatabaseByName(
  * Uses adopt-or-create on `create()`: checks if the database already exists
  * before creating a new one.
  */
-class NeonDatabaseProvider implements pulumi.dynamic.ResourceProvider {
-	/**
-	 * Creates or adopts a Neon database by name.
-	 *
-	 * @param inputs Resolved database configuration
-	 * @returns Composite ID `{branchId}/{databaseName}` as the resource ID
-	 */
+class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: NeonDatabaseInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -103,14 +94,6 @@ class NeonDatabaseProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Reads current state for `pulumi refresh`.
-	 *
-	 * @param id Current composite database ID
-	 * @param props Last known persisted state
-	 * @returns Refreshed resource ID and properties
-	 * @throws {Error} If the database no longer exists
-	 */
 	async read(
 		id: string,
 		props: NeonDatabaseOutputs,
@@ -127,9 +110,6 @@ class NeonDatabaseProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Deletes the Neon database. Silently succeeds if already deleted.
-	 */
 	async delete(_id: string, props: NeonDatabaseOutputs): Promise<void> {
 		const client = new NeonClient(props.apiKey);
 
@@ -144,10 +124,6 @@ class NeonDatabaseProvider implements pulumi.dynamic.ResourceProvider {
 		}
 	}
 
-	/**
-	 * Compares old and new inputs. All fields trigger replacement
-	 * since databases cannot be renamed or moved.
-	 */
 	async diff(
 		_id: string,
 		olds: NeonDatabaseOutputs,
@@ -175,46 +151,80 @@ class NeonDatabaseProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
+/** Internal dynamic resource — not part of the public API. */
+class NeonDatabaseResource extends pulumi.dynamic.Resource {
+	constructor(
+		name: string,
+		args: {
+			apiKey: pulumi.Input<string>;
+			projectId: pulumi.Input<string>;
+			branchId: pulumi.Input<string>;
+			name: pulumi.Input<string>;
+			ownerName: pulumi.Input<string>;
+		},
+		opts?: pulumi.CustomResourceOptions,
+	) {
+		super(new NeonDatabaseResourceProvider(), name, { ...args }, opts);
+	}
+}
+
+/** Options type for NeonDatabase — replaces Pulumi's native `provider` field. */
+type NeonDatabaseOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Neon authentication context. */
+	provider: NeonProvider;
+
+	/** Neon project context. */
+	project: NeonProject;
+
+	/** Neon branch context. */
+	branch: NeonBranch;
+};
+
+/** Args for NeonDatabase. */
+export interface NeonDatabaseArgs {
+	/** Database name. */
+	name: pulumi.Input<string>;
+
+	/** Owner role name. */
+	ownerName: pulumi.Input<string>;
+}
+
 /**
  * Manages a Neon database with adopt-or-create semantics.
  *
  * @example
  * ```typescript
- * new NeonDatabase("neon-database", {
- *   apiKey: config.requireSecret("neonApiKey"),
- *   projectId: "quiet-forest-69719462",
- *   branchId: branch.id,
+ * new NeonDatabase("main", {
  *   name: "neondb",
  *   ownerName: "neondb_owner",
- * });
+ * }, { provider, project, branch });
  * ```
  */
-export class NeonDatabase extends pulumi.dynamic.Resource {
-	/**
-	 * @param name Pulumi resource name
-	 * @param args Database configuration inputs
-	 * @param opts Standard Pulumi resource options
-	 */
+export class NeonDatabase extends pulumi.ComponentResource {
 	constructor(
 		name: string,
-		args: {
-			/** Neon API key. */
-			apiKey: pulumi.Input<string>;
-
-			/** Neon project ID. */
-			projectId: pulumi.Input<string>;
-
-			/** Branch ID the database belongs to. */
-			branchId: pulumi.Input<string>;
-
-			/** Database name. */
-			name: pulumi.Input<string>;
-
-			/** Owner role name. */
-			ownerName: pulumi.Input<string>;
-		},
-		opts?: pulumi.CustomResourceOptions,
+		args: NeonDatabaseArgs,
+		opts: NeonDatabaseOptions,
 	) {
-		super(new NeonDatabaseProvider(), name, { ...args }, opts);
+		const { provider, project, branch, ...pulumiOpts } = opts;
+
+		super("infracraft:neon:Database", name, {}, pulumiOpts);
+
+		new NeonDatabaseResource(
+			`${name}-resource`,
+			{
+				apiKey: provider.apiKey,
+				projectId: project.projectId,
+				branchId: branch.branchId,
+				name: args.name,
+				ownerName: args.ownerName,
+			},
+			{ parent: this },
+		);
+
+		this.registerOutputs({});
 	}
 }

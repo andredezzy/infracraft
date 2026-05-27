@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { NeonClient } from "./client.js";
+import type { NeonProvider } from "./provider.js";
 
 /** Resolved inputs for the Neon project dynamic provider. */
 export interface NeonProjectInputs {
@@ -41,13 +42,7 @@ interface ProjectReadResponse {
  * If found, adopts the existing project. If not, creates a new one via
  * `POST /projects`. Deletion is a no-op to protect production databases.
  */
-class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
-	/**
-	 * Creates or adopts a Neon project by name.
-	 *
-	 * @param inputs Resolved project configuration
-	 * @returns The Neon project ID as the resource ID
-	 */
+class NeonProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: NeonProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -84,14 +79,6 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 		return { id: projectId, outs };
 	}
 
-	/**
-	 * Reads current state for `pulumi refresh`.
-	 *
-	 * @param id Current Neon project ID
-	 * @param props Last known persisted state
-	 * @returns Refreshed resource ID and properties
-	 * @throws {Error} If the project no longer exists
-	 */
 	async read(
 		id: string,
 		props: NeonProjectOutputs,
@@ -110,9 +97,6 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	/**
-	 * Updates the Neon project name via PATCH.
-	 */
 	async update(
 		id: string,
 		_olds: NeonProjectOutputs,
@@ -127,19 +111,12 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 		return { outs: { ...news, projectId: id } };
 	}
 
-	/**
-	 * Skips deletion to protect production databases.
-	 */
 	async delete(): Promise<void> {
 		pulumi.log.warn(
 			"Neon project deletion skipped — projects are not deleted by Pulumi",
 		);
 	}
 
-	/**
-	 * Compares old and new inputs. `orgId` changes trigger replacement.
-	 * `name` changes trigger in-place update via PATCH.
-	 */
 	async diff(
 		_id: string,
 		olds: NeonProjectOutputs,
@@ -164,56 +141,79 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
-/**
- * Manages a Neon project with adopt-or-create semantics.
- *
- * Discovers or creates the project by exact name match. Deletion is a no-op
- * to prevent accidental removal of production databases.
- *
- * @example
- * ```typescript
- * const project = new NeonProject("neon-project", {
- *   apiKey: config.requireSecret("neonApiKey"),
- *   name: "my-app",
- *   orgId: "org-abc123",
- * });
- *
- * // Use the resolved project ID downstream
- * const branch = new NeonBranch("neon-branch-production", {
- *   apiKey: config.requireSecret("neonApiKey"),
- *   projectId: project.projectId,
- *   name: "production",
- * });
- * ```
- */
-export class NeonProject extends pulumi.dynamic.Resource {
-	/** Neon-assigned project ID. */
+/** Internal dynamic resource — not part of the public API. */
+class NeonProjectResource extends pulumi.dynamic.Resource {
 	public declare readonly projectId: pulumi.Output<string>;
 
-	/**
-	 * @param name Pulumi resource name
-	 * @param args Project configuration inputs
-	 * @param opts Standard Pulumi resource options
-	 */
 	constructor(
 		name: string,
 		args: {
-			/** Neon API key. */
 			apiKey: pulumi.Input<string>;
-
-			/** Exact project display name to adopt or create. */
 			name: pulumi.Input<string>;
-
-			/** Optional Neon organization ID to scope the project search. */
 			orgId?: pulumi.Input<string>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new NeonProjectProvider(),
+			new NeonProjectResourceProvider(),
 			name,
 			{ ...args, projectId: undefined },
 			opts,
 		);
+	}
+}
+
+/** Options type for NeonProject — replaces Pulumi's native `provider` field. */
+type NeonProjectOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+	/** Neon authentication context. */
+	provider: NeonProvider;
+};
+
+/** Args for NeonProject. */
+export interface NeonProjectArgs {
+	/** Exact project display name to adopt or create. */
+	name: pulumi.Input<string>;
+}
+
+/**
+ * Manages a Neon project with adopt-or-create semantics.
+ *
+ * @example
+ * ```typescript
+ * const project = new NeonProject("db", {
+ *   name: "my-app",
+ * }, { provider });
+ *
+ * const branch = new NeonBranch("production", {
+ *   name: "production",
+ * }, { provider, project });
+ * ```
+ */
+export class NeonProject extends pulumi.ComponentResource {
+	/** Neon-assigned project ID. */
+	public readonly projectId: pulumi.Output<string>;
+
+	constructor(
+		name: string,
+		args: NeonProjectArgs,
+		opts: NeonProjectOptions,
+	) {
+		const { provider, ...pulumiOpts } = opts;
+
+		super("infracraft:neon:Project", name, {}, pulumiOpts);
+
+		const resource = new NeonProjectResource(
+			`${name}-resource`,
+			{
+				apiKey: provider.apiKey,
+				name: args.name,
+				orgId: provider.orgId,
+			},
+			{ parent: this },
+		);
+
+		this.projectId = resource.projectId;
+
+		this.registerOutputs({ projectId: this.projectId });
 	}
 }

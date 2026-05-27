@@ -1,5 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 import { RailwayClient } from "./client.js";
+import type { RailwayEnvironment } from "./environment.js";
+import type { RailwayProject } from "./project.js";
+import type { RailwayProvider } from "./provider.js";
 
 /** Docker image source for a Railway service (e.g. `redis:8-alpine`). */
 interface RailwayServiceSource {
@@ -198,12 +201,9 @@ async function applyInstanceConfig(
  * before creating a new one. Service instance configuration (builder, commands,
  * healthcheck) is applied via `serviceInstanceUpdate` after create or update.
  */
-class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
+class RailwayServiceResourceProvider implements pulumi.dynamic.ResourceProvider {
 	/**
 	 * Creates or adopts a Railway service by name, then applies instance config.
-	 *
-	 * @param inputs Resolved service configuration
-	 * @returns The Railway service UUID as the resource ID
 	 */
 	async create(
 		inputs: RailwayServiceInputs,
@@ -268,10 +268,6 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 
 	/**
 	 * Updates service name/icon and re-applies instance configuration.
-	 *
-	 * @param id Railway service UUID
-	 * @param _olds Previous persisted state
-	 * @param news New desired configuration
 	 */
 	async update(
 		id: string,
@@ -303,9 +299,6 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 
 	/**
 	 * Reads current state for `pulumi refresh` by querying the service by ID.
-	 *
-	 * @param id Railway service UUID
-	 * @param props Last known persisted state
 	 */
 	async read(
 		id: string,
@@ -327,9 +320,6 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 
 	/**
 	 * Deletes the Railway service. Silently succeeds if already deleted.
-	 *
-	 * @param id Railway service UUID to delete
-	 * @param props Last known persisted state (used for token and logging)
 	 */
 	async delete(id: string, props: RailwayServiceOutputs): Promise<void> {
 		const client = new RailwayClient(props.token);
@@ -349,11 +339,6 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 	 * Compares old and new inputs to determine what changed.
 	 *
 	 * ProjectId and environmentId changes trigger replacement.
-	 * Name, builder, commands, and healthcheck changes trigger in-place update.
-	 *
-	 * @param _id Current resource ID (unused)
-	 * @param olds Previous persisted state
-	 * @param news New desired configuration
 	 */
 	async diff(
 		_id: string,
@@ -415,85 +400,130 @@ class RailwayServiceProvider implements pulumi.dynamic.ResourceProvider {
 	}
 }
 
-/**
- * Manages a Railway service with adopt-or-create semantics.
- *
- * Queries existing services by project ID and name before creating new ones.
- * Service instance configuration (builder, start command, healthcheck) is
- * applied after creation via `serviceInstanceUpdate`.
- *
- * @example
- * ```typescript
- * const service = new RailwayService("railway-service-api", {
- *   token: project.projectToken,
- *   projectId: project.projectId,
- *   environmentId: project.productionEnvironmentId,
- *   name: "@my-app/api",
- *   builder: "RAILPACK",
- *   startCommand: "node dist/index.js",
- *   healthcheckPath: "/health",
- * });
- *
- * // Use serviceId downstream
- * new RailwayVariable("railway-variable-api", {
- *   serviceId: service.serviceId,
- *   ...
- * });
- * ```
- */
-export class RailwayService extends pulumi.dynamic.Resource {
-	/** Railway service UUID. */
+/** Internal dynamic resource — not part of the public API. */
+class RailwayServiceResource extends pulumi.dynamic.Resource {
 	public declare readonly serviceId: pulumi.Output<string>;
 
 	constructor(
 		name: string,
 		args: {
-			/** Railway API bearer token. */
 			token: pulumi.Input<string>;
-
-			/** Railway project UUID. */
 			projectId: pulumi.Input<string>;
-
-			/** Railway environment UUID (e.g. production). */
 			environmentId: pulumi.Input<string>;
-
-			/** Human-readable service name used for adopt-or-create matching. */
 			name: pulumi.Input<string>;
-
-			/** SVG icon URL displayed in the Railway dashboard. */
 			icon?: pulumi.Input<string>;
-
-			/** Docker image source for image-based services. */
 			source?: pulumi.Input<{ image: pulumi.Input<string> }>;
-
-			/** Build system: `"RAILPACK"`, `"NIXPACKS"`, or `"DOCKERFILE"`. */
 			builder?: pulumi.Input<string>;
-
-			/** Shell command executed during the build phase. */
 			buildCommand?: pulumi.Input<string>;
-
-			/** Shell command executed to start the service at runtime. */
 			startCommand?: pulumi.Input<string>;
-
-			/** Restart behavior: `"ON_FAILURE"`, `"ALWAYS"`, or `"NEVER"`. */
 			restartPolicyType?: pulumi.Input<string>;
-
-			/** HTTP path polled for health checks (e.g. `"/health-check"`). */
 			healthcheckPath?: pulumi.Input<string>;
-
-			/** Seconds to wait for a healthy response before marking unhealthy. */
 			healthcheckTimeout?: pulumi.Input<number>;
-
-			/** Shell command executed before the main deploy (e.g. migrations). */
 			preDeployCommand?: pulumi.Input<string>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayServiceProvider(),
+			new RailwayServiceResourceProvider(),
 			name,
 			{ ...args, serviceId: undefined },
 			opts,
 		);
+	}
+}
+
+/** Options type for RailwayService — replaces Pulumi's native `provider` field. */
+type RailwayServiceOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
+	/** Railway authentication context. */
+	provider: RailwayProvider;
+
+	/** Railway project context. */
+	project: RailwayProject;
+
+	/** Railway environment context. */
+	environment: RailwayEnvironment;
+};
+
+/** Args for RailwayService. */
+export interface RailwayServiceArgs {
+	/** Human-readable service name used for adopt-or-create matching. */
+	name: pulumi.Input<string>;
+
+	/** SVG icon URL displayed in the Railway dashboard. */
+	icon?: pulumi.Input<string>;
+
+	/** Docker image source for image-based services. */
+	source?: pulumi.Input<{ image: pulumi.Input<string> }>;
+
+	/** Build system: `"RAILPACK"`, `"NIXPACKS"`, or `"DOCKERFILE"`. */
+	builder?: pulumi.Input<string>;
+
+	/** Shell command executed during the build phase. */
+	buildCommand?: pulumi.Input<string>;
+
+	/** Shell command executed to start the service at runtime. */
+	startCommand?: pulumi.Input<string>;
+
+	/** Restart behavior: `"ON_FAILURE"`, `"ALWAYS"`, or `"NEVER"`. */
+	restartPolicyType?: pulumi.Input<string>;
+
+	/** HTTP path polled for health checks (e.g. `"/health-check"`). */
+	healthcheckPath?: pulumi.Input<string>;
+
+	/** Seconds to wait for a healthy response before marking unhealthy. */
+	healthcheckTimeout?: pulumi.Input<number>;
+
+	/** Shell command executed before the main deploy (e.g. migrations). */
+	preDeployCommand?: pulumi.Input<string>;
+}
+
+/**
+ * Manages a Railway service with adopt-or-create semantics.
+ *
+ * @example
+ * ```typescript
+ * const service = new RailwayService("api", {
+ *   name: "api",
+ *   builder: "RAILPACK",
+ *   startCommand: "node dist/index.js",
+ *   healthcheckPath: "/health",
+ * }, { provider, project, environment });
+ *
+ * // Use serviceId downstream
+ * new RailwayVariable("api-vars", {
+ *   variables: { DATABASE_URL: dbUrl },
+ * }, { provider, project, environment, service });
+ * ```
+ */
+export class RailwayService extends pulumi.ComponentResource {
+	/** Railway service UUID. */
+	public readonly serviceId: pulumi.Output<string>;
+
+	constructor(
+		name: string,
+		args: RailwayServiceArgs,
+		opts: RailwayServiceOptions,
+	) {
+		const { provider, project, environment, ...pulumiOpts } = opts;
+
+		super("infracraft:railway:Service", name, {}, pulumiOpts);
+
+		const resource = new RailwayServiceResource(
+			`${name}-resource`,
+			{
+				token: provider.token,
+				projectId: project.projectId,
+				environmentId: environment.environmentId,
+				...args,
+			},
+			{ parent: this },
+		);
+
+		this.serviceId = resource.serviceId;
+
+		this.registerOutputs({ serviceId: this.serviceId });
 	}
 }
