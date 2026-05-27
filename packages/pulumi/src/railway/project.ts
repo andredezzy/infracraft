@@ -332,7 +332,7 @@ class RailwayProjectProvider implements pulumi.dynamic.ResourceProvider {
 		const changes: string[] = [];
 
 		if (olds.name !== news.name) {
-			replaces.push("name");
+			changes.push("name");
 		}
 
 		if (olds.description !== news.description) {
