@@ -58,8 +58,10 @@ export class RailwayClient {
 		});
 
 		if (!response.ok) {
+			const body = await response.text();
+
 			throw new Error(
-				`Railway API HTTP error: ${response.status} ${response.statusText}`,
+				`Railway API HTTP error: ${response.status} ${response.statusText}\n${body}`,
 			);
 		}
 
