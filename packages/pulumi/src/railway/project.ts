@@ -250,7 +250,7 @@ class RailwayProjectProvider implements pulumi.dynamic.ResourceProvider {
 
 		const environments = await fetchProjectEnvironments(client, projectId);
 
-		const productionEnvironmentId = environments["production"] ?? "";
+		const productionEnvironmentId = environments.production ?? "";
 
 		const projectToken = await getOrCreateProjectToken(
 			client,
@@ -282,7 +282,7 @@ class RailwayProjectProvider implements pulumi.dynamic.ResourceProvider {
 
 		const environments = await fetchProjectEnvironments(client, id);
 
-		const productionEnvironmentId = environments["production"] ?? "";
+		const productionEnvironmentId = environments.production ?? "";
 
 		const projectToken = await getOrCreateProjectToken(
 			client,
@@ -309,7 +309,7 @@ class RailwayProjectProvider implements pulumi.dynamic.ResourceProvider {
 		const environments = await fetchProjectEnvironments(client, id);
 
 		const productionEnvironmentId =
-			environments["production"] ?? props.productionEnvironmentId;
+			environments.production ?? props.productionEnvironmentId;
 
 		return {
 			id,

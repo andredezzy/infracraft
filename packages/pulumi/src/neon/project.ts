@@ -48,7 +48,9 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 	 * @param inputs Resolved project configuration
 	 * @returns The Neon project ID as the resource ID
 	 */
-	async create(inputs: NeonProjectInputs): Promise<pulumi.dynamic.CreateResult> {
+	async create(
+		inputs: NeonProjectInputs,
+	): Promise<pulumi.dynamic.CreateResult> {
 		const client = new NeonClient(inputs.apiKey);
 
 		const query = inputs.orgId
@@ -68,9 +70,7 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 
 			projectId = existing.id;
 		} else {
-			pulumi.log.info(
-				`Neon project "${inputs.name}" not found — creating...`,
-			);
+			pulumi.log.info(`Neon project "${inputs.name}" not found — creating...`);
 
 			const created = await client.post<ProjectCreateResponse>("/projects", {
 				project: { name: inputs.name },
@@ -102,7 +102,11 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 
 		return {
 			id: result.project.id,
-			props: { ...props, name: result.project.name, projectId: result.project.id },
+			props: {
+				...props,
+				name: result.project.name,
+				projectId: result.project.id,
+			},
 		};
 	}
 

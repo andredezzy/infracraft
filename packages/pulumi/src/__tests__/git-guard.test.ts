@@ -3,7 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { GUARD_DIR, ensureGitignore } from "../git-guard";
+import { ensureGitignore, GUARD_DIR } from "../git-guard";
 
 describe("ensureGitignore", () => {
 	let tmpDir: string;

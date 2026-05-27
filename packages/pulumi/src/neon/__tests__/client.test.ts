@@ -32,10 +32,10 @@ describe("NeonClient", () => {
 		});
 
 		const client = new NeonClient("test-api-key");
-		const result = await client.post<{ project: { id: string } }>(
-			"/projects",
-			{ project: { name: "test" } },
-		);
+
+		const result = await client.post<{ project: { id: string } }>("/projects", {
+			project: { name: "test" },
+		});
 
 		expect(result.project.id).toBe("proj-1");
 

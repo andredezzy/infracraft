@@ -32,8 +32,16 @@ export function gitGuard(monorepoRoot: string): GitGuardResult {
 	}
 
 	process.on("exit", restore);
-	process.on("SIGINT", () => { restore(); process.exit(0); });
-	process.on("SIGTERM", () => { restore(); process.exit(0); });
+
+	process.on("SIGINT", () => {
+		restore();
+		process.exit(0);
+	});
+
+	process.on("SIGTERM", () => {
+		restore();
+		process.exit(0);
+	});
 
 	const hide = new command.local.Command("git-guard-hide", {
 		create: [

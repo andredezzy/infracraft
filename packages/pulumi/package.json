@@ -24,7 +24,9 @@
 			"default": "./dist/git-guard.mjs"
 		}
 	},
-	"files": ["dist/**"],
+	"files": [
+		"dist/**"
+	],
 	"scripts": {
 		"build": "tsdown",
 		"dev": "tsdown --watch",
