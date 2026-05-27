@@ -7,7 +7,7 @@ export default mergeConfig(
 		test: {
 			include: ["src/**/*.test.ts", "test/**/*.test.ts"],
 			exclude: ["**/node_modules/**", "**/dist/**", "**/*.e2e-test.ts"],
-			setupFiles: ["@infrakit/config-test/setup"],
+			setupFiles: ["@infracraft/config-test/setup"],
 			passWithNoTests: true,
 		},
 	}),

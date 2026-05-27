@@ -1,5 +1,5 @@
 {
-	"name": "@infrakit/config-test",
+	"name": "@infracraft/config-test",
 	"version": "0.0.0",
 	"private": true,
 	"type": "module",
@@ -48,7 +48,7 @@
 		}
 	},
 	"devDependencies": {
-		"@infrakit/config-tsdown": "workspace:*",
-		"@infrakit/typescript-config": "workspace:*"
+		"@infracraft/config-tsdown": "workspace:*",
+		"@infracraft/typescript-config": "workspace:*"
 	}
 }

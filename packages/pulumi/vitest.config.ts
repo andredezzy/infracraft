@@ -1,3 +1,3 @@
-import unit from "@infrakit/config-test/unit";
+import unit from "@infracraft/config-test/unit";
 
 export default unit;

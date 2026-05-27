@@ -19,14 +19,14 @@
       },
     },
     "packages/config-test": {
-      "name": "@infrakit/config-test",
+      "name": "@infracraft/config-test",
       "version": "0.0.0",
       "dependencies": {
         "vitest": "4.1.7",
       },
       "devDependencies": {
-        "@infrakit/config-tsdown": "workspace:*",
-        "@infrakit/typescript-config": "workspace:*",
+        "@infracraft/config-tsdown": "workspace:*",
+        "@infracraft/typescript-config": "workspace:*",
       },
       "peerDependencies": {
         "@vitest/coverage-v8": "^4.0.16",
@@ -36,29 +36,29 @@
       ],
     },
     "packages/config-tsdown": {
-      "name": "@infrakit/config-tsdown",
+      "name": "@infracraft/config-tsdown",
       "version": "0.0.0",
       "dependencies": {
         "tsdown": "0.22.0",
       },
       "devDependencies": {
-        "@infrakit/typescript-config": "workspace:*",
+        "@infracraft/typescript-config": "workspace:*",
       },
       "peerDependencies": {
         "typescript": "^5.0.0",
       },
     },
     "packages/config-typescript": {
-      "name": "@infrakit/typescript-config",
+      "name": "@infracraft/typescript-config",
       "version": "0.0.0",
     },
     "packages/pulumi": {
-      "name": "@infrakit/pulumi",
+      "name": "@infracraft/pulumi",
       "version": "0.1.0",
       "devDependencies": {
-        "@infrakit/config-test": "workspace:*",
-        "@infrakit/config-tsdown": "workspace:*",
-        "@infrakit/typescript-config": "workspace:*",
+        "@infracraft/config-test": "workspace:*",
+        "@infracraft/config-tsdown": "workspace:*",
+        "@infracraft/typescript-config": "workspace:*",
         "@pulumi/command": "1.2.1",
         "@pulumi/pulumi": "3.243.0",
         "@types/node": "25.9.1",
@@ -142,13 +142,13 @@
 
     "@humanwhocodes/retry": ["@humanwhocodes/retry@0.4.3", "", {}, "sha512-bV0Tgo9K4hfPCek+aMAn81RppFKv2ySDQeMoSZuvTASywNTnVJCArCZE2FWqpvIatKu7VMRLWlR1EazvVhDyhQ=="],
 
-    "@infrakit/config-test": ["@infrakit/config-test@workspace:packages/config-test"],
+    "@infracraft/config-test": ["@infracraft/config-test@workspace:packages/config-test"],
 
-    "@infrakit/config-tsdown": ["@infrakit/config-tsdown@workspace:packages/config-tsdown"],
+    "@infracraft/config-tsdown": ["@infracraft/config-tsdown@workspace:packages/config-tsdown"],
 
-    "@infrakit/pulumi": ["@infrakit/pulumi@workspace:packages/pulumi"],
+    "@infracraft/pulumi": ["@infracraft/pulumi@workspace:packages/pulumi"],
 
-    "@infrakit/typescript-config": ["@infrakit/typescript-config@workspace:packages/config-typescript"],
+    "@infracraft/typescript-config": ["@infracraft/typescript-config@workspace:packages/config-typescript"],
 
     "@isaacs/fs-minipass": ["@isaacs/fs-minipass@4.0.1", "", { "dependencies": { "minipass": "^7.0.4" } }, "sha512-wgm9Ehl2jpeqP3zw/7mo3kRHFp5MEDhqAdwy1fTGkHAwnkGOVsgpvQhL8B5n1qlb01jV3n/bI0ZfZp5lWA1k4w=="],
 

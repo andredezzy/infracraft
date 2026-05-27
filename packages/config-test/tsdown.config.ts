@@ -1,5 +1,5 @@
-import { baseConfig } from "@infrakit/config-tsdown/base";
-import { mergeConfig } from "@infrakit/config-tsdown/merge";
+import { baseConfig } from "@infracraft/config-tsdown/base";
+import { mergeConfig } from "@infracraft/config-tsdown/merge";
 
 export default [
 	mergeConfig(baseConfig, {

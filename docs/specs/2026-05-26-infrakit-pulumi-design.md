@@ -1,8 +1,8 @@
-# @infrakit/pulumi — Design Spec
+# @infracraft/pulumi — Design Spec
 
 ## Vision
 
-`@infrakit` is an infrastructure toolkit brand. `@infrakit/pulumi` is the first package — Pulumi providers that fill gaps no existing library covers.
+`@infracraft` is an infrastructure toolkit brand. `@infracraft/pulumi` is the first package — Pulumi providers that fill gaps no existing library covers.
 
 ## Market Context
 
@@ -17,25 +17,25 @@
 Single npm package with subpath exports:
 
 ```
-npm install @infrakit/pulumi
+npm install @infracraft/pulumi
 ```
 
 ```ts
-import { RailwayProject, RailwayService } from '@infrakit/pulumi/railway'
-import { NeonProject, NeonBranch, NeonRole } from '@infrakit/pulumi/neon'
-import { VercelDeploy, VercelVariable } from '@infrakit/pulumi/vercel'
-import { hashDirectory } from '@infrakit/pulumi/hash'
-import { gitGuard } from '@infrakit/pulumi/git-guard'
+import { RailwayProject, RailwayService } from '@infracraft/pulumi/railway'
+import { NeonProject, NeonBranch, NeonRole } from '@infracraft/pulumi/neon'
+import { VercelDeploy, VercelVariable } from '@infracraft/pulumi/vercel'
+import { hashDirectory } from '@infracraft/pulumi/hash'
+import { gitGuard } from '@infracraft/pulumi/git-guard'
 ```
 
 ## Repository Structure
 
-Monorepo with room for future `@infrakit/*` packages:
+Monorepo with room for future `@infracraft/*` packages:
 
 ```
 infrakit/
   packages/
-    pulumi/                              ← @infrakit/pulumi
+    pulumi/                              ← @infracraft/pulumi
       src/
         railway/
           client.ts                      GraphQL client
@@ -64,7 +64,7 @@ infrakit/
       tsconfig.json
       tsdown.config.ts
       vitest.config.ts
-    config-tsdown/                       ← @infrakit/config-tsdown
+    config-tsdown/                       ← @infracraft/config-tsdown
       src/
         base.ts
         library.ts
@@ -72,10 +72,10 @@ infrakit/
       package.json
       tsconfig.json
       tsdown.config.ts
-    config-typescript/                    ← @infrakit/typescript-config
+    config-typescript/                    ← @infracraft/typescript-config
       base.json
       package.json
-    config-test/                         ← @infrakit/config-test
+    config-test/                         ← @infracraft/config-test
       src/
         base.ts
         unit.ts
@@ -107,7 +107,7 @@ infrakit/
 
 ## Subpath Exports
 
-### `@infrakit/pulumi/railway`
+### `@infracraft/pulumi/railway`
 
 Full Railway Pulumi provider — 8 resources + discovery layer.
 
@@ -122,7 +122,7 @@ Full Railway Pulumi provider — 8 resources + discovery layer.
 | `RailwayDeploy` | ComponentResource | `railway up --ci` with `[sourceHash, envHash]` triggers |
 | `RailwayDeployConfig` | Type | Build/deploy settings |
 
-### `@infrakit/pulumi/neon`
+### `@infracraft/pulumi/neon`
 
 Adopt-or-create layer for Neon serverless Postgres.
 
@@ -135,7 +135,7 @@ Adopt-or-create layer for Neon serverless Postgres.
 | `NeonRole` | dynamic.Resource | Role with password reveal (exposes `password` output) |
 | `NeonDatabase` | dynamic.Resource | Adopt-or-create database |
 
-### `@infrakit/pulumi/vercel`
+### `@infracraft/pulumi/vercel`
 
 Deployment orchestration for Vercel — fills gaps in `@pulumiverse/vercel`.
 
@@ -144,10 +144,10 @@ Deployment orchestration for Vercel — fills gaps in `@pulumiverse/vercel`.
 | `VercelVariable` | dynamic.Resource | Batch env vars with `contentHash` drift detection |
 | `VercelDeploy` | ComponentResource | `vercel deploy --prod` with `[sourceHash, envHash]` triggers |
 
-### `@infrakit/pulumi/hash`
+### `@infracraft/pulumi/hash`
 
 ```ts
-import { hashDirectory } from '@infrakit/pulumi/hash'
+import { hashDirectory } from '@infracraft/pulumi/hash'
 
 const sourceHash = hashDirectory('/app/apps/mesh')
 const hash = hashDirectory('/app/apps/api', {
@@ -159,10 +159,10 @@ const hash = hashDirectory('/app/apps/api', {
 - Default ignore: `node_modules`, `dist`, `.turbo`, `.next`, `.git`, `.vercel`
 - Configurable `ignore` set via options
 
-### `@infrakit/pulumi/git-guard`
+### `@infracraft/pulumi/git-guard`
 
 ```ts
-import { gitGuard } from '@infrakit/pulumi/git-guard'
+import { gitGuard } from '@infracraft/pulumi/git-guard'
 
 const guard = gitGuard(monorepoRoot)
 
@@ -313,8 +313,8 @@ Extracting from nodex/acme-gamma requires these changes:
 
 ## Publishing
 
-- npm scope: `@infrakit`
-- Package: `@infrakit/pulumi`
+- npm scope: `@infracraft`
+- Package: `@infracraft/pulumi`
 - License: MIT
 - CI: GitHub Actions — lint, typecheck, test, build, publish on tag
 - Versioning: semver, changesets or manual

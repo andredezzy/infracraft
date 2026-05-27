@@ -1,5 +1,5 @@
 {
-	"name": "@infrakit/typescript-config",
+	"name": "@infracraft/typescript-config",
 	"version": "0.0.0",
 	"private": true,
 	"publishConfig": {
