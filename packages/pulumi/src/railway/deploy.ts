@@ -22,11 +22,8 @@ export interface RailwayDeployArgs {
 	/** Absolute path to the monorepo root (working directory for `railway up`). */
 	directory: string;
 
-	/** SHA-256 hash of the app source directory, used as a deploy trigger. */
-	sourceHash: string;
-
-	/** Env var map used as deploy trigger. */
-	env: Record<string, pulumi.Input<string>>;
+	/** Values that trigger a redeploy when changed (e.g. source hashes, env hashes). */
+	triggers: pulumi.Input<pulumi.Input<string>[]>;
 
 	/** Directories to exclude via `.railwayignore`. */
 	excludePaths?: string[];
@@ -102,29 +99,13 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 
 		const setupLines = [writeIgnore, writeRailpack].filter(Boolean).join("; ");
 
-		const envHash = pulumi
-			.all(
-				Object.entries(args.env)
-					.sort(([a], [b]) => a.localeCompare(b))
-					.map(([k, v]) => pulumi.output(v).apply((val) => `${k}=${val}`)),
-			)
-			.apply((parts) => parts.join(","));
-
-		// Parallel-safe upload: multiple stacks deploy concurrently, but each writes
-		// .railwayignore and railpack.json to the same monorepo root before calling
-		// `railway up`. The mkdir lock serializes that brief window (~5s upload phase).
-		// After upload, the background job releases the lock so builds stream in parallel.
-		//
-		// Flow: acquire lock → write config files → release lock after 5s (background) →
-		//       railway up --ci (blocks through upload, then streams build logs) →
-		//       cleanup on exit
 		const deployCmd = pulumi.interpolate`while ! mkdir ${LOCK_DIR} 2>/dev/null; do sleep 1; done; ${setupLines}; { sleep 5; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; } & railway up --ci --project ${project.id} --service ${service.id} --environment ${environment.id}; EXIT=$?; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; wait; exit $EXIT`;
 
 		new command.local.Command(
 			`${name}-deploy`,
 			{
 				create: deployCmd,
-				triggers: [args.sourceHash, envHash],
+				triggers: args.triggers,
 				dir: args.directory,
 				environment: {
 					RAILWAY_TOKEN: project.projectToken,

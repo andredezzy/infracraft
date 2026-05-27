@@ -1,7 +1,5 @@
-import * as path from "node:path";
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
-import { hashDirectory } from "../hash.js";
 import type { VercelProject } from "./project.js";
 import type { VercelProvider } from "./provider.js";
 
@@ -28,20 +26,11 @@ export interface VercelDeployArgs {
 	 */
 	projectId?: pulumi.Input<string>;
 
-	/** Relative path from monorepo root to the app directory (e.g. `"apps/nexus"`). */
-	rootDirectory: string;
-
 	/** Absolute path to the monorepo root (working directory for `vercel deploy`). */
 	monorepoRoot: string;
 
-	/** Env var map used as deploy trigger. Hashes both keys and resolved values so value changes trigger redeploy. */
-	env: Record<string, pulumi.Input<string>>;
-
-	/** Additional directories (relative to monorepo root) to include in source hash. Changes in these trigger redeploy. */
-	additionalSourceDirs?: string[];
-
-	/** Resources that must complete before the deploy runs. */
-	dependsOn?: pulumi.Resource[];
+	/** Values that trigger a redeploy when changed (e.g. source hashes, env hashes). */
+	triggers: pulumi.Input<pulumi.Input<string>[]>;
 }
 
 /**
@@ -82,35 +71,11 @@ export class VercelDeploy extends pulumi.ComponentResource {
 			);
 		}
 
-		const appDir = path.join(args.monorepoRoot, args.rootDirectory);
-
-		const hashParts = [hashDirectory(appDir)];
-
-		for (const dir of args.additionalSourceDirs ?? []) {
-			hashParts.push(hashDirectory(path.join(args.monorepoRoot, dir)));
-		}
-
-		const sourceHash = hashParts.join(",");
-
-		const commandOpts: pulumi.ResourceOptions = { parent: this };
-
-		if (args.dependsOn && args.dependsOn.length > 0) {
-			commandOpts.dependsOn = args.dependsOn;
-		}
-
-		const envHash = pulumi
-			.all(
-				Object.entries(args.env)
-					.sort(([a], [b]) => a.localeCompare(b))
-					.map(([k, v]) => pulumi.output(v).apply((val) => `${k}=${val}`)),
-			)
-			.apply((parts) => parts.join(","));
-
 		new command.local.Command(
 			`${name}-deploy`,
 			{
 				create: "vercel deploy --prod --yes",
-				triggers: [sourceHash, envHash],
+				triggers: args.triggers,
 				dir: args.monorepoRoot,
 				environment: {
 					VERCEL_TOKEN: provider.token,
@@ -118,10 +83,7 @@ export class VercelDeploy extends pulumi.ComponentResource {
 					VERCEL_PROJECT_ID: projectId,
 				},
 			},
-			{
-				parent: this,
-				...(commandOpts.dependsOn ? { dependsOn: commandOpts.dependsOn } : {}),
-			},
+			{ parent: this },
 		);
 
 		this.registerOutputs({});
