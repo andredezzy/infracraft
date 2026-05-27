@@ -1,0 +1,10 @@
+{
+	"workspaces": {
+		".": {},
+		"packages/pulumi": {},
+		"packages/config-tsdown": {},
+		"packages/config-typescript": {},
+		"packages/config-test": {}
+	},
+	"ignore": ["dist", ".turbo"]
+}
