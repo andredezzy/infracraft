@@ -111,6 +111,23 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	/**
+	 * Updates the Neon project name via PATCH.
+	 */
+	async update(
+		id: string,
+		_olds: NeonProjectOutputs,
+		news: NeonProjectInputs,
+	): Promise<pulumi.dynamic.UpdateResult> {
+		const client = new NeonClient(news.apiKey);
+
+		await client.patch(`/projects/${id}`, {
+			project: { name: news.name },
+		});
+
+		return { outs: { ...news, projectId: id } };
+	}
+
+	/**
 	 * Skips deletion to protect production databases.
 	 */
 	async delete(): Promise<void> {
@@ -120,7 +137,8 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	/**
-	 * Compares old and new inputs. `name` or `orgId` changes trigger replacement.
+	 * Compares old and new inputs. `orgId` changes trigger replacement.
+	 * `name` changes trigger in-place update via PATCH.
 	 */
 	async diff(
 		_id: string,
@@ -128,9 +146,10 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 		news: NeonProjectInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
+		const changes: string[] = [];
 
 		if (olds.name !== news.name) {
-			replaces.push("name");
+			changes.push("name");
 		}
 
 		if (olds.orgId !== news.orgId) {
@@ -138,7 +157,7 @@ class NeonProjectProvider implements pulumi.dynamic.ResourceProvider {
 		}
 
 		return {
-			changes: replaces.length > 0,
+			changes: replaces.length > 0 || changes.length > 0,
 			replaces,
 			deleteBeforeReplace: true,
 		};
