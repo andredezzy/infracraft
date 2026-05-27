@@ -1,0 +1,54 @@
+{
+	"name": "@infrakit/config-test",
+	"version": "0.0.0",
+	"private": true,
+	"type": "module",
+	"exports": {
+		"./base": {
+			"types": "./dist/base.d.mts",
+			"import": "./dist/base.mjs",
+			"require": "./dist/base.cjs"
+		},
+		"./unit": {
+			"types": "./dist/unit.d.mts",
+			"import": "./dist/unit.mjs",
+			"require": "./dist/unit.cjs"
+		},
+		"./e2e": {
+			"types": "./dist/e2e.d.mts",
+			"import": "./dist/e2e.mjs",
+			"require": "./dist/e2e.cjs"
+		},
+		"./setup": {
+			"types": "./dist/setup.d.mts",
+			"import": "./dist/setup.mjs"
+		}
+	},
+	"typesVersions": {
+		"*": {
+			"*": [
+				"dist/*"
+			]
+		}
+	},
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch",
+		"typecheck": "tsc --noEmit"
+	},
+	"dependencies": {
+		"vitest": "4.1.7"
+	},
+	"peerDependencies": {
+		"@vitest/coverage-v8": "^4.0.16"
+	},
+	"peerDependenciesMeta": {
+		"@vitest/coverage-v8": {
+			"optional": true
+		}
+	},
+	"devDependencies": {
+		"@infrakit/config-tsdown": "workspace:*",
+		"@infrakit/typescript-config": "workspace:*"
+	}
+}
