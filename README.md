@@ -161,8 +161,8 @@ new FlyVolume("api-data", {
   sizeGb: 10,
 }, { provider, app });
 
-// Certificate — ACME cert for a custom hostname; exposes DNS requirements
-const cert = new FlyCertificate("api-cert", {
+// Certificate — ACME cert for a custom hostname; exposes .configured + .dnsRequirements
+new FlyCertificate("api-cert", {
   hostname: "api.example.com",
 }, { provider, app });
 
