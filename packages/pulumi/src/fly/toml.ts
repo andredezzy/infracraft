@@ -50,6 +50,7 @@ export enum FlyPortHandler {
 	TLS = "tls",
 	PG_TLS = "pg_tls",
 	PROXY_PROTO = "proxy_proto",
+	EDGE_HTTP = "edge_http",
 }
 
 /** VM CPU kind. */
@@ -65,73 +66,86 @@ export enum FlyCheckType {
 }
 
 /**
- * Fly region code (IATA). This is a complete closed union of every region
- * published by Fly.io. When Fly adds a new region, update this union and
- * release a new version of the package.
+ * Authoritative list of Fly region codes (IATA).
+ * Consumers may use this array for validation or UI rendering.
+ * Source: https://fly.io/docs/reference/regions/
  */
-export type FlyRegion =
+export const FLY_REGIONS = [
 	// Americas
-	| "bos"
-	| "dfw"
-	| "ewr"
-	| "gig"
-	| "gru"
-	| "iad"
-	| "lax"
-	| "mia"
-	| "ord"
-	| "scl"
-	| "sea"
-	| "sjc"
-	| "yul"
-	| "yyz"
+	"bos",
+	"dfw",
+	"ewr",
+	"gig",
+	"gru",
+	"iad",
+	"lax",
+	"mia",
+	"ord",
+	"scl",
+	"sea",
+	"sjc",
+	"yul",
+	"yyz",
 	// Europe
-	| "ams"
-	| "arn"
-	| "cdg"
-	| "fra"
-	| "lhr"
-	| "mad"
-	| "waw"
+	"ams",
+	"arn",
+	"cdg",
+	"fra",
+	"lhr",
+	"mad",
+	"waw",
 	// Asia-Pacific
-	| "bom"
-	| "hkg"
-	| "maa"
-	| "nrt"
-	| "sin"
-	| "syd"
+	"bom",
+	"hkg",
+	"maa",
+	"nrt",
+	"sin",
+	"syd",
 	// Africa
-	| "jnb";
+	"jnb",
+] as const;
 
 /**
- * Fly machine size preset. This is a complete closed union of every size
- * option published by Fly.io. When Fly adds a new size, update this union
- * and release a new version of the package.
- *
+ * Fly region code (IATA). Derived from {@link FLY_REGIONS} — single source of truth.
+ * When Fly adds a new region, update {@link FLY_REGIONS} and release a new version.
+ */
+export type FlyRegion = (typeof FLY_REGIONS)[number];
+
+/**
+ * Authoritative list of Fly machine size presets.
+ * Consumers may use this array for validation or UI rendering.
+ * Source: https://fly.io/docs/about/pricing/#compute
+ */
+export const FLY_VM_SIZES = [
+	// Shared CPU
+	"shared-cpu-1x",
+	"shared-cpu-2x",
+	"shared-cpu-4x",
+	"shared-cpu-6x",
+	"shared-cpu-8x",
+	// Performance CPU
+	"performance-1x",
+	"performance-2x",
+	"performance-4x",
+	"performance-6x",
+	"performance-8x",
+	"performance-10x",
+	"performance-12x",
+	"performance-14x",
+	"performance-16x",
+	// GPU
+	"a10",
+	"a100-40gb",
+	"a100-80gb",
+	"l40s",
+] as const;
+
+/**
+ * Fly machine size preset. Derived from {@link FLY_VM_SIZES} — single source of truth.
+ * When Fly adds a new size, update {@link FLY_VM_SIZES} and release a new version.
  * Pass the raw string directly — e.g. "shared-cpu-1x".
  */
-export type FlyVmSize =
-	// Shared CPU
-	| "shared-cpu-1x"
-	| "shared-cpu-2x"
-	| "shared-cpu-4x"
-	| "shared-cpu-6x"
-	| "shared-cpu-8x"
-	// Performance CPU
-	| "performance-1x"
-	| "performance-2x"
-	| "performance-4x"
-	| "performance-6x"
-	| "performance-8x"
-	| "performance-10x"
-	| "performance-12x"
-	| "performance-14x"
-	| "performance-16x"
-	// GPU
-	| "a10"
-	| "a100-40gb"
-	| "a100-80gb"
-	| "l40s";
+export type FlyVmSize = (typeof FLY_VM_SIZES)[number];
 
 /**
  * Number of CPUs for a [[vm]] entry. Valid values depend on the chosen

@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/pulumi",
-	"version": "1.4.0",
+	"version": "1.5.0",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
@@ -42,6 +42,7 @@
 		"dev": "tsdown --watch",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
+		"test:drift": "vitest run --config vitest.drift.config.ts",
 		"lint": "biome check --write"
 	},
 	"peerDependencies": {
@@ -54,12 +55,13 @@
 		}
 	},
 	"devDependencies": {
-		"@infracraft/config-tsdown": "workspace:*",
 		"@infracraft/config-test": "workspace:*",
+		"@infracraft/config-tsdown": "workspace:*",
 		"@infracraft/typescript-config": "workspace:*",
 		"@pulumi/command": "1.2.1",
 		"@pulumi/pulumi": "3.243.0",
 		"@types/node": "25.9.1",
+		"@vercel/frameworks": "3.26.1",
 		"typescript": "6.0.3",
 		"vitest": "4.1.7"
 	}

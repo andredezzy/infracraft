@@ -4,94 +4,100 @@ import type { VercelProvider } from "./provider.js";
 const VERCEL_API_URL = "https://api.vercel.com";
 
 /**
- * Vercel framework preset slug. This is a complete closed union of every
- * framework slug published by Vercel. When Vercel adds a new framework,
- * update this union and release a new version of the package.
- *
- * Source of truth: https://github.com/vercel/vercel/blob/main/packages/frameworks/src/frameworks.ts
+ * Authoritative list of Vercel framework preset slugs.
+ * Consumers may use this array for validation or UI rendering.
+ * Source of truth: @vercel/frameworks (run `bun run script` to regenerate).
+ * When Vercel adds a new framework, update this array and release a new version.
  */
-export type VercelFramework =
+export const VERCEL_FRAMEWORKS = [
 	// Full-stack & React
-	| "blitzjs"
-	| "nextjs"
-	| "gatsby"
-	| "remix"
-	| "react-router"
-	| "astro"
-	| "preact"
-	| "solidstart-1"
-	| "solidstart"
-	| "create-react-app"
-	| "ionic-react"
-	| "tanstack-start"
-	| "redwoodjs"
-	| "hydrogen"
+	"blitzjs",
+	"nextjs",
+	"gatsby",
+	"remix",
+	"react-router",
+	"astro",
+	"preact",
+	"solidstart-1",
+	"solidstart",
+	"create-react-app",
+	"ionic-react",
+	"tanstack-start",
+	"redwoodjs",
+	"hydrogen",
 	// Vue ecosystem
-	| "vue"
-	| "nuxtjs"
-	| "vitepress"
-	| "vuepress"
-	| "gridsome"
-	| "saber"
+	"vue",
+	"nuxtjs",
+	"vitepress",
+	"vuepress",
+	"gridsome",
+	"saber",
 	// Svelte ecosystem
-	| "svelte"
-	| "sveltekit"
-	| "sveltekit-1"
-	| "sapper"
+	"svelte",
+	"sveltekit",
+	"sveltekit-1",
+	"sapper",
 	// Angular ecosystem
-	| "angular"
-	| "ionic-angular"
-	| "scully"
+	"angular",
+	"ionic-angular",
+	"scully",
 	// Static site generators
-	| "hexo"
-	| "eleventy"
-	| "docusaurus-2"
-	| "docusaurus"
-	| "hugo"
-	| "jekyll"
-	| "brunch"
-	| "middleman"
-	| "zola"
+	"hexo",
+	"eleventy",
+	"docusaurus-2",
+	"docusaurus",
+	"hugo",
+	"jekyll",
+	"brunch",
+	"middleman",
+	"zola",
 	// UI / component tools
-	| "storybook"
-	| "stencil"
-	| "dojo"
-	| "ember"
-	| "polymer"
+	"storybook",
+	"stencil",
+	"dojo",
+	"ember",
+	"polymer",
 	// Build tools
-	| "vite"
-	| "parcel"
+	"vite",
+	"parcel",
 	// CMS
-	| "sanity-v3"
-	| "sanity"
+	"sanity-v3",
+	"sanity",
 	// Node.js back-ends
-	| "nitro"
-	| "hono"
-	| "express"
-	| "h3"
-	| "koa"
-	| "nestjs"
-	| "elysia"
-	| "fastify"
+	"nitro",
+	"hono",
+	"express",
+	"h3",
+	"koa",
+	"nestjs",
+	"elysia",
+	"fastify",
 	// Python
-	| "fastapi"
-	| "flask"
-	| "fasthtml"
-	| "django"
+	"fastapi",
+	"flask",
+	"fasthtml",
+	"django",
 	// Other languages
-	| "ash"
-	| "axum"
-	| "actix-web"
-	| "ruby"
-	| "rust"
-	| "go"
-	| "python"
-	| "node"
+	"ash",
+	"axum",
+	"actix-web",
+	"ruby",
+	"rust",
+	"go",
+	"python",
+	"node",
 	// Misc
-	| "xmcp"
-	| "umijs"
-	| "mastra"
-	| "services";
+	"xmcp",
+	"umijs",
+	"mastra",
+	"services",
+] as const;
+
+/**
+ * Vercel framework preset slug. Derived from {@link VERCEL_FRAMEWORKS} — single source of truth.
+ * When Vercel adds a new framework, update {@link VERCEL_FRAMEWORKS} and release a new version.
+ */
+export type VercelFramework = (typeof VERCEL_FRAMEWORKS)[number];
 
 /** Resolved inputs for the Vercel project dynamic provider. */
 export interface VercelProjectInputs {
