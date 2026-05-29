@@ -7,6 +7,7 @@ export type { RailwayEnvironmentArgs } from "./environment.js";
 export { RailwayEnvironment } from "./environment.js";
 export type { RailwayProjectArgs } from "./project.js";
 export { RailwayProject } from "./project.js";
+export type { RailwayProviderArgs } from "./provider.js";
 export { RailwayProvider } from "./provider.js";
 export type { RailwayServiceArgs } from "./service.js";
 export { RailwayService } from "./service.js";

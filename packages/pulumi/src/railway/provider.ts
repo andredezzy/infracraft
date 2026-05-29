@@ -1,5 +1,11 @@
 import * as pulumi from "@pulumi/pulumi";
 
+/** Args for RailwayProvider. */
+export interface RailwayProviderArgs {
+	/** Railway API bearer token. */
+	token: pulumi.Input<string>;
+}
+
 /**
  * Holds Railway authentication context for resource constructors.
  *
@@ -21,10 +27,7 @@ export class RailwayProvider extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: {
-			/** Railway API bearer token. */
-			token: pulumi.Input<string>;
-		},
+		args: RailwayProviderArgs,
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:railway:Provider", name, {}, opts);

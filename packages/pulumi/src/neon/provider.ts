@@ -1,5 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 
+/** Args for NeonProvider. */
+export interface NeonProviderArgs {
+	/** Neon API key. */
+	apiKey: pulumi.Input<string>;
+
+	/** Optional Neon organization ID to scope project search. */
+	orgId?: pulumi.Input<string>;
+}
+
 /**
  * Holds Neon authentication context for resource constructors.
  *
@@ -25,13 +34,7 @@ export class NeonProvider extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: {
-			/** Neon API key. */
-			apiKey: pulumi.Input<string>;
-
-			/** Optional Neon organization ID to scope project search. */
-			orgId?: pulumi.Input<string>;
-		},
+		args: NeonProviderArgs,
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:neon:Provider", name, {}, opts);
