@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
-import { NeonClient } from "./client.js";
 import type { NeonBranch } from "./branch.js";
+import { NeonClient } from "./client.js";
 import type { NeonProject } from "./project.js";
 import type { NeonProvider } from "./provider.js";
 
@@ -224,11 +224,7 @@ export class NeonRole extends pulumi.ComponentResource {
 	/** Role password (secret). */
 	public readonly password: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: NeonRoleArgs,
-		opts: NeonRoleOptions,
-	) {
+	constructor(name: string, args: NeonRoleArgs, opts: NeonRoleOptions) {
 		const { provider, project, branch, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Role", name, {}, pulumiOpts);

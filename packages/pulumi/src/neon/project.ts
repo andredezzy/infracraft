@@ -193,11 +193,7 @@ export class NeonProject extends pulumi.ComponentResource {
 	/** Neon-assigned project ID. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: NeonProjectArgs,
-		opts: NeonProjectOptions,
-	) {
+	constructor(name: string, args: NeonProjectArgs, opts: NeonProjectOptions) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Project", name, {}, pulumiOpts);
