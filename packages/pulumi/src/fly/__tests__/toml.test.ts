@@ -132,4 +132,60 @@ describe("generateFlyToml", () => {
 
 		expect(toml).toContain('app = "sh -c \\"echo hi\\""');
 	});
+
+	it("accepts performance and GPU vm sizes with additional regions", () => {
+		const toml = generateFlyToml({
+			app: "ml-worker",
+			primaryRegion: "fra",
+			vm: [
+				{
+					size: "performance-4x",
+					memory: "8192mb",
+					cpuKind: FlyCpuKind.PERFORMANCE,
+					cpus: 4,
+				},
+			],
+		});
+
+		expect(toml).toContain('primary_region = "fra"');
+		expect(toml).toContain('size = "performance-4x"');
+		expect(toml).toContain('memory = "8192mb"');
+		expect(toml).toContain('cpu_kind = "performance"');
+		expect(toml).toContain("cpus = 4");
+	});
+
+	it("accepts a GPU vm size", () => {
+		const toml = generateFlyToml({
+			app: "gpu-worker",
+			primaryRegion: "ord",
+			vm: [{ size: "a100-80gb", memory: "16384mb", cpus: 8 }],
+		});
+
+		expect(toml).toContain('size = "a100-80gb"');
+		expect(toml).toContain('memory = "16384mb"');
+	});
+
+	it("accepts numeric memory and additional region codes", () => {
+		const configs = [
+			{ app: "app-arn", primaryRegion: "arn" as const },
+			{ app: "app-syd", primaryRegion: "syd" as const },
+			{ app: "app-jnb", primaryRegion: "jnb" as const },
+		] satisfies Array<{
+			app: string;
+			primaryRegion: import("../toml").FlyRegion;
+		}>;
+
+		for (const config of configs) {
+			const toml = generateFlyToml(config);
+			expect(toml).toContain(`primary_region = "${config.primaryRegion}"`);
+		}
+
+		const tomlNumericMemory = generateFlyToml({
+			app: "app-mem",
+			primaryRegion: "lhr",
+			vm: [{ size: "shared-cpu-2x", memory: 1024, cpus: 2 }],
+		});
+
+		expect(tomlNumericMemory).toContain("memory = 1024");
+	});
 });

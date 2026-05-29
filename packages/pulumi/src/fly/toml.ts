@@ -1,6 +1,8 @@
 /**
  * fly.toml deploy strategy. Enum keys are UPPERCASE per convention; values are
  * Fly's required lowercase wire literals (external format — cannot be uppercased).
+ * Note: 'canary' requires more than one machine; falls back to 'rolling' when
+ * max-per-region is 1. Default is 'rolling'.
  */
 export enum FlyDeployStrategy {
 	ROLLING = "rolling",
@@ -9,36 +11,44 @@ export enum FlyDeployStrategy {
 	BLUEGREEN = "bluegreen",
 }
 
-/** Machine restart policy. */
+/** Machine restart policy. Default is 'on-failure'. */
 export enum FlyRestartPolicy {
 	ALWAYS = "always",
 	ON_FAILURE = "on-failure",
 	NEVER = "never",
 }
 
-/** Idle-machine auto-stop behavior. */
+/**
+ * Idle-machine auto-stop behavior. 'off' is equivalent to boolean false,
+ * 'stop' is equivalent to boolean true, but 'suspend' cannot be expressed
+ * as a boolean. Default is 'off'.
+ */
 export enum FlyAutoStopMachines {
 	OFF = "off",
 	STOP = "stop",
 	SUSPEND = "suspend",
 }
 
-/** Concurrency limit unit. */
+/**
+ * Concurrency limit unit. 'connections' is the default. For HTTP apps,
+ * 'requests' is recommended because the proxy can pool connections.
+ */
 export enum FlyConcurrencyType {
 	CONNECTIONS = "connections",
 	REQUESTS = "requests",
 }
 
-/** Raw service protocol. */
+/** Raw service protocol. When 'udp', handlers must be left unset. */
 export enum FlyServiceProtocol {
 	TCP = "tcp",
 	UDP = "udp",
 }
 
-/** Port handler. */
+/** Port handler. Only valid for TCP services; omit entirely for UDP services. */
 export enum FlyPortHandler {
 	HTTP = "http",
 	TLS = "tls",
+	PG_TLS = "pg_tls",
 	PROXY_PROTO = "proxy_proto",
 }
 
@@ -55,35 +65,80 @@ export enum FlyCheckType {
 }
 
 /**
- * Fly region (IATA code). Common values are suggested for autocomplete; any
- * string is accepted because Fly adds regions over time (semi-open set).
+ * Fly region code (IATA). This is a complete closed union of every region
+ * published by Fly.io. When Fly adds a new region, update this union and
+ * release a new version of the package.
  */
 export type FlyRegion =
+	// Americas
+	| "bos"
+	| "dfw"
+	| "ewr"
+	| "gig"
+	| "gru"
 	| "iad"
-	| "ord"
 	| "lax"
+	| "mia"
+	| "ord"
+	| "scl"
 	| "sea"
-	| "lhr"
-	| "fra"
+	| "sjc"
+	| "yul"
+	| "yyz"
+	// Europe
 	| "ams"
+	| "arn"
 	| "cdg"
-	| "syd"
+	| "fra"
+	| "lhr"
+	| "mad"
+	| "waw"
+	// Asia-Pacific
+	| "bom"
+	| "hkg"
+	| "maa"
 	| "nrt"
 	| "sin"
-	| "gru"
-	| (string & {});
+	| "syd"
+	// Africa
+	| "jnb";
 
-/** Fly machine size preset. Semi-open set — any string is accepted. */
+/**
+ * Fly machine size preset. This is a complete closed union of every size
+ * option published by Fly.io. When Fly adds a new size, update this union
+ * and release a new version of the package.
+ *
+ * Pass the raw string directly — e.g. "shared-cpu-1x".
+ */
 export type FlyVmSize =
+	// Shared CPU
 	| "shared-cpu-1x"
 	| "shared-cpu-2x"
 	| "shared-cpu-4x"
+	| "shared-cpu-6x"
 	| "shared-cpu-8x"
+	// Performance CPU
 	| "performance-1x"
 	| "performance-2x"
 	| "performance-4x"
+	| "performance-6x"
 	| "performance-8x"
-	| (string & {});
+	| "performance-10x"
+	| "performance-12x"
+	| "performance-14x"
+	| "performance-16x"
+	// GPU
+	| "a10"
+	| "a100-40gb"
+	| "a100-80gb"
+	| "l40s";
+
+/**
+ * Number of CPUs for a [[vm]] entry. Valid values depend on the chosen
+ * cpu_kind — not all counts are available for both shared and performance
+ * CPU kinds. The union covers the full documented permitted set.
+ */
+export type FlyCpuCount = 1 | 2 | 4 | 8 | 16;
 
 /** A single health check. */
 export interface FlyCheck {
@@ -91,8 +146,20 @@ export interface FlyCheck {
 	port?: number;
 	method?: string;
 	path?: string;
+	/**
+	 * How often to run the check. Go duration format — e.g. "15s", "1m", "500ms".
+	 * Compound forms like "1m30s" are also valid.
+	 */
 	interval: string;
+	/**
+	 * Maximum time to wait for the check to complete. Go duration format — e.g. "10s".
+	 * Compound forms like "1m30s" are also valid.
+	 */
 	timeout: string;
+	/**
+	 * Grace period before checks begin after machine start. Go duration format — e.g. "30s".
+	 * Compound forms like "1m30s" are also valid.
+	 */
 	gracePeriod?: string;
 }
 
@@ -151,9 +218,15 @@ export interface FlyMount {
 /** A `[[vm]]` entry. `count` is intentionally absent — machine count is set via `fly scale`. */
 export interface FlyVm {
 	size?: FlyVmSize;
-	memory?: string;
+	/**
+	 * Memory allocation. Accepts a bare integer (interpreted as MB, e.g. 1024)
+	 * or a string with units (e.g. "512mb", "2gb"). Valid values are
+	 * hardware-tier-dependent; see https://fly.io/docs/about/pricing/.
+	 */
+	memory?: string | number;
 	cpuKind?: FlyCpuKind;
-	cpus?: number;
+	/** Number of CPUs. Valid values depend on the chosen `cpuKind`. */
+	cpus?: FlyCpuCount;
 	processes?: string[];
 }
 
@@ -370,7 +443,11 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 				lines.push(`  size = ${quote(vm.size)}`);
 			}
 			if (vm.memory !== undefined) {
-				lines.push(`  memory = ${quote(vm.memory)}`);
+				lines.push(
+					typeof vm.memory === "number"
+						? `  memory = ${vm.memory}`
+						: `  memory = ${quote(vm.memory)}`,
+				);
 			}
 			if (vm.cpuKind !== undefined) {
 				lines.push(`  cpu_kind = ${quote(vm.cpuKind)}`);
