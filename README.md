@@ -21,6 +21,7 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 | 🚂 | **Railway** | The only Pulumi provider for Railway. Projects, environments, services, variables, volumes, domains, deploys. |
 | 🐘 | **Neon** | Adopt-or-create layer for Neon Postgres. Projects, branches, endpoints, roles, databases. |
 | ▲ | **Vercel** | Projects with adopt-or-create, deploy orchestration, and sensitive env var drift detection. |
+| 🎯 | **Fly.io** | App, Secret, Volume, Certificate, IP, and Deploy resources via the Machines REST API and Fly GraphQL API. |
 | #️⃣ | **Hash** | Deterministic directory hashing for deploy triggers. |
 | 🔒 | **Git Guard** | Parallel-safe `.git` protection for concurrent CLI deploys. |
 
@@ -122,6 +123,82 @@ new VercelDeploy("web-deploy", {
   triggers: [sourceHash, ...Object.values(env)],
 }, { provider, project })
 ```
+
+## Fly.io
+
+```typescript
+import {
+  FlyProvider,
+  FlyApp,
+  FlySecret,
+  FlyVolume,
+  FlyCertificate,
+  FlyIp,
+  FlyIpType,
+  FlyDeploy,
+} from "@infracraft/pulumi/fly";
+import { hashDirectory } from "@infracraft/pulumi/hash";
+
+// Provider — auth context (token + optional default org)
+const provider = new FlyProvider("fly", {
+  token: config.requireSecret("flyToken"),
+  organization: "personal",
+});
+
+// App — adopt-or-create; `.id` is the app name
+const app = new FlyApp("api", { name: "rby-api" }, { provider });
+
+// Secrets — managed via the Machines REST secrets API.
+// `.version` changes only when the secret set changes.
+const secrets = new FlySecret("api-secrets", {
+  secrets: { JWT_SECRET: jwt, DATABASE_URL: dbUrl },
+}, { provider, app });
+
+// Volume — persistent storage (grow-only)
+new FlyVolume("api-data", {
+  name: "data",
+  region: "iad",
+  sizeGb: 10,
+}, { provider, app });
+
+// Certificate — ACME cert for a custom hostname; exposes DNS requirements
+const cert = new FlyCertificate("api-cert", {
+  hostname: "api.example.com",
+}, { provider, app });
+
+// Dedicated/shared IP (Fly GraphQL API)
+new FlyIp("api-ip", { type: FlyIpType.SHARED_V4 }, { provider, app });
+
+// Deploy — `fly deploy` with consumer-controlled triggers.
+// The generated fly.toml content is added to the triggers automatically.
+new FlyDeploy("api-deploy", {
+  monorepoRoot,
+  config: {
+    app: "rby-api",
+    primaryRegion: "iad",
+    build: { dockerfile: "apps/api/Dockerfile" },
+    env: { PORT: "3333", NODE_ENV: "production" },
+    httpService: {
+      internalPort: 3333,
+      forceHttps: true,
+      minMachinesRunning: 1,
+      checks: [{ method: "GET", path: "/health", interval: "30s", timeout: "10s" }],
+    },
+    vm: [{ size: "shared-cpu-1x", memory: "512mb", cpus: 1 }],
+  },
+  triggers: [hashDirectory("apps/api"), secrets.version],
+}, { provider, app, dependsOn: [secrets] });
+```
+
+**Requirements:** `flyctl` must be installed on the machine running `pulumi up` (used by `FlyDeploy`). Generate a token with `fly tokens create deploy`. Dedicated IP allocation uses the Fly GraphQL API; everything else uses the Machines REST API.
+
+| Resource | Key outputs |
+|---|---|
+| `FlyApp` | `.id` (app name) |
+| `FlySecret` | `.version` |
+| `FlyVolume` | `.id` (vol_…) |
+| `FlyCertificate` | `.id` (hostname), `.configured`, `.dnsRequirements` |
+| `FlyIp` | `.id` (IP address) |
 
 ## Design
 
