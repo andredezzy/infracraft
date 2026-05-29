@@ -1,8 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
-import { RailwayClient } from "./client.js";
-import type { RailwayEnvironment } from "./environment.js";
-import type { RailwayProject } from "./project.js";
-import type { RailwayProvider } from "./provider.js";
+import { RailwayClient } from "./client";
+import type { RailwayEnvironment } from "./environment";
+import type { RailwayProject } from "./project";
+import type { RailwayProvider } from "./provider";
 
 /**
  * Railway build system. Enum keys are UPPERCASE per convention; values are

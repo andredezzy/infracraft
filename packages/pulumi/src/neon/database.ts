@@ -1,8 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
-import type { NeonBranch } from "./branch.js";
-import { NeonClient } from "./client.js";
-import type { NeonProject } from "./project.js";
-import type { NeonProvider } from "./provider.js";
+import type { NeonBranch } from "./branch";
+import { NeonClient } from "./client";
+import type { NeonProject } from "./project";
+import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon database dynamic provider. */
 export interface NeonDatabaseInputs {

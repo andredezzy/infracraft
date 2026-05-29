@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
-import { NeonClient } from "./client.js";
-import type { NeonProvider } from "./provider.js";
+import { NeonClient } from "./client";
+import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon project dynamic provider. */
 export interface NeonProjectInputs {

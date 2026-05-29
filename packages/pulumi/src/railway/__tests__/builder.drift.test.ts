@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { RailwayBuilder, RailwayRestartPolicy } from "../service.js";
+import { RailwayBuilder, RailwayRestartPolicy } from "../service";
 
 /**
  * Drift test: asserts that RailwayBuilder and RailwayRestartPolicy enum values

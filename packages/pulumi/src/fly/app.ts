@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 
-import { FlyClient } from "./client.js";
-import type { FlyProvider } from "./provider.js";
+import { FlyClient } from "./client";
+import type { FlyProvider } from "./provider";
 
 /** Resolved inputs for the Fly app dynamic provider. */
 export interface FlyAppInputs {

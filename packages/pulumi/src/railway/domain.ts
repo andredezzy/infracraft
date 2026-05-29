@@ -1,9 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
-import { RailwayClient } from "./client.js";
-import type { RailwayEnvironment } from "./environment.js";
-import type { RailwayProject } from "./project.js";
-import type { RailwayProvider } from "./provider.js";
-import type { RailwayService } from "./service.js";
+import { RailwayClient } from "./client";
+import type { RailwayEnvironment } from "./environment";
+import type { RailwayProject } from "./project";
+import type { RailwayProvider } from "./provider";
+import type { RailwayService } from "./service";
 
 /** Resolved inputs for the Railway domain dynamic provider. */
 export interface RailwayDomainInputs {

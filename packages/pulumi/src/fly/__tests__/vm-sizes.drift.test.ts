@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FLY_VM_SIZES } from "../toml.js";
+import { FLY_VM_SIZES } from "../toml";
 
 /**
  * Drift test: asserts that FLY_VM_SIZES matches the keys of MachinePresets

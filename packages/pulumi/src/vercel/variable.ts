@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
-import type { VercelProject } from "./project.js";
-import type { VercelProvider } from "./provider.js";
+import type { VercelProject } from "./project";
+import type { VercelProvider } from "./provider";
 
 const VERCEL_API_URL = "https://api.vercel.com";
 

@@ -1,9 +1,10 @@
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
-import type { RailwayEnvironment } from "./environment.js";
-import type { RailwayProject } from "./project.js";
-import type { RailwayProvider } from "./provider.js";
-import { RailwayBuilder, type RailwayService } from "./service.js";
+import { stableDir } from "../stable-dir";
+import type { RailwayEnvironment } from "./environment";
+import type { RailwayProject } from "./project";
+import type { RailwayProvider } from "./provider";
+import { RailwayBuilder, type RailwayService } from "./service";
 
 /** Build and deploy configuration for a Railway service. */
 export interface RailwayDeployConfig {
@@ -19,7 +20,11 @@ export interface RailwayDeployConfig {
 
 /** Args for RailwayDeploy. */
 export interface RailwayDeployArgs {
-	/** Absolute path to the monorepo root (working directory for `railway up`). */
+	/**
+	 * Absolute path to the monorepo root (working directory for `railway up`).
+	 * Stored relative to the Pulumi program directory so the command stays stable
+	 * across machines and CI (see {@link stableDir}).
+	 */
 	directory: string;
 
 	/** Values that trigger a redeploy when changed (e.g. source hashes, env hashes). */
@@ -106,7 +111,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 			{
 				create: deployCmd,
 				triggers: args.triggers,
-				dir: args.directory,
+				dir: stableDir(args.directory),
 				environment: {
 					RAILWAY_TOKEN: project.projectToken,
 				},
