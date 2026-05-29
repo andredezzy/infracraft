@@ -251,6 +251,57 @@ Mirroring the same enum-vs-union audit applied to the Fly, Railway, and Neon pro
 
 Fields kept as `string`: `name`, `rootDirectory`, `buildCommand`, `installCommand`, `outputDirectory` — all genuinely open free-form values.
 
+## Type drift detection
+
+### Why drift tests exist
+
+`FlyVmSize`, `FlyRegion`, and `VercelFramework` are closed sets hand-curated from upstream sources. Over time, upstream providers add or remove values without breaking semver — a new Fly machine size or a new Vercel framework slug won't trigger any failure in a consumer's Pulumi program, but it will silently be rejected at the API layer until the package is updated. Drift tests detect this gap in CI.
+
+### Const-derived single source of truth
+
+`FlyVmSize`, `FlyRegion`, and `VercelFramework` are defined as `as const` arrays with a derived type:
+
+```typescript
+export const FLY_VM_SIZES = ["shared-cpu-1x", ...] as const;
+export type FlyVmSize = (typeof FLY_VM_SIZES)[number];
+```
+
+This pattern means the array and the type are always in sync — adding a value to the array automatically widens the type. Consumers get full compile-time narrowing (`"shared-cpu-1x"` is accepted, `"typo-1x"` is a type error) while the array can be iterated at runtime for validation, UI dropdowns, or drift comparisons.
+
+TypeScript enums (`RailwayBuilder`, `RailwayRestartPolicy`, `FlyPortHandler`, `FlyDeployStrategy`, etc.) stay as enums — `Object.values()` already gives an iterable of their wire values.
+
+### The harness
+
+Four drift tests live in `src/**/*.drift.test.ts` and are quarantined from the normal suite:
+
+| Test file | Upstream checked | What it compares |
+|---|---|---|
+| `src/fly/__tests__/vm-sizes.drift.test.ts` | `superfly/fly-go` `machine_types.go` (raw GitHub) | `FLY_VM_SIZES` vs `MachinePresets` map keys |
+| `src/fly/__tests__/port-handlers.drift.test.ts` | `https://api.fly.io/graphql` (unauthenticated introspection) | `FlyPortHandler` values vs `ServiceHandlerType` enum |
+| `src/railway/__tests__/builder.drift.test.ts` | `https://backboard.railway.app/railway.schema.json` | `RailwayBuilder` + `RailwayRestartPolicy` vs schema enums |
+| `src/vercel/__tests__/framework.drift.test.ts` | `@vercel/frameworks` (devDependency, offline) | `VERCEL_FRAMEWORKS` vs `frameworks.map(f => f.slug)` |
+
+Each test prints the **symmetric difference** on failure so a maintainer sees exactly which values were added or removed upstream.
+
+### Running drift tests
+
+```bash
+bun run test:drift
+```
+
+This runs `vitest run --config vitest.drift.config.ts`. The normal `bun run test` excludes all `*.drift.test.ts` files and remains fully offline and deterministic.
+
+### What is intentionally NOT drift-tested
+
+| Concern | Reason |
+|---|---|
+| `FlyRegion` | Fly does not publish a machine-readable region list without authentication. The `GET /v1/platform/regions` endpoint requires a Fly token. Regions are stable enough that manual curation + release is acceptable. |
+| `FlyDeployStrategy` | fly.toml `[deploy].strategy` is a flyctl/toml-layer concept, not a Fly Machines API enum — it is not introspectable from the GraphQL or REST surface without auth. |
+| `FlyConcurrencyType` | Same: toml-layer concept, no machine-readable upstream. |
+| `FlyRestartPolicy` | Same: toml-layer concept (`[[restart]].policy`), not an API enum. |
+| `FlyCpuKind` | Effectively two values (`shared`, `performance`) tied to VM architecture, not an API enum — changes would be a major platform shift. |
+| `FlyAutoStopMachines` | fly.toml layer, not a Fly API introspectable enum. |
+
 ## Residual uncertainties (handle defensively in code)
 
 - HTTP status for duplicate `POST /v1/apps` is undocumented — treat any non-2xx on create-after-404 as "already exists" and re-read.

@@ -27,6 +27,8 @@ export type {
 	FlyVmSize,
 } from "./toml.js";
 export {
+	FLY_REGIONS,
+	FLY_VM_SIZES,
 	FlyAutoStopMachines,
 	FlyCheckType,
 	FlyConcurrencyType,
