@@ -215,6 +215,7 @@ new FlyDeploy("api-deploy", {
 | Railway | Nothing. Zero Pulumi providers exist. | **We are the Railway Pulumi provider.** |
 | Neon | Bridged TF provider — fails on pre-existing resources | Adopt-or-create without manual `import` blocks |
 | Vercel | `@pulumiverse/vercel` — no adopt-or-create, no CLI deploys | Adopt-or-create projects + consumer-controlled deploy triggers |
+| Fly.io | `@ediri/pulumi-fly` — bridges a Terraform provider Fly archived March 2024; no secrets support | Hand-rolled `dynamic` resources matching every other provider — secrets, adopt-or-create, consumer-controlled deploys; no unmaintained upstream |
 
 ## License
 
