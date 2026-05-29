@@ -11,6 +11,7 @@
 		"dev": "turbo run dev",
 		"typecheck": "turbo run typecheck",
 		"test": "turbo run test",
+		"test:drift": "turbo run test:drift",
 		"lint": "eslint --fix && biome check --write --max-diagnostics 500",
 		"knip": "knip",
 		"postinstall": "test -n \"$CI\" || bun run build"
