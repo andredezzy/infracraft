@@ -89,7 +89,7 @@ src/fly/
 | `FlyApp` | app name (`GET /v1/apps/{name}`) | **no-op + `pulumi.log.warn`** (top-level, like Railway/Neon projects) | `.id` (= app name) |
 | `FlySecret` | n/a (batch upsert) | real (unset all keys) | `.version` (Fly release id) |
 | `FlyVolume` | volume name | real (`DELETE` volume) | `.id` |
-| `FlyCertificate` | hostname | real (`DELETE` cert) | `.id`, `.dnsValidationTarget`, `.configured` |
+| `FlyCertificate` | hostname (no `id` field; hostname is the key) | real (`DELETE /certificates/{hostname}`) | `.id` (= hostname), `.configured`, `.dnsRequirements` (ACME challenge + ownership records) |
 | `FlyIp` | type + region | real (`releaseIpAddress`) | `.id` (= allocated address) |
 | `FlyDeploy` | — | — (Command lifecycle) | — |
 
@@ -100,7 +100,7 @@ src/fly/
 ```typescript
 import {
   FlyProvider, FlyApp, FlySecret, FlyVolume, FlyCertificate, FlyIp, FlyDeploy,
-  FlyRegion, FlyDeployStrategy,
+  FlyAutoStopMachines, FlyDeployStrategy, FlyIpType,
 } from "@infracraft/pulumi/fly";
 import { hashDirectory } from "@infracraft/pulumi/hash";
 
@@ -120,7 +120,7 @@ const secrets = new FlySecret("api-secrets", {
 // Volume — persistent storage
 const volume = new FlyVolume("api-data", {
   name: "data",
-  region: FlyRegion.IAD,
+  region: "iad",
   sizeGb: 10,
 }, { provider, app });
 
@@ -130,21 +130,20 @@ const cert = new FlyCertificate("api-cert", {
 }, { provider, app });
 
 // Dedicated IP (GraphQL)
-const ip = new FlyIp("api-ip", { type: "shared_v4" }, { provider, app });
+const ip = new FlyIp("api-ip", { type: FlyIpType.SHARED_V4 }, { provider, app });
 
 // Deploy — `fly deploy` with consumer-controlled triggers
 new FlyDeploy("api-deploy", {
   monorepoRoot,
-  sourceDirectory: "apps/api",
   config: {
     app: "rby-api",
-    primaryRegion: FlyRegion.IAD,
+    primaryRegion: "iad",
     build: { dockerfile: "apps/api/Dockerfile" },
     env: { PORT: "3333", NODE_ENV: "production" },
     httpService: {
       internalPort: 3333,
       forceHttps: true,
-      autoStopMachines: "off",
+      autoStopMachines: FlyAutoStopMachines.OFF,
       minMachinesRunning: 1,
       checks: [{ method: "GET", path: "/health", interval: "30s", timeout: "10s", gracePeriod: "120s" }],
     },
@@ -194,7 +193,7 @@ Fly secrets only take effect on the next deploy. `FlySecret` exposes a `.version
 | `FlyApp` | `id` (app name) |
 | `FlySecret` | `version` |
 | `FlyVolume` | `id` |
-| `FlyCertificate` | `id`, `dnsValidationTarget`, `configured` |
+| `FlyCertificate` | `id` (= hostname), `configured`, `dnsRequirements` (ACME challenge + ownership DNS records) |
 | `FlyIp` | `id` (allocated address) |
 
 ## Registration, tests, README
@@ -203,9 +202,17 @@ Fly secrets only take effect on the next deploy. `FlySecret` exposes a `.version
 - **Tests:** `client.test.ts` exercises the REST client (incl. secrets) and GraphQL path through fetch mocks; `toml.test.ts` asserts `generateFlyToml()` output for representative configs. Same client-seam approach as the other providers.
 - **README:** the implementation ends by bringing `README.md` fully up to date — a Fly section matching how Vercel is documented (context-based API, the full resource set, consumer-controlled triggers, `@infracraft/pulumi/fly` import), verified against the shipped API.
 
-## To verify during implementation
+## Verified API contracts (research, 2026-05-28)
 
-- Exact paths/payloads of the new Machines REST secrets endpoints (announced Oct 2025) against current Fly docs.
-- Machines REST certificate endpoints and the DNS-validation fields returned.
-- `allocateIpAddress` / `releaseIpAddress` GraphQL input shapes and the `shared_v4` vs dedicated `v4`/`v6` type values.
-- Fly Machines API rate limits (≈1 req/s per action) — confirm adopt-or-create reads stay within budget.
+- **Apps:** `POST /v1/apps {app_name, org_slug}` → `{id, created_at}` (name not echoed); `GET /v1/apps/{name}` → `{id, name, status, organization{slug}}`; `DELETE /v1/apps/{name}` → 202. All child paths key off the **name**, so `FlyApp.id` = name.
+- **Secrets (REST, the Oct 2025 default in flyctl/fly-go):** bulk `POST /v1/apps/{app}/secrets {values:{KEY:"v", KEY_TO_DELETE:null}}` → `{secrets, version}` (uint64). `version` drives `FlySecret.version`. Set takes effect on next machine restart/deploy (hence the deploy trigger). Source of truth is `superfly/fly-go` (not in the public OpenAPI spec).
+- **Volumes:** `POST /v1/apps/{app}/volumes {name, region, size_gb}` → 200 `{id: "vol_…", …}`; adopt by listing `GET .../volumes` and matching `name`.
+- **Certificates:** `POST /v1/apps/{app}/certificates/acme {hostname}` → 201 with `dns_requirements{acme_challenge{name,target}, ownership{name,app_value}}` + `configured`; **no `id`** — hostname is the key; `DELETE /v1/apps/{app}/certificates/{hostname}` → 204.
+- **IP (GraphQL):** `allocateIpAddress(input:{appId,type,region?})`; `IPAddressType` ∈ `v4|v6|private_v6|shared_v4`. `shared_v4` returns a null `ipAddress` in the payload — read `app.sharedIpAddress` instead. `releaseIpAddress(input:{ip|ipAddressId})`.
+- **fly.toml / flyctl:** `[[vm]].count` is not a real field (drop it; scale is separate); `auto_stop_machines` is a string enum (`off|stop|suspend`), `auto_start_machines` is bool; deploy strategy ∈ `rolling|immediate|canary|bluegreen`; restart policy ∈ `always|on-failure|never`. `fly deploy` flags: `--config`, `--remote-only`, `--ha[=false]`, `--wait-timeout`, `--release-command-timeout`, `--strategy`; `FLY_API_TOKEN` authenticates flyctl.
+
+## Residual uncertainties (handle defensively in code)
+
+- HTTP status for duplicate `POST /v1/apps` is undocumented — treat any non-2xx on create-after-404 as "already exists" and re-read.
+- `releaseIpAddress` input SDL isn't in the published GraphQL schema (sourced from `fly-go`); prefer `ipAddressId` from a prior `app.ipAddresses` query, fall back to `ip`.
+- GraphQL is Fly's "old" API and may migrate IP allocation to REST (`POST /apps/:name/ip_assignments`) later — isolate it behind `FlyClient.graphql()` so a future swap touches one file.
