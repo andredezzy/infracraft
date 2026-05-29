@@ -7,3 +7,6 @@ coverage
 .DS_Store
 *.log
 .env*.local*
+
+# Generated fly.toml files (FlyDeploy)
+.fly/
