@@ -4,6 +4,30 @@ import type { RailwayEnvironment } from "./environment.js";
 import type { RailwayProject } from "./project.js";
 import type { RailwayProvider } from "./provider.js";
 
+/**
+ * Railway build system. Enum keys are UPPERCASE per convention; values are
+ * Railway's required UPPERCASE wire literals.
+ * Note: HEROKU and PAKETO were deprecated Feb 21 2025 and auto-migrated to
+ * NIXPACKS by Railway, but remain in the schema and are accepted by the API.
+ */
+export enum RailwayBuilder {
+	RAILPACK = "RAILPACK",
+	NIXPACKS = "NIXPACKS",
+	DOCKERFILE = "DOCKERFILE",
+	HEROKU = "HEROKU",
+	PAKETO = "PAKETO",
+}
+
+/**
+ * Railway service restart policy. Controls when Railway restarts the service
+ * container after it exits. Default is ON_FAILURE.
+ */
+export enum RailwayRestartPolicy {
+	ON_FAILURE = "ON_FAILURE",
+	ALWAYS = "ALWAYS",
+	NEVER = "NEVER",
+}
+
 /** Docker image source for a Railway service (e.g. `redis:8-alpine`). */
 interface RailwayServiceSource {
 	/** Full Docker image reference including tag. */
@@ -30,8 +54,8 @@ export interface RailwayServiceInputs {
 	/** Docker image source for image-based services. */
 	source?: RailwayServiceSource;
 
-	/** Build system: `"RAILPACK"`, `"NIXPACKS"`, or `"DOCKERFILE"`. */
-	builder?: string;
+	/** Build system to use when building the service. */
+	builder?: RailwayBuilder;
 
 	/** Shell command executed during the build phase. */
 	buildCommand?: string;
@@ -39,8 +63,8 @@ export interface RailwayServiceInputs {
 	/** Shell command executed to start the service at runtime. */
 	startCommand?: string;
 
-	/** Restart behavior: `"ON_FAILURE"`, `"ALWAYS"`, or `"NEVER"`. */
-	restartPolicyType?: string;
+	/** Restart behavior for the service container. */
+	restartPolicyType?: RailwayRestartPolicy;
 
 	/** HTTP path polled for health checks (e.g. `"/health-check"`). */
 	healthcheckPath?: string;
@@ -415,10 +439,10 @@ class RailwayServiceResource extends pulumi.dynamic.Resource {
 			name: pulumi.Input<string>;
 			icon?: pulumi.Input<string>;
 			source?: pulumi.Input<{ image: pulumi.Input<string> }>;
-			builder?: pulumi.Input<string>;
+			builder?: pulumi.Input<RailwayBuilder>;
 			buildCommand?: pulumi.Input<string>;
 			startCommand?: pulumi.Input<string>;
-			restartPolicyType?: pulumi.Input<string>;
+			restartPolicyType?: pulumi.Input<RailwayRestartPolicy>;
 			healthcheckPath?: pulumi.Input<string>;
 			healthcheckTimeout?: pulumi.Input<number>;
 			preDeployCommand?: pulumi.Input<string>;
@@ -460,8 +484,8 @@ export interface RailwayServiceArgs {
 	/** Docker image source for image-based services. */
 	source?: pulumi.Input<{ image: pulumi.Input<string> }>;
 
-	/** Build system: `"RAILPACK"`, `"NIXPACKS"`, or `"DOCKERFILE"`. */
-	builder?: pulumi.Input<string>;
+	/** Build system to use when building the service. */
+	builder?: pulumi.Input<RailwayBuilder>;
 
 	/** Shell command executed during the build phase. */
 	buildCommand?: pulumi.Input<string>;
@@ -469,8 +493,8 @@ export interface RailwayServiceArgs {
 	/** Shell command executed to start the service at runtime. */
 	startCommand?: pulumi.Input<string>;
 
-	/** Restart behavior: `"ON_FAILURE"`, `"ALWAYS"`, or `"NEVER"`. */
-	restartPolicyType?: pulumi.Input<string>;
+	/** Restart behavior for the service container. */
+	restartPolicyType?: pulumi.Input<RailwayRestartPolicy>;
 
 	/** HTTP path polled for health checks (e.g. `"/health-check"`). */
 	healthcheckPath?: pulumi.Input<string>;
@@ -489,7 +513,7 @@ export interface RailwayServiceArgs {
  * ```typescript
  * const service = new RailwayService("api", {
  *   name: "api",
- *   builder: "RAILPACK",
+ *   builder: RailwayBuilder.RAILPACK,
  *   startCommand: "node dist/index.js",
  *   healthcheckPath: "/health",
  * }, { provider, project, environment });

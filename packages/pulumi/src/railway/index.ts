@@ -10,7 +10,11 @@ export { RailwayProject } from "./project.js";
 export type { RailwayProviderArgs } from "./provider.js";
 export { RailwayProvider } from "./provider.js";
 export type { RailwayServiceArgs } from "./service.js";
-export { RailwayService } from "./service.js";
+export {
+	RailwayBuilder,
+	RailwayRestartPolicy,
+	RailwayService,
+} from "./service.js";
 export type { RailwayVariableArgs } from "./variable.js";
 export { RailwayVariable } from "./variable.js";
 export type { RailwayVolumeArgs } from "./volume.js";
