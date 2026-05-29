@@ -241,6 +241,16 @@ Mirroring the same enum-vs-union audit applied to the Fly and Railway providers,
 
 **Result: zero conversions applied.** All Neon fields are either free-form strings, continuous numeric ranges, or hardcoded internal wire values. No new enums or union types are warranted.
 
+## Vercel provider closed-set decisions (2026-05-29)
+
+Mirroring the same enum-vs-union audit applied to the Fly, Railway, and Neon providers:
+
+| Field | Type | Kind | Notes |
+|---|---|---|---|
+| `VercelProjectArgs.framework` / `VercelProjectInputs.framework` | `type VercelFramework` (string-literal union) | string-union | Complete closed union of every framework slug published by Vercel. Source of truth: `vercel/vercel` repo `packages/frameworks/src/frameworks.ts`. Raw-string DX preserved so consumers write `"nextjs"` directly — same rationale as `FlyRegion`. When Vercel adds a new framework, update the union and release a new version. |
+
+Fields kept as `string`: `name`, `rootDirectory`, `buildCommand`, `installCommand`, `outputDirectory` — all genuinely open free-form values.
+
 ## Residual uncertainties (handle defensively in code)
 
 - HTTP status for duplicate `POST /v1/apps` is undocumented — treat any non-2xx on create-after-404 as "already exists" and re-read.

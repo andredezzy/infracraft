@@ -3,6 +3,96 @@ import type { VercelProvider } from "./provider.js";
 
 const VERCEL_API_URL = "https://api.vercel.com";
 
+/**
+ * Vercel framework preset slug. This is a complete closed union of every
+ * framework slug published by Vercel. When Vercel adds a new framework,
+ * update this union and release a new version of the package.
+ *
+ * Source of truth: https://github.com/vercel/vercel/blob/main/packages/frameworks/src/frameworks.ts
+ */
+export type VercelFramework =
+	// Full-stack & React
+	| "blitzjs"
+	| "nextjs"
+	| "gatsby"
+	| "remix"
+	| "react-router"
+	| "astro"
+	| "preact"
+	| "solidstart-1"
+	| "solidstart"
+	| "create-react-app"
+	| "ionic-react"
+	| "tanstack-start"
+	| "redwoodjs"
+	| "hydrogen"
+	// Vue ecosystem
+	| "vue"
+	| "nuxtjs"
+	| "vitepress"
+	| "vuepress"
+	| "gridsome"
+	| "saber"
+	// Svelte ecosystem
+	| "svelte"
+	| "sveltekit"
+	| "sveltekit-1"
+	| "sapper"
+	// Angular ecosystem
+	| "angular"
+	| "ionic-angular"
+	| "scully"
+	// Static site generators
+	| "hexo"
+	| "eleventy"
+	| "docusaurus-2"
+	| "docusaurus"
+	| "hugo"
+	| "jekyll"
+	| "brunch"
+	| "middleman"
+	| "zola"
+	// UI / component tools
+	| "storybook"
+	| "stencil"
+	| "dojo"
+	| "ember"
+	| "polymer"
+	// Build tools
+	| "vite"
+	| "parcel"
+	// CMS
+	| "sanity-v3"
+	| "sanity"
+	// Node.js back-ends
+	| "nitro"
+	| "hono"
+	| "express"
+	| "h3"
+	| "koa"
+	| "nestjs"
+	| "elysia"
+	| "fastify"
+	// Python
+	| "fastapi"
+	| "flask"
+	| "fasthtml"
+	| "django"
+	// Other languages
+	| "ash"
+	| "axum"
+	| "actix-web"
+	| "ruby"
+	| "rust"
+	| "go"
+	| "python"
+	| "node"
+	// Misc
+	| "xmcp"
+	| "umijs"
+	| "mastra"
+	| "services";
+
 /** Resolved inputs for the Vercel project dynamic provider. */
 export interface VercelProjectInputs {
 	/** Vercel API bearer token. */
@@ -14,8 +104,8 @@ export interface VercelProjectInputs {
 	/** Project name. */
 	name: string;
 
-	/** Framework preset (e.g. `"nextjs"`, `"remix"`). */
-	framework?: string;
+	/** Framework preset. */
+	framework?: VercelFramework;
 
 	/** Relative path to the project root within a monorepo (e.g. `"apps/nexus"`). */
 	rootDirectory?: string;
@@ -248,7 +338,7 @@ class VercelProjectResource extends pulumi.dynamic.Resource {
 			token: pulumi.Input<string>;
 			teamId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
-			framework?: pulumi.Input<string>;
+			framework?: pulumi.Input<VercelFramework>;
 			rootDirectory?: pulumi.Input<string>;
 			buildCommand?: pulumi.Input<string>;
 			installCommand?: pulumi.Input<string>;
@@ -279,8 +369,8 @@ export interface VercelProjectArgs {
 	/** Project name. Used for both adoption lookup and display name. */
 	name: pulumi.Input<string>;
 
-	/** Framework preset (e.g. `"nextjs"`, `"remix"`). */
-	framework?: pulumi.Input<string>;
+	/** Framework preset. */
+	framework?: pulumi.Input<VercelFramework>;
 
 	/** Relative path to the project root within a monorepo (e.g. `"apps/nexus"`). */
 	rootDirectory?: pulumi.Input<string>;
