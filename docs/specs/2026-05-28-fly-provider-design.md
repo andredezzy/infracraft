@@ -225,6 +225,22 @@ Both enums follow the pattern: **UPPERCASE keys + UPPERCASE wire values** (Railw
 
 Fields kept as `string`: `name`, `buildCommand`, `startCommand`, `healthcheckPath`, `preDeployCommand`, `icon`, `image` — all genuinely open free-form values.
 
+## Neon provider closed-set audit (2026-05-29)
+
+Mirroring the same enum-vs-union audit applied to the Fly and Railway providers, every field in the Neon provider was reviewed for closed-set candidacy:
+
+| Field | Decision | Reason |
+|---|---|---|
+| `NeonProjectArgs.name` | keep `string` | Free-form display name — genuinely open. |
+| `NeonBranchArgs.name` | keep `string` | Free-form display name — genuinely open. |
+| `NeonDatabaseArgs.name`, `.ownerName` | keep `string` | Free-form identifiers — genuinely open. |
+| `NeonRoleArgs.name` | keep `string` | Free-form identifier — genuinely open. |
+| `NeonEndpointArgs.minCu`, `.maxCu` | keep `number` | Autoscaling compute units are continuous (0.25, 0.5, 1, 2, … up to tier limits) and tier-dependent — not a fixed closed discrete set. |
+| `NeonEndpointArgs.suspendTimeout` | keep `number` | Continuous seconds value (0 = global default, any positive integer) — not a closed discrete set. |
+| Endpoint `type` field (internal wire value `"read_write"`) | not exposed — keep internal | The endpoint type is hardcoded to `"read_write"` inside the dynamic provider and is never a user-facing arg. No type conversion needed. |
+
+**Result: zero conversions applied.** All Neon fields are either free-form strings, continuous numeric ranges, or hardcoded internal wire values. No new enums or union types are warranted.
+
 ## Residual uncertainties (handle defensively in code)
 
 - HTTP status for duplicate `POST /v1/apps` is undocumented — treat any non-2xx on create-after-404 as "already exists" and re-read.
