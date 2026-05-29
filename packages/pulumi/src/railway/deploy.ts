@@ -3,12 +3,12 @@ import * as pulumi from "@pulumi/pulumi";
 import type { RailwayEnvironment } from "./environment.js";
 import type { RailwayProject } from "./project.js";
 import type { RailwayProvider } from "./provider.js";
-import type { RailwayService } from "./service.js";
+import { RailwayBuilder, type RailwayService } from "./service.js";
 
 /** Build and deploy configuration for a Railway service. */
 export interface RailwayDeployConfig {
-	/** Build system: `"RAILPACK"`, `"NIXPACKS"`, or `"DOCKERFILE"`. */
-	builder?: string;
+	/** Build system to use when building the service. */
+	builder?: RailwayBuilder;
 
 	/** Shell command executed to start the service at runtime. */
 	startCommand?: string;

@@ -40,7 +40,7 @@ Peer dependencies: `@pulumi/pulumi` ^3, `@pulumi/command` ^1 (optional)
 ```typescript
 import {
   RailwayProvider, RailwayProject, RailwayEnvironment,
-  RailwayService, RailwayVariable, RailwayDeploy,
+  RailwayService, RailwayBuilder, RailwayVariable, RailwayDeploy,
 } from "@infracraft/pulumi/railway"
 import { hashDirectory } from "@infracraft/pulumi/hash"
 
@@ -58,7 +58,7 @@ const environment = new RailwayEnvironment("production", {
 
 const service = new RailwayService("api", {
   name: "api",
-  builder: "RAILPACK",
+  builder: RailwayBuilder.RAILPACK,
   startCommand: "node dist/index.js",
 }, { provider, project, environment })
 

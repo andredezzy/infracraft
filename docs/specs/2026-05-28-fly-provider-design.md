@@ -211,6 +211,20 @@ Fly secrets only take effect on the next deploy. `FlySecret` exposes a `.version
 - **IP (GraphQL):** `allocateIpAddress(input:{appId,type,region?})`; `IPAddressType` ∈ `v4|v6|private_v6|shared_v4`. `shared_v4` returns a null `ipAddress` in the payload — read `app.sharedIpAddress` instead. `releaseIpAddress(input:{ip|ipAddressId})`.
 - **fly.toml / flyctl:** `[[vm]].count` is not a real field (drop it; scale is separate); `auto_stop_machines` is a string enum (`off|stop|suspend`), `auto_start_machines` is bool; deploy strategy ∈ `rolling|immediate|canary|bluegreen`; restart policy ∈ `always|on-failure|never`. `fly deploy` flags: `--config`, `--remote-only`, `--ha[=false]`, `--wait-timeout`, `--release-command-timeout`, `--strategy`; `FLY_API_TOKEN` authenticates flyctl.
 
+## Railway provider closed-set decisions (2026-05-29)
+
+Mirroring the Fly enum-vs-union audit, the following Railway fields were converted to fully type-safe closed sets:
+
+| Field | Type | Values | Notes |
+|---|---|---|---|
+| `RailwayServiceArgs.builder` / `RailwayServiceInputs.builder` | `enum RailwayBuilder` | `RAILPACK`, `NIXPACKS`, `DOCKERFILE`, `HEROKU`, `PAKETO` | Source: `railway.schema.json`. `HEROKU` and `PAKETO` are deprecated (Feb 21 2025, auto-migrated to NIXPACKS) but remain in the schema and are accepted by the API. |
+| `RailwayServiceArgs.restartPolicyType` / `RailwayServiceInputs.restartPolicyType` | `enum RailwayRestartPolicy` | `ON_FAILURE`, `ALWAYS`, `NEVER` | Source: `railway.schema.json` + docs. Exactly three values; ON_FAILURE is the default. |
+| `RailwayDeployConfig.builder` | `RailwayBuilder` (reuse same enum) | same as above | Imported from `service.ts`; no new enum defined. |
+
+Both enums follow the pattern: **UPPERCASE keys + UPPERCASE wire values** (Railway's API requires the literal uppercase strings, matching the enum values exactly — no casing mismatch unlike Fly's lowercase toml literals).
+
+Fields kept as `string`: `name`, `buildCommand`, `startCommand`, `healthcheckPath`, `preDeployCommand`, `icon`, `image` — all genuinely open free-form values.
+
 ## Residual uncertainties (handle defensively in code)
 
 - HTTP status for duplicate `POST /v1/apps` is undocumented — treat any non-2xx on create-after-404 as "already exists" and re-read.
