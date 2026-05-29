@@ -2,6 +2,7 @@ export type { FlyAppArgs } from "./app.js";
 export { FlyApp } from "./app.js";
 export type { FlyCertificateArgs, FlyDnsRequirements } from "./certificate.js";
 export { FlyCertificate } from "./certificate.js";
+export { FlyClient } from "./client.js";
 export type { FlyDeployArgs } from "./deploy.js";
 export { FlyDeploy } from "./deploy.js";
 export type { FlyIpArgs } from "./ip.js";
