@@ -1,7 +1,8 @@
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
-import type { VercelProject } from "./project.js";
-import type { VercelProvider } from "./provider.js";
+import { stableDir } from "../stable-dir";
+import type { VercelProject } from "./project";
+import type { VercelProvider } from "./provider";
 
 /** Options type for VercelDeploy — replaces Pulumi's native `provider` field. */
 type VercelDeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
@@ -23,7 +24,11 @@ export interface VercelDeployArgs {
 	 */
 	projectId?: pulumi.Input<string>;
 
-	/** Absolute path to the monorepo root (working directory for `vercel deploy`). */
+	/**
+	 * Absolute path to the monorepo root (working directory for `vercel deploy`).
+	 * Stored relative to the Pulumi program directory so the command stays stable
+	 * across machines and CI (see {@link stableDir}).
+	 */
 	monorepoRoot: string;
 
 	/** Values that trigger a redeploy when changed (e.g. source hashes, env hashes). */
@@ -69,7 +74,7 @@ export class VercelDeploy extends pulumi.ComponentResource {
 			{
 				create: "vercel deploy --prod --yes",
 				triggers: args.triggers,
-				dir: args.monorepoRoot,
+				dir: stableDir(args.monorepoRoot),
 				environment: {
 					VERCEL_TOKEN: provider.token,
 					VERCEL_ORG_ID: provider.teamId,

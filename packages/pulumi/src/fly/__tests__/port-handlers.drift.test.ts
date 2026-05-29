@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { FlyPortHandler } from "../toml.js";
+import { FlyPortHandler } from "../toml";
 
 /**
  * Drift test: asserts that FlyPortHandler enum values match the

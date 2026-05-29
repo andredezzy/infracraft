@@ -1,9 +1,10 @@
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 
-import type { FlyApp } from "./app.js";
-import type { FlyProvider } from "./provider.js";
-import { type FlyTomlConfig, generateFlyToml } from "./toml.js";
+import { stableDir } from "../stable-dir";
+import type { FlyApp } from "./app";
+import type { FlyProvider } from "./provider";
+import { type FlyTomlConfig, generateFlyToml } from "./toml";
 
 /** Options type for FlyDeploy. */
 type FlyDeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
@@ -16,7 +17,11 @@ type FlyDeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 
 /** Args for FlyDeploy. */
 export interface FlyDeployArgs {
-	/** Absolute path to the repo root (working directory for `fly deploy`). */
+	/**
+	 * Absolute path to the repo root (working directory for `fly deploy`).
+	 * Stored relative to the Pulumi program directory so the command stays stable
+	 * across machines and CI (see {@link stableDir}).
+	 */
 	monorepoRoot: string;
 
 	/**
@@ -88,7 +93,7 @@ export class FlyDeploy extends pulumi.ComponentResource {
 			{
 				create: deployCommand,
 				triggers,
-				dir: args.monorepoRoot,
+				dir: stableDir(args.monorepoRoot),
 				environment: {
 					FLY_API_TOKEN: provider.token,
 					FLY_TOML_CONTENT: tomlContent,

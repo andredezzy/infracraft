@@ -1,21 +1,21 @@
-export { RailwayClient } from "./client.js";
-export type { RailwayDeployArgs, RailwayDeployConfig } from "./deploy.js";
-export { RailwayDeploy } from "./deploy.js";
-export type { RailwayDomainArgs } from "./domain.js";
-export { RailwayDomain } from "./domain.js";
-export type { RailwayEnvironmentArgs } from "./environment.js";
-export { RailwayEnvironment } from "./environment.js";
-export type { RailwayProjectArgs } from "./project.js";
-export { RailwayProject } from "./project.js";
-export type { RailwayProviderArgs } from "./provider.js";
-export { RailwayProvider } from "./provider.js";
-export type { RailwayServiceArgs } from "./service.js";
+export { RailwayClient } from "./client";
+export type { RailwayDeployArgs, RailwayDeployConfig } from "./deploy";
+export { RailwayDeploy } from "./deploy";
+export type { RailwayDomainArgs } from "./domain";
+export { RailwayDomain } from "./domain";
+export type { RailwayEnvironmentArgs } from "./environment";
+export { RailwayEnvironment } from "./environment";
+export type { RailwayProjectArgs } from "./project";
+export { RailwayProject } from "./project";
+export type { RailwayProviderArgs } from "./provider";
+export { RailwayProvider } from "./provider";
+export type { RailwayServiceArgs } from "./service";
 export {
 	RailwayBuilder,
 	RailwayRestartPolicy,
 	RailwayService,
-} from "./service.js";
-export type { RailwayVariableArgs } from "./variable.js";
-export { RailwayVariable } from "./variable.js";
-export type { RailwayVolumeArgs } from "./volume.js";
-export { RailwayVolume } from "./volume.js";
+} from "./service";
+export type { RailwayVariableArgs } from "./variable";
+export { RailwayVariable } from "./variable";
+export type { RailwayVolumeArgs } from "./volume";
+export { RailwayVolume } from "./volume";

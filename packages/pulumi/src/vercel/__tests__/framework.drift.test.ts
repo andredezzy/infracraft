@@ -1,6 +1,6 @@
 import { frameworks } from "@vercel/frameworks";
 import { describe, expect, it } from "vitest";
-import { VERCEL_FRAMEWORKS } from "../project.js";
+import { VERCEL_FRAMEWORKS } from "../project";
 
 /**
  * Drift test: asserts that VERCEL_FRAMEWORKS matches the slug list from

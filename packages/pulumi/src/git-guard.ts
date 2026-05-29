@@ -2,6 +2,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as command from "@pulumi/command";
 
+import { stableDir } from "./stable-dir";
+
 export const GUARD_DIR = ".git-infrakit-pulumi-guard";
 
 interface GitGuardResult {
@@ -43,6 +45,8 @@ export function gitGuard(monorepoRoot: string): GitGuardResult {
 		process.exit(0);
 	});
 
+	const dir = stableDir(monorepoRoot);
+
 	const hide = new command.local.Command("git-guard-hide", {
 		create: [
 			`test -d .git && test ! -d ${GUARD_DIR}`,
@@ -52,8 +56,8 @@ export function gitGuard(monorepoRoot: string): GitGuardResult {
 			`&& echo "hidden"`,
 			`|| echo "no-op"`,
 		].join(" "),
-		dir: monorepoRoot,
-		triggers: [monorepoRoot],
+		dir,
+		triggers: [dir],
 	});
 
 	return { hide };

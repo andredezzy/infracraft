@@ -1,16 +1,16 @@
-export type { FlyAppArgs } from "./app.js";
-export { FlyApp } from "./app.js";
-export type { FlyCertificateArgs, FlyDnsRequirements } from "./certificate.js";
-export { FlyCertificate } from "./certificate.js";
-export { FlyClient } from "./client.js";
-export type { FlyDeployArgs } from "./deploy.js";
-export { FlyDeploy } from "./deploy.js";
-export type { FlyIpArgs } from "./ip.js";
-export { FlyIp, FlyIpType } from "./ip.js";
-export type { FlyProviderArgs } from "./provider.js";
-export { FlyProvider } from "./provider.js";
-export type { FlySecretArgs } from "./secret.js";
-export { FlySecret } from "./secret.js";
+export type { FlyAppArgs } from "./app";
+export { FlyApp } from "./app";
+export type { FlyCertificateArgs, FlyDnsRequirements } from "./certificate";
+export { FlyCertificate } from "./certificate";
+export { FlyClient } from "./client";
+export type { FlyDeployArgs } from "./deploy";
+export { FlyDeploy } from "./deploy";
+export type { FlyIpArgs } from "./ip";
+export { FlyIp, FlyIpType } from "./ip";
+export type { FlyProviderArgs } from "./provider";
+export { FlyProvider } from "./provider";
+export type { FlySecretArgs } from "./secret";
+export { FlySecret } from "./secret";
 export type {
 	FlyBuildConfig,
 	FlyCheck,
@@ -25,7 +25,7 @@ export type {
 	FlyTomlConfig,
 	FlyVm,
 	FlyVmSize,
-} from "./toml.js";
+} from "./toml";
 export {
 	FLY_REGIONS,
 	FLY_VM_SIZES,
@@ -38,6 +38,6 @@ export {
 	FlyRestartPolicy,
 	FlyServiceProtocol,
 	generateFlyToml,
-} from "./toml.js";
-export type { FlyVolumeArgs } from "./volume.js";
-export { FlyVolume } from "./volume.js";
+} from "./toml";
+export type { FlyVolumeArgs } from "./volume";
+export { FlyVolume } from "./volume";

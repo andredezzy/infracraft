@@ -1,8 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
 
-import type { FlyApp } from "./app.js";
-import { FlyClient } from "./client.js";
-import type { FlyProvider } from "./provider.js";
+import type { FlyApp } from "./app";
+import { FlyClient } from "./client";
+import type { FlyProvider } from "./provider";
 
 /**
  * Fly IP address type. Enum keys UPPERCASE; values are Fly's GraphQL enum
