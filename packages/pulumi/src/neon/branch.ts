@@ -184,11 +184,7 @@ export class NeonBranch extends pulumi.ComponentResource {
 	/** Neon branch ID. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: NeonBranchArgs,
-		opts: NeonBranchOptions,
-	) {
+	constructor(name: string, args: NeonBranchArgs, opts: NeonBranchOptions) {
 		const { provider, project, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Branch", name, {}, pulumiOpts);

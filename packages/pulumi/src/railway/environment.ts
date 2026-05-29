@@ -88,7 +88,7 @@ class RailwayEnvironmentResourceProvider
 	}
 
 	async read(
-		id: string,
+		_id: string,
 		props: RailwayEnvironmentOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
 		const client = new RailwayClient(props.token);
@@ -172,10 +172,15 @@ class RailwayEnvironmentResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new RailwayEnvironmentResourceProvider(), name, {
-			...args,
-			environmentId: undefined,
-		}, opts);
+		super(
+			new RailwayEnvironmentResourceProvider(),
+			name,
+			{
+				...args,
+				environmentId: undefined,
+			},
+			opts,
+		);
 	}
 }
 

@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
-import { NeonClient } from "./client.js";
 import type { NeonBranch } from "./branch.js";
+import { NeonClient } from "./client.js";
 import type { NeonProject } from "./project.js";
 import type { NeonProvider } from "./provider.js";
 
@@ -169,10 +169,7 @@ class NeonDatabaseResource extends pulumi.dynamic.Resource {
 }
 
 /** Options type for NeonDatabase — replaces Pulumi's native `provider` field. */
-type NeonDatabaseOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+type NeonDatabaseOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Neon authentication context. */
 	provider: NeonProvider;
 
@@ -204,11 +201,7 @@ export interface NeonDatabaseArgs {
  * ```
  */
 export class NeonDatabase extends pulumi.ComponentResource {
-	constructor(
-		name: string,
-		args: NeonDatabaseArgs,
-		opts: NeonDatabaseOptions,
-	) {
+	constructor(name: string, args: NeonDatabaseArgs, opts: NeonDatabaseOptions) {
 		const { provider, project, branch, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Database", name, {}, pulumiOpts);

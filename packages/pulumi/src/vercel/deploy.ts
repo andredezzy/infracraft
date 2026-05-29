@@ -4,10 +4,7 @@ import type { VercelProject } from "./project.js";
 import type { VercelProvider } from "./provider.js";
 
 /** Options type for VercelDeploy — replaces Pulumi's native `provider` field. */
-type VercelDeployOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+type VercelDeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Vercel authentication context. */
 	provider: VercelProvider;
 
@@ -52,11 +49,7 @@ export interface VercelDeployArgs {
  * ```
  */
 export class VercelDeploy extends pulumi.ComponentResource {
-	constructor(
-		name: string,
-		args: VercelDeployArgs,
-		opts: VercelDeployOptions,
-	) {
+	constructor(name: string, args: VercelDeployArgs, opts: VercelDeployOptions) {
 		const { provider, project, ...pulumiOpts } = opts;
 
 		super("infracraft:vercel:Deploy", name, {}, pulumiOpts);

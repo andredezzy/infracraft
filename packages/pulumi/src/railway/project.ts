@@ -174,7 +174,9 @@ async function getOrCreateProjectToken(
  * Deletion is a no-op (with a warning) to prevent accidental project removal.
  * Name changes trigger replacement.
  */
-class RailwayProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
+class RailwayProjectResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(
 		inputs: RailwayProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {

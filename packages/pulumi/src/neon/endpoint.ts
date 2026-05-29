@@ -1,6 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
-import { NeonClient } from "./client.js";
 import type { NeonBranch } from "./branch.js";
+import { NeonClient } from "./client.js";
 import type { NeonProject } from "./project.js";
 import type { NeonProvider } from "./provider.js";
 
@@ -222,15 +222,17 @@ class NeonEndpointResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new NeonEndpointResourceProvider(), name, { ...args, host: undefined }, opts);
+		super(
+			new NeonEndpointResourceProvider(),
+			name,
+			{ ...args, host: undefined },
+			opts,
+		);
 	}
 }
 
 /** Options type for NeonEndpoint — replaces Pulumi's native `provider` field. */
-type NeonEndpointOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+type NeonEndpointOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Neon authentication context. */
 	provider: NeonProvider;
 
@@ -270,11 +272,7 @@ export class NeonEndpoint extends pulumi.ComponentResource {
 	/** Endpoint hostname for connection strings. */
 	public readonly host: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: NeonEndpointArgs,
-		opts: NeonEndpointOptions,
-	) {
+	constructor(name: string, args: NeonEndpointArgs, opts: NeonEndpointOptions) {
 		const { provider, project, branch, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Endpoint", name, {}, pulumiOpts);

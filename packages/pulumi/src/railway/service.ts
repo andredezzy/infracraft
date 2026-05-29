@@ -201,7 +201,9 @@ async function applyInstanceConfig(
  * before creating a new one. Service instance configuration (builder, commands,
  * healthcheck) is applied via `serviceInstanceUpdate` after create or update.
  */
-class RailwayServiceResourceProvider implements pulumi.dynamic.ResourceProvider {
+class RailwayServiceResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	/**
 	 * Creates or adopts a Railway service by name, then applies instance config.
 	 */

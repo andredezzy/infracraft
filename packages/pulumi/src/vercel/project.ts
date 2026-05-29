@@ -78,14 +78,21 @@ function buildProjectBody(
 ): Record<string, string> {
 	const body: Record<string, string> = { name: inputs.name };
 
-	if (inputs.framework !== undefined) body.framework = inputs.framework;
-	if (inputs.rootDirectory !== undefined)
+	if (inputs.framework !== undefined) {
+		body.framework = inputs.framework;
+	}
+	if (inputs.rootDirectory !== undefined) {
 		body.rootDirectory = inputs.rootDirectory;
-	if (inputs.buildCommand !== undefined) body.buildCommand = inputs.buildCommand;
-	if (inputs.installCommand !== undefined)
+	}
+	if (inputs.buildCommand !== undefined) {
+		body.buildCommand = inputs.buildCommand;
+	}
+	if (inputs.installCommand !== undefined) {
 		body.installCommand = inputs.installCommand;
-	if (inputs.outputDirectory !== undefined)
+	}
+	if (inputs.outputDirectory !== undefined) {
 		body.outputDirectory = inputs.outputDirectory;
+	}
 
 	return body;
 }
@@ -97,13 +104,15 @@ function buildProjectBody(
  * the existing project. If 404, creates a new one via `POST /v9/projects`.
  * Deletion is a no-op to protect production projects.
  */
-class VercelProjectResourceProvider
-	implements pulumi.dynamic.ResourceProvider
-{
+class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: VercelProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const existing = await fetchProject(inputs.token, inputs.teamId, inputs.name);
+		const existing = await fetchProject(
+			inputs.token,
+			inputs.teamId,
+			inputs.name,
+		);
 
 		let projectId: string;
 
@@ -257,7 +266,10 @@ class VercelProjectResource extends pulumi.dynamic.Resource {
 }
 
 /** Options type for VercelProject — replaces Pulumi's native `provider` field. */
-type VercelProjectOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+type VercelProjectOptions = Omit<
+	pulumi.ComponentResourceOptions,
+	"provider"
+> & {
 	/** Vercel authentication context. */
 	provider: VercelProvider;
 };
