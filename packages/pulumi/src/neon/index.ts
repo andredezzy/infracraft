@@ -7,6 +7,7 @@ export type { NeonEndpointArgs } from "./endpoint.js";
 export { NeonEndpoint } from "./endpoint.js";
 export type { NeonProjectArgs } from "./project.js";
 export { NeonProject } from "./project.js";
+export type { NeonProviderArgs } from "./provider.js";
 export { NeonProvider } from "./provider.js";
 export type { NeonRoleArgs } from "./role.js";
 export { NeonRole } from "./role.js";

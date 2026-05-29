@@ -1,5 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 
+/** Args for VercelProvider. */
+export interface VercelProviderArgs {
+	/** Vercel API bearer token. */
+	token: pulumi.Input<string>;
+
+	/** Vercel team/org ID. */
+	teamId: pulumi.Input<string>;
+}
+
 /**
  * Holds Vercel authentication context for resource constructors.
  *
@@ -25,13 +34,7 @@ export class VercelProvider extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: {
-			/** Vercel API bearer token. */
-			token: pulumi.Input<string>;
-
-			/** Vercel team/org ID. */
-			teamId: pulumi.Input<string>;
-		},
+		args: VercelProviderArgs,
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:vercel:Provider", name, {}, opts);
