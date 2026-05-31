@@ -177,15 +177,19 @@ function buildProjectBody(
 	if (inputs.framework !== undefined) {
 		body.framework = inputs.framework;
 	}
+
 	if (inputs.rootDirectory !== undefined) {
 		body.rootDirectory = inputs.rootDirectory;
 	}
+
 	if (inputs.buildCommand !== undefined) {
 		body.buildCommand = inputs.buildCommand;
 	}
+
 	if (inputs.installCommand !== undefined) {
 		body.installCommand = inputs.installCommand;
 	}
+
 	if (inputs.outputDirectory !== undefined) {
 		body.outputDirectory = inputs.outputDirectory;
 	}

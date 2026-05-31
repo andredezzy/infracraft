@@ -139,12 +139,15 @@ class FlyVolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
 		if (olds.appName !== news.appName) {
 			replaces.push("appName");
 		}
+
 		if (olds.name !== news.name) {
 			replaces.push("name");
 		}
+
 		if (olds.region !== news.region) {
 			replaces.push("region");
 		}
+
 		if (news.sizeGb < olds.sizeGb) {
 			replaces.push("sizeGb");
 		}

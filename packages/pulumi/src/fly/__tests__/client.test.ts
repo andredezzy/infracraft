@@ -54,6 +54,7 @@ describe("FlyClient", () => {
 		});
 
 		const client = new FlyClient("test-token");
+
 		const result = await client.post<{ id: string }>("/v1/apps", {
 			app_name: "x",
 			org_slug: "personal",
@@ -63,6 +64,7 @@ describe("FlyClient", () => {
 
 		const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
 		expect(call[1].method).toBe("POST");
+
 		expect(JSON.parse(call[1].body)).toEqual({
 			app_name: "x",
 			org_slug: "personal",
@@ -77,6 +79,7 @@ describe("FlyClient", () => {
 		});
 
 		const client = new FlyClient("test-token");
+
 		const result = await client.put<{ needs_restart: boolean }>(
 			"/v1/apps/x/volumes/vol_123/extend",
 			{ size_gb: 20 },
@@ -97,6 +100,7 @@ describe("FlyClient", () => {
 		});
 
 		const client = new FlyClient("test-token");
+
 		await expect(
 			client.delete("/v1/apps/x/certificates/h"),
 		).resolves.toBeUndefined();
@@ -122,6 +126,7 @@ describe("FlyClient", () => {
 		});
 
 		const client = new FlyClient("test-token");
+
 		const data = await client.graphql<{ app: { name: string } }>(
 			"query { app { name } }",
 			{},

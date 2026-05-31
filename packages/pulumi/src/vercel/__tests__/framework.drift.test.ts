@@ -19,6 +19,7 @@ describe("VERCEL_FRAMEWORKS drift", () => {
 		const upstreamSlugs = new Set(
 			frameworks.map((f) => f.slug).filter((s): s is string => s !== null),
 		);
+
 		const localSlugs = new Set(VERCEL_FRAMEWORKS);
 
 		const added = [...upstreamSlugs].filter((s) => !localSlugs.has(s));
