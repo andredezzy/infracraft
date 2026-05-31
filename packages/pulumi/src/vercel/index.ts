@@ -1,5 +1,7 @@
 export type { VercelDeployArgs } from "./deploy";
 export { VercelDeploy } from "./deploy";
+export type { VercelIntegrationArgs } from "./integration";
+export { VercelIntegration } from "./integration";
 export type { VercelFramework, VercelProjectArgs } from "./project";
 export { VERCEL_FRAMEWORKS, VercelProject } from "./project";
 export type { VercelProviderArgs } from "./provider";
