@@ -45,7 +45,7 @@ jobs:
 
       - run: bun run build
 
-      - name: Publish @infrakit/pulumi
+      - name: Publish @infracraft/pulumi
         run: npm publish --provenance --access public
         working-directory: packages/pulumi
         env:

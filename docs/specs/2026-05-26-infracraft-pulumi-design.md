@@ -33,7 +33,7 @@ import { gitGuard } from '@infracraft/pulumi/git-guard'
 Monorepo with room for future `@infracraft/*` packages:
 
 ```
-infrakit/
+infracraft/
   packages/
     pulumi/                              ← @infracraft/pulumi
       src/
@@ -170,7 +170,7 @@ new RailwayDeploy('deploy-mesh', { dependsOn: [guard.hide] })
 new VercelDeploy('deploy-nexus', { dependsOn: [guard.hide] })
 ```
 
-- Moves `.git` → `.git-infrakit-pulumi-guard`, creates stub with index
+- Moves `.git` → `.git-infracraft-pulumi-guard`, creates stub with index
 - Restores on `process.exit`, `SIGINT`, `SIGTERM`
 - Auto-adds guard dir to `.gitignore` if not present
 - Protects against crash leaving guard dir tracked
@@ -239,11 +239,11 @@ No value extraction from `apply()` for use as resource inputs. All inter-resourc
 
 ### Consistent type URNs
 
-All resources use the pattern `infrakit:{provider}:{ResourceName}`:
-- `infrakit:railway:Project`
-- `infrakit:railway:Service`
-- `infrakit:neon:Branch`
-- `infrakit:vercel:Variable`
+All resources use the pattern `infracraft:{provider}:{ResourceName}`:
+- `infracraft:railway:Project`
+- `infracraft:railway:Service`
+- `infracraft:neon:Branch`
+- `infracraft:vercel:Variable`
 
 ### ComponentResource conventions
 

@@ -30,13 +30,13 @@
 - Create: `knip.json`
 - Create: `.gitignore`
 
-All files live at `/Users/andrevictor/www/Andre-Dezzy/infrakit/`.
+All files live at `/Users/andrevictor/www/Andre-Dezzy/infracraft/`.
 
 - [ ] **Step 1: Create root `package.json`**
 
 ```json
 {
-	"name": "infrakit",
+	"name": "infracraft",
 	"private": true,
 	"type": "module",
 	"packageManager": "bun@1.3.14",
@@ -148,14 +148,14 @@ coverage
 
 - [ ] **Step 8: Install dependencies and verify**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun install`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun install`
 Expected: Lockfile generated, no errors.
 
 - [ ] **Step 9: Commit**
 
 ```bash
 git add -A
-git commit -m "chore: scaffold infrakit monorepo root"
+git commit -m "chore: scaffold infracraft monorepo root"
 ```
 
 ---
@@ -193,7 +193,7 @@ Copy from `/Users/andrevictor/www/HAT-CREW/mlm-rby/packages/config-test/`. Chang
 - [ ] **Step 4: Install and build config packages**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun install && bun run build
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun install && bun run build
 ```
 
 Expected: All 3 config packages build clean. `config-typescript` has no build step. `config-tsdown` and `config-test` produce `dist/` output.
@@ -346,7 +346,7 @@ export {};
 - [ ] **Step 6: Install, build, and typecheck**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun install && bun run build && bun run typecheck
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun install && bun run build && bun run typecheck
 ```
 
 Expected: All packages build. No type errors.
@@ -442,7 +442,7 @@ describe("hashDirectory", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run test --filter=@infracraft/pulumi`
 Expected: FAIL — `hashDirectory` is not exported.
 
 - [ ] **Step 3: Implement hashDirectory**
@@ -500,7 +500,7 @@ export function hashDirectory(dirPath: string, options?: HashOptions): string {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run test --filter=@infracraft/pulumi`
 Expected: 4 tests PASS.
 
 - [ ] **Step 5: Commit**
@@ -521,7 +521,7 @@ git commit -m "feat: add hashDirectory with configurable ignore set"
 **Reference:** `/Users/andrevictor/www/HAT-CREW/nodex/infrastructure/helpers/git-guard.ts`
 
 **Key changes from reference:**
-- Guard dir renamed to `.git-infrakit-pulumi-guard`
+- Guard dir renamed to `.git-infracraft-pulumi-guard`
 - Added `ensureGitignore` — auto-adds guard dir to `.gitignore`
 - Function renamed from `createGitGuard` to `gitGuard`
 
@@ -590,7 +590,7 @@ describe("ensureGitignore", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run test --filter=@infracraft/pulumi`
 Expected: FAIL — `ensureGitignore` and `GUARD_DIR` not exported.
 
 - [ ] **Step 3: Implement git-guard.ts**
@@ -602,7 +602,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as command from "@pulumi/command";
 
-export const GUARD_DIR = ".git-infrakit-pulumi-guard";
+export const GUARD_DIR = ".git-infracraft-pulumi-guard";
 
 interface GitGuardResult {
 	hide: command.local.Command;
@@ -668,7 +668,7 @@ export function ensureGitignore(gitignorePath: string): void {
 
 - [ ] **Step 4: Run tests to verify they pass**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run test --filter=@infracraft/pulumi`
 Expected: All tests PASS (4 hash + 4 git-guard).
 
 - [ ] **Step 5: Commit**
@@ -751,7 +751,7 @@ describe("RailwayClient", () => {
 
 - [ ] **Step 2: Run tests to verify they fail**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test --filter=@infracraft/pulumi`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run test --filter=@infracraft/pulumi`
 Expected: FAIL — `RailwayClient` not found.
 
 - [ ] **Step 3: Implement RailwayClient**
@@ -862,7 +862,7 @@ Copy from reference. No structural changes needed.
 
 - [ ] **Step 6: Typecheck**
 
-Run: `cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run typecheck`
+Run: `cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run typecheck`
 Expected: No type errors.
 
 - [ ] **Step 7: Commit**
@@ -883,7 +883,7 @@ git commit -m "feat(railway): add project, service, variable, volume, domain pro
 **Reference:** `/Users/andrevictor/www/HAT-CREW/nodex/infrastructure/providers/railway/deploy.ts`
 
 **Key changes from reference:**
-- Type URN: `infrakit:railway:Deploy`
+- Type URN: `infracraft:railway:Deploy`
 - Constructor calls `this.registerOutputs()` at the end.
 - Child resources use `{ parent: this }` and derive names from `${name}-suffix`.
 - Uses `hashDirectory` from `../hash` (internal import, not from a separate package).
@@ -891,7 +891,7 @@ git commit -m "feat(railway): add project, service, variable, volume, domain pro
 - [ ] **Step 1: Implement deploy.ts**
 
 Copy from reference and apply these changes:
-1. Change `super()` type URN to `"infrakit:railway:Deploy"`.
+1. Change `super()` type URN to `"infracraft:railway:Deploy"`.
 2. Add `this.registerOutputs({ deploy: this.deploy })` as last line of constructor.
 3. All child `command.local.Command` resources get `{ parent: this }` and names derived from `${name}`.
 4. Import `hashDirectory` from `"../hash"`.
@@ -921,7 +921,7 @@ export type { RailwayDeployConfig } from "./deploy";
 - [ ] **Step 3: Build and typecheck**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run build && bun run typecheck
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run build && bun run typecheck
 ```
 
 Expected: Clean build with no errors.
@@ -1090,7 +1090,7 @@ export type { NeonDatabaseInputs } from "./database";
 - [ ] **Step 4: Build and typecheck**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run build && bun run typecheck
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run build && bun run typecheck
 ```
 
 Expected: Clean build.
@@ -1122,7 +1122,7 @@ git commit -m "feat(neon): add project, branch, endpoint, role, database provide
 - Remove the unused `createEnvironmentVariables` helper function and `VercelTarget` enum from `deploy.ts` — they are dead code.
 
 ### deploy.ts
-- Change type URN to `"infrakit:vercel:Deploy"`.
+- Change type URN to `"infracraft:vercel:Deploy"`.
 - Add `this.registerOutputs()` at end of constructor.
 - Child `command.local.Command` gets `{ parent: this }` and name derived from `${name}`.
 - Import `hashDirectory` from `"../hash"`.
@@ -1135,7 +1135,7 @@ Copy from reference. Clean up unused code. Ensure all inputs wrapped in `pulumi.
 - [ ] **Step 2: Implement deploy.ts**
 
 Copy from reference and apply changes:
-1. Type URN: `"infrakit:vercel:Deploy"`.
+1. Type URN: `"infracraft:vercel:Deploy"`.
 2. `this.registerOutputs({})` at end of constructor.
 3. Child command: `{ parent: this }`, name: `${name}-deploy`.
 4. Import `hashDirectory` from `"../hash"`.
@@ -1153,7 +1153,7 @@ export type { VercelDeployArgs } from "./deploy";
 - [ ] **Step 4: Build and typecheck**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run build && bun run typecheck
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run build && bun run typecheck
 ```
 
 Expected: Clean build.
@@ -1178,7 +1178,7 @@ git commit -m "feat(vercel): add variable and deploy providers"
 - [ ] **Step 1: Run full lint**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run lint
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run lint
 ```
 
 Fix any lint errors or warnings. Zero warnings allowed.
@@ -1186,7 +1186,7 @@ Fix any lint errors or warnings. Zero warnings allowed.
 - [ ] **Step 2: Run full test suite**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run test
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run test
 ```
 
 Expected: All tests pass (hash: 4, git-guard: 4, railway client: 3, neon client: 3 = 14 tests).
@@ -1194,7 +1194,7 @@ Expected: All tests pass (hash: 4, git-guard: 4, railway client: 3, neon client:
 - [ ] **Step 3: Run full build**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run build
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run build
 ```
 
 Expected: All packages build clean. `packages/pulumi/dist/` contains all subpath entry points.
@@ -1202,7 +1202,7 @@ Expected: All packages build clean. `packages/pulumi/dist/` contains all subpath
 - [ ] **Step 4: Run typecheck**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run typecheck
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run typecheck
 ```
 
 Expected: No type errors.
@@ -1210,7 +1210,7 @@ Expected: No type errors.
 - [ ] **Step 5: Run knip**
 
 ```bash
-cd /Users/andrevictor/www/Andre-Dezzy/infrakit && bun run knip
+cd /Users/andrevictor/www/Andre-Dezzy/infracraft && bun run knip
 ```
 
 Expected: No unused files, deps, or exports.
