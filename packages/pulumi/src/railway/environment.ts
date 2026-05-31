@@ -13,6 +13,9 @@ interface RailwayEnvironmentInputs {
 
 	/** Environment display name (e.g. `"production"`, `"staging"`). */
 	name: string;
+
+	/** Name of an existing environment to fork from when creating a new one. */
+	source?: string;
 }
 
 /** Persisted state for the Railway environment. */
@@ -20,6 +23,15 @@ interface RailwayEnvironmentOutputs extends RailwayEnvironmentInputs {
 	/** Railway-assigned environment UUID. */
 	environmentId: string;
 }
+
+const ENVIRONMENT_CREATE_MUTATION = `
+  mutation EnvironmentCreate($input: EnvironmentCreateInput!) {
+    environmentCreate(input: $input) {
+      id
+      name
+    }
+  }
+`;
 
 const PROJECT_ENVIRONMENTS_QUERY = `
   query($projectId: String!) {
@@ -60,25 +72,70 @@ async function findEnvironmentId(
 }
 
 /**
- * Dynamic provider that resolves a Railway environment UUID by name from a project.
+ * Dynamic provider that resolves or creates a Railway environment by name.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class RailwayEnvironmentResourceProvider
+export class RailwayEnvironmentResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Adopts an existing Railway environment when found by name, or creates a new
+	 * one (optionally forked from a source environment) when not found.
+	 *
+	 * @param inputs Resolved provider inputs including token, projectId, name, and optional source.
+	 * @returns Pulumi dynamic create result with the environment UUID as the resource ID.
+	 * @throws {Error} When `source` is provided but cannot be resolved to an environment ID.
+	 */
 	async create(
 		inputs: RailwayEnvironmentInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
 		const client = new RailwayClient(inputs.token);
 
-		const environmentId = await findEnvironmentId(
+		let environmentId = await findEnvironmentId(
 			client,
 			inputs.projectId,
 			inputs.name,
 		);
 
-		if (!environmentId) {
-			throw new Error(
-				`Railway environment "${inputs.name}" not found in project ${inputs.projectId}`,
+		if (environmentId) {
+			pulumi.log.info(
+				`Adopting existing Railway environment "${inputs.name}" (${environmentId})`,
+			);
+		} else {
+			let sourceEnvironmentId: string | undefined;
+
+			if (inputs.source) {
+				sourceEnvironmentId = await findEnvironmentId(
+					client,
+					inputs.projectId,
+					inputs.source,
+				);
+
+				if (!sourceEnvironmentId) {
+					throw new Error(
+						`Railway source environment "${inputs.source}" not found in project ${inputs.projectId}`,
+					);
+				}
+			}
+
+			const result = await client.query<{
+				environmentCreate: { id: string; name: string };
+			}>(ENVIRONMENT_CREATE_MUTATION, {
+				input: {
+					projectId: inputs.projectId,
+					name: inputs.name,
+					// skipInitialDeploys: hold deploys so a forked env doesn't run with inherited
+					// source/production variables before our RailwayVariable resources overwrite them.
+					skipInitialDeploys: true,
+					...(sourceEnvironmentId ? { sourceEnvironmentId } : {}),
+				},
+			});
+
+			environmentId = result.environmentCreate.id;
+
+			pulumi.log.info(
+				`Created Railway environment "${inputs.name}" (${environmentId})`,
 			);
 		}
 
@@ -169,6 +226,7 @@ class RailwayEnvironmentResource extends pulumi.dynamic.Resource {
 			token: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
+			source?: pulumi.Input<string>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
@@ -200,20 +258,38 @@ type RailwayEnvironmentOptions = Omit<
 export interface RailwayEnvironmentArgs {
 	/** Environment display name (e.g. `"production"`, `"staging"`). */
 	name: pulumi.Input<string>;
+
+	/**
+	 * Name of an existing environment to fork from when this environment is created.
+	 * Evaluated only at creation time — changing `source` after the environment exists
+	 * has no effect (an existing environment is never re-forked).
+	 */
+	source?: pulumi.Input<string>;
 }
 
 /**
- * Resolves a Railway environment UUID by name from a project.
+ * Resolves or creates a Railway environment by name within a project.
+ *
+ * When the named environment already exists it is adopted (no mutation).
+ * When it does not exist it is created — optionally forked from a source
+ * environment so the new env inherits service instances and variables.
  *
  * @example
  * ```typescript
- * const environment = new RailwayEnvironment("production", {
+ * // Adopt or create "production" (no source)
+ * const production = new RailwayEnvironment("production", {
  *   name: "production",
+ * }, { provider, project });
+ *
+ * // Adopt or create "staging", forked from "production"
+ * const staging = new RailwayEnvironment("staging", {
+ *   name: "staging",
+ *   source: "production",
  * }, { provider, project });
  *
  * // Use environmentId downstream
  * const service = new RailwayService("api", { name: "api" }, {
- *   provider, project, environment,
+ *   provider, project, environment: staging,
  * });
  * ```
  */
@@ -236,6 +312,7 @@ export class RailwayEnvironment extends pulumi.ComponentResource {
 				token: provider.token,
 				projectId: project.id,
 				name: args.name,
+				source: args.source,
 			},
 			{ parent: this },
 		);
