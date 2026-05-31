@@ -38,6 +38,7 @@ interface FlyAppResponse {
 class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(inputs: FlyAppInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new FlyClient(inputs.token);
+
 		const existing = await client.tryGet<FlyAppResponse>(
 			`/v1/apps/${inputs.name}`,
 		);
@@ -102,6 +103,7 @@ class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 		if (olds.name !== news.name) {
 			replaces.push("name");
 		}
+
 		if (olds.organization !== news.organization) {
 			replaces.push("organization");
 		}

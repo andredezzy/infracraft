@@ -291,12 +291,15 @@ function pushCheck(lines: string[], header: string, check: FlyCheck): void {
 	if (check.type !== undefined) {
 		lines.push(`    type = ${quote(check.type)}`);
 	}
+
 	if (check.port !== undefined) {
 		lines.push(`    port = ${check.port}`);
 	}
+
 	if (check.method !== undefined) {
 		lines.push(`    method = ${quote(check.method)}`);
 	}
+
 	if (check.path !== undefined) {
 		lines.push(`    path = ${quote(check.path)}`);
 	}
@@ -339,6 +342,7 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 		if (config.build.dockerfile !== undefined) {
 			lines.push(`  dockerfile = ${quote(config.build.dockerfile)}`);
 		}
+
 		if (config.build.image !== undefined) {
 			lines.push(`  image = ${quote(config.build.image)}`);
 		}
@@ -367,15 +371,19 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 		if (service.forceHttps !== undefined) {
 			lines.push(`  force_https = ${service.forceHttps}`);
 		}
+
 		if (service.autoStopMachines !== undefined) {
 			lines.push(`  auto_stop_machines = ${quote(service.autoStopMachines)}`);
 		}
+
 		if (service.autoStartMachines !== undefined) {
 			lines.push(`  auto_start_machines = ${service.autoStartMachines}`);
 		}
+
 		if (service.minMachinesRunning !== undefined) {
 			lines.push(`  min_machines_running = ${service.minMachinesRunning}`);
 		}
+
 		if (service.processes !== undefined) {
 			lines.push(`  processes = ${array(service.processes)}`);
 		}
@@ -404,12 +412,15 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 			if (service.autoStopMachines !== undefined) {
 				lines.push(`  auto_stop_machines = ${quote(service.autoStopMachines)}`);
 			}
+
 			if (service.autoStartMachines !== undefined) {
 				lines.push(`  auto_start_machines = ${service.autoStartMachines}`);
 			}
+
 			if (service.minMachinesRunning !== undefined) {
 				lines.push(`  min_machines_running = ${service.minMachinesRunning}`);
 			}
+
 			if (service.processes !== undefined) {
 				lines.push(`  processes = ${array(service.processes)}`);
 			}
@@ -417,6 +428,7 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 			for (const port of service.ports) {
 				lines.push("", "  [[services.ports]]");
 				lines.push(`    port = ${port.port}`);
+
 				if (port.handlers !== undefined) {
 					lines.push(`    handlers = ${array(port.handlers)}`);
 				}
@@ -443,6 +455,7 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 			if (mount.processes !== undefined) {
 				lines.push(`  processes = ${array(mount.processes)}`);
 			}
+
 			if (mount.initialSize !== undefined) {
 				lines.push(`  initial_size = ${quote(mount.initialSize)}`);
 			}
@@ -456,6 +469,7 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 			if (vm.size !== undefined) {
 				lines.push(`  size = ${quote(vm.size)}`);
 			}
+
 			if (vm.memory !== undefined) {
 				lines.push(
 					typeof vm.memory === "number"
@@ -463,12 +477,15 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 						: `  memory = ${quote(vm.memory)}`,
 				);
 			}
+
 			if (vm.cpuKind !== undefined) {
 				lines.push(`  cpu_kind = ${quote(vm.cpuKind)}`);
 			}
+
 			if (vm.cpus !== undefined) {
 				lines.push(`  cpus = ${vm.cpus}`);
 			}
+
 			if (vm.processes !== undefined) {
 				lines.push(`  processes = ${array(vm.processes)}`);
 			}
@@ -481,6 +498,7 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 		if (config.deploy.strategy !== undefined) {
 			lines.push(`  strategy = ${quote(config.deploy.strategy)}`);
 		}
+
 		if (config.deploy.releaseCommand !== undefined) {
 			lines.push(`  release_command = ${quote(config.deploy.releaseCommand)}`);
 		}
@@ -492,9 +510,11 @@ export function generateFlyToml(config: FlyTomlConfig): string {
 		if (config.restart.policy !== undefined) {
 			lines.push(`  policy = ${quote(config.restart.policy)}`);
 		}
+
 		if (config.restart.retries !== undefined) {
 			lines.push(`  retries = ${config.restart.retries}`);
 		}
+
 		if (config.restart.processes !== undefined) {
 			lines.push(`  processes = ${array(config.restart.processes)}`);
 		}

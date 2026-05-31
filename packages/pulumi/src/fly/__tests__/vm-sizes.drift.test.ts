@@ -30,6 +30,7 @@ describe("FLY_VM_SIZES drift", () => {
 		// then collect the `"key":` entries inside.
 		const mapDecl =
 			"MachinePresets map[string]*MachineGuest = map[string]*MachineGuest{";
+
 		const declIndex = source.indexOf(mapDecl);
 
 		expect(

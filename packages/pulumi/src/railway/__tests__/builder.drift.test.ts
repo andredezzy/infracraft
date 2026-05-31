@@ -71,6 +71,7 @@ describe("Railway enum drift", () => {
 		const added = [...upstreamSet].filter(
 			(v) => !localSet.has(v as RailwayBuilder),
 		);
+
 		const removed = [...localSet].filter((v) => !upstreamSet.has(v));
 
 		expect(
@@ -124,6 +125,7 @@ describe("Railway enum drift", () => {
 		const added = [...upstreamSet].filter(
 			(v) => !localSet.has(v as RailwayRestartPolicy),
 		);
+
 		const removed = [...localSet].filter((v) => !upstreamSet.has(v));
 
 		expect(

@@ -132,6 +132,7 @@ class FlyCertificateResourceProvider
 		if (olds.appName !== news.appName) {
 			replaces.push("appName");
 		}
+
 		if (olds.hostname !== news.hostname) {
 			replaces.push("hostname");
 		}

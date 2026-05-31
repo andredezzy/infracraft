@@ -171,9 +171,11 @@ class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 		if (olds.appName !== news.appName) {
 			replaces.push("appName");
 		}
+
 		if (olds.type !== news.type) {
 			replaces.push("type");
 		}
+
 		if (olds.region !== news.region) {
 			replaces.push("region");
 		}
