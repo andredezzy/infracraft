@@ -21,9 +21,10 @@ interface VercelIntegrationOutputs extends VercelIntegrationInputs {
 	configurationId: string;
 }
 
-/** Vercel API response shape for the integration configurations list. */
-interface VercelIntegrationsResponse {
-	configurations: Array<{ id: string; slug: string }>;
+/** A single installed Vercel marketplace integration configuration. */
+interface VercelIntegrationConfiguration {
+	id: string;
+	slug: string;
 }
 
 /**
@@ -38,8 +39,9 @@ export class VercelIntegrationResourceProvider
 	async create(
 		inputs: VercelIntegrationInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
+		// `view=account` is required by the configurations endpoint (a missing view returns 400).
 		const response = await fetch(
-			`${VERCEL_API_URL}/v1/integrations/configurations?teamId=${inputs.teamId}`,
+			`${VERCEL_API_URL}/v1/integrations/configurations?view=account&teamId=${inputs.teamId}`,
 			{ headers: { Authorization: `Bearer ${inputs.token}` } },
 		);
 
@@ -49,13 +51,21 @@ export class VercelIntegrationResourceProvider
 			);
 		}
 
-		const data = (await response.json()) as VercelIntegrationsResponse;
+		// The endpoint returns a top-level array; some responses wrap it in { configurations: [...] }.
+		const data = (await response.json()) as
+			| VercelIntegrationConfiguration[]
+			| { configurations: VercelIntegrationConfiguration[] };
 
-		const config = data.configurations.find((c) => c.slug === inputs.slug);
+		const configurations = Array.isArray(data) ? data : data.configurations;
+
+		const config = configurations.find((c) => c.slug === inputs.slug);
 
 		if (!config) {
+			const available =
+				configurations.map((c) => c.slug).join(", ") || "(none)";
+
 			throw new Error(
-				`Vercel integration "${inputs.slug}" is not installed on this team`,
+				`Vercel integration "${inputs.slug}" is not installed on this team (available: ${available})`,
 			);
 		}
 

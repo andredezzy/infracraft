@@ -14,16 +14,15 @@ describe("VercelIntegrationResourceProvider", () => {
 	});
 
 	describe("create", () => {
-		it("resolves an installed integration slug to its configuration id", async () => {
+		it("resolves an installed integration slug to its configuration id (top-level array response, view=account)", async () => {
+			// The real endpoint returns a top-level array.
 			mockFetch.mockResolvedValue({
 				ok: true,
 				json: () =>
-					Promise.resolve({
-						configurations: [
-							{ id: "icfg_upstash123", slug: "upstash" },
-							{ id: "icfg_other", slug: "other" },
-						],
-					}),
+					Promise.resolve([
+						{ id: "icfg_upstash123", slug: "upstash" },
+						{ id: "icfg_other", slug: "other" },
+					]),
 			});
 
 			const provider = new VercelIntegrationResourceProvider();
@@ -35,7 +34,7 @@ describe("VercelIntegrationResourceProvider", () => {
 			});
 
 			expect(fetch).toHaveBeenCalledWith(
-				expect.stringContaining("/v1/integrations/configurations"),
+				expect.stringContaining("/v1/integrations/configurations?view=account"),
 				expect.objectContaining({
 					headers: expect.objectContaining({ Authorization: "Bearer tok" }),
 				}),
@@ -45,10 +44,30 @@ describe("VercelIntegrationResourceProvider", () => {
 			expect(result.outs.configurationId).toBe("icfg_upstash123");
 		});
 
+		it("also accepts the { configurations: [...] } wrapped shape", async () => {
+			mockFetch.mockResolvedValue({
+				ok: true,
+				json: () =>
+					Promise.resolve({
+						configurations: [{ id: "icfg_wrapped", slug: "upstash" }],
+					}),
+			});
+
+			const provider = new VercelIntegrationResourceProvider();
+
+			const result = await provider.create({
+				token: "tok",
+				teamId: "team_xyz",
+				slug: "upstash",
+			});
+
+			expect(result.outs.configurationId).toBe("icfg_wrapped");
+		});
+
 		it("throws (naming the slug) when the integration is not installed on the team", async () => {
 			mockFetch.mockResolvedValue({
 				ok: true,
-				json: () => Promise.resolve({ configurations: [] }),
+				json: () => Promise.resolve([]),
 			});
 
 			const provider = new VercelIntegrationResourceProvider();
