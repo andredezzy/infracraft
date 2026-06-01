@@ -113,7 +113,12 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 
 		const setupLines = [writeIgnore, writeRailpack].filter(Boolean).join("; ");
 
-		const deployCmd = pulumi.interpolate`while ! mkdir ${LOCK_DIR} 2>/dev/null; do sleep 1; done; ${setupLines}; { sleep 5; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; } & railway up --ci --project ${project.id} --service ${service.id} --environment ${environment.id}; EXIT=$?; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; wait; exit $EXIT`;
+		// The deploy token is inlined into the create command (RAILWAY_TOKEN=… railway up) rather
+		// than passed via command.local.Command's `environment` map. The token is auto-minted (a
+		// RailwayProjectToken), so it is an UNKNOWN secret at preview time, and an unknown secret in
+		// the `environment` map makes `pulumi preview` fail ("malformed RPC secret: missing value").
+		// Inlining keeps the token secret in state while letting preview serialize cleanly.
+		const deployCmd = pulumi.interpolate`while ! mkdir ${LOCK_DIR} 2>/dev/null; do sleep 1; done; ${setupLines}; { sleep 5; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; } & RAILWAY_TOKEN=${projectToken} railway up --ci --project ${project.id} --service ${service.id} --environment ${environment.id}; EXIT=$?; rm -f .railwayignore railpack.json; rmdir ${LOCK_DIR} 2>/dev/null; wait; exit $EXIT`;
 
 		new command.local.Command(
 			`${name}-deploy`,
@@ -121,9 +126,6 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 				create: deployCmd,
 				triggers: args.triggers,
 				dir: stableDir(args.directory),
-				environment: {
-					RAILWAY_TOKEN: projectToken,
-				},
 			},
 			{ parent: this },
 		);
