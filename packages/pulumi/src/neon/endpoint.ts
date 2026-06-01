@@ -108,10 +108,14 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 			};
 		}
 
+		// Create the compute endpoint via the project-level endpoints collection with
+		// branch_id in the body. The branch-scoped path (/branches/{id}/endpoints) is
+		// GET-only and returns 405 on POST.
 		const result = await client.post<EndpointResponse>(
-			`/projects/${inputs.projectId}/branches/${inputs.branchId}/endpoints`,
+			`/projects/${inputs.projectId}/endpoints`,
 			{
 				endpoint: {
+					branch_id: inputs.branchId,
 					type: "read_write",
 					autoscaling_limit_min_cu: inputs.minCu,
 					autoscaling_limit_max_cu: inputs.maxCu,
