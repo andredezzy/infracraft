@@ -25,6 +25,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 			});
 
 			const provider = new RailwayEnvironmentResourceProvider();
+
 			const result = await provider.create({
 				token: "tok",
 				projectId: "proj-123",
@@ -43,6 +44,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 				}); // create
 
 			const provider = new RailwayEnvironmentResourceProvider();
+
 			const result = await provider.create({
 				token: "tok",
 				projectId: "proj-123",
@@ -74,6 +76,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 				}); // create forked
 
 			const provider = new RailwayEnvironmentResourceProvider();
+
 			const result = await provider.create({
 				token: "tok",
 				projectId: "proj-123",
