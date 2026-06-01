@@ -53,6 +53,9 @@ type RailwayDeployOptions = Omit<
 
 	/** Railway service context. */
 	service: RailwayService;
+
+	/** Environment-scoped Railway deploy token. Provision via {@link RailwayProjectToken}. */
+	projectToken: pulumi.Input<string>;
 };
 
 const LOCK_DIR = "/tmp/.railway-upload-lock";
@@ -69,9 +72,8 @@ const LOCK_DIR = "/tmp/.railway-upload-lock";
  * ```typescript
  * new RailwayDeploy("api-deploy", {
  *   directory: monorepoRoot,
- *   sourceHash,
- *   env: { DATABASE_URL: dbUrl },
- * }, { provider, project, environment, service });
+ *   triggers: [sourceHash],
+ * }, { provider, project, environment, service, projectToken: stagingToken.token });
  * ```
  */
 export class RailwayDeploy extends pulumi.ComponentResource {
@@ -80,7 +82,14 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 		args: RailwayDeployArgs,
 		opts: RailwayDeployOptions,
 	) {
-		const { provider, project, environment, service, ...pulumiOpts } = opts;
+		const {
+			provider,
+			project,
+			environment,
+			service,
+			projectToken,
+			...pulumiOpts
+		} = opts;
 
 		super("infracraft:railway:Deploy", name, {}, pulumiOpts);
 
@@ -113,7 +122,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 				triggers: args.triggers,
 				dir: stableDir(args.directory),
 				environment: {
-					RAILWAY_TOKEN: project.projectToken,
+					RAILWAY_TOKEN: projectToken,
 				},
 			},
 			{ parent: this },

@@ -21,9 +21,6 @@ interface RailwayProjectOutputs extends RailwayProjectInputs {
 
 	/** Railway-assigned production environment UUID. */
 	productionEnvironmentId: string;
-
-	/** Railway project-scoped token (auto-provisioned, exposed as secret output). */
-	projectToken: string;
 }
 
 const WORKSPACE_QUERY = `
@@ -78,26 +75,6 @@ const PROJECT_ENVIRONMENTS_QUERY = `
   }
 `;
 
-const PROJECT_TOKENS_QUERY = `
-  query($projectId: String!) {
-    projectTokens(projectId: $projectId) {
-      edges { node { id name } }
-    }
-  }
-`;
-
-const PROJECT_TOKEN_CREATE = `
-  mutation($input: ProjectTokenCreateInput!) {
-    projectTokenCreate(input: $input)
-  }
-`;
-
-const PROJECT_TOKEN_DELETE = `
-  mutation($id: String!) { projectTokenDelete(id: $id) }
-`;
-
-const PERMANENT_TOKEN_NAME = "pulumi";
-
 /**
  * Fetches all environments for a project and returns a name → UUID map.
  */
@@ -123,53 +100,12 @@ async function fetchProjectEnvironments(
 }
 
 /**
- * Gets or creates a permanent project-scoped token named "pulumi".
- *
- * Deletes any stale tokens with the same name before creating a new one,
- * ensuring a single canonical token exists. Does NOT write to Pulumi config —
- * the token is returned as a secret output for the consumer to manage.
- */
-async function getOrCreateProjectToken(
-	client: RailwayClient,
-	projectId: string,
-	environmentId?: string,
-): Promise<string> {
-	const tokensResult = await client.query<{
-		projectTokens: {
-			edges: Array<{ node: { id: string; name: string } }>;
-		};
-	}>(PROJECT_TOKENS_QUERY, { projectId });
-
-	const stale = tokensResult.projectTokens.edges.filter(
-		(edge) => edge.node.name === PERMANENT_TOKEN_NAME,
-	);
-
-	for (const entry of stale) {
-		await client.query(PROJECT_TOKEN_DELETE, { id: entry.node.id });
-	}
-
-	const result = await client.query<{ projectTokenCreate: string }>(
-		PROJECT_TOKEN_CREATE,
-		{
-			input: {
-				projectId,
-				name: PERMANENT_TOKEN_NAME,
-				...(environmentId ? { environmentId } : {}),
-			},
-		},
-	);
-
-	return result.projectTokenCreate;
-}
-
-/**
  * Dynamic provider that adopts an existing Railway project by name, or creates one.
  *
  * On create:
  * 1. Queries workspaces to find the project by name.
  * 2. If found → adopts. If not → creates via `projectCreate`.
  * 3. Fetches all environments and resolves the production environment ID.
- * 4. Creates/reuses a project-scoped token named "pulumi".
  *
  * Deletion is a no-op (with a warning) to prevent accidental project removal.
  * Name changes trigger replacement.
@@ -255,17 +191,10 @@ class RailwayProjectResourceProvider
 
 		const productionEnvironmentId = environments.production ?? "";
 
-		const projectToken = await getOrCreateProjectToken(
-			client,
-			projectId,
-			productionEnvironmentId || undefined,
-		);
-
 		const outs: RailwayProjectOutputs = {
 			...inputs,
 			projectId,
 			productionEnvironmentId,
-			projectToken,
 		};
 
 		return { id: projectId, outs };
@@ -287,17 +216,10 @@ class RailwayProjectResourceProvider
 
 		const productionEnvironmentId = environments.production ?? "";
 
-		const projectToken = await getOrCreateProjectToken(
-			client,
-			id,
-			productionEnvironmentId || undefined,
-		);
-
 		const outs: RailwayProjectOutputs = {
 			...news,
 			projectId: id,
 			productionEnvironmentId,
-			projectToken,
 		};
 
 		return { outs };
@@ -354,7 +276,6 @@ class RailwayProjectResourceProvider
 class RailwayProjectResource extends pulumi.dynamic.Resource {
 	public declare readonly projectId: pulumi.Output<string>;
 	public declare readonly productionEnvironmentId: pulumi.Output<string>;
-	public declare readonly projectToken: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -372,7 +293,6 @@ class RailwayProjectResource extends pulumi.dynamic.Resource {
 				...args,
 				projectId: undefined,
 				productionEnvironmentId: undefined,
-				projectToken: pulumi.secret(undefined as unknown as string),
 			},
 			opts,
 		);
@@ -400,8 +320,9 @@ export interface RailwayProjectArgs {
 /**
  * Manages a Railway project with adopt-or-create semantics.
  *
- * Discovers or creates the project, resolves the production environment ID,
- * and provisions a project-scoped token named "pulumi" for CLI deploys.
+ * Discovers or creates the project and resolves the production environment ID.
+ * Deploy tokens are provisioned separately via {@link RailwayProjectToken} so
+ * each environment gets its own correctly-scoped token with no cross-stack collisions.
  *
  * @example
  * ```typescript
@@ -419,9 +340,6 @@ export interface RailwayProjectArgs {
 export class RailwayProject extends pulumi.ComponentResource {
 	/** Railway project UUID. */
 	public readonly id: pulumi.Output<string>;
-
-	/** Railway project-scoped token (secret). */
-	public readonly projectToken: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -443,11 +361,7 @@ export class RailwayProject extends pulumi.ComponentResource {
 		);
 
 		this.id = resource.projectId;
-		this.projectToken = resource.projectToken;
 
-		this.registerOutputs({
-			id: this.id,
-			projectToken: this.projectToken,
-		});
+		this.registerOutputs({ id: this.id });
 	}
 }

@@ -7,6 +7,8 @@ export type { RailwayEnvironmentArgs } from "./environment";
 export { RailwayEnvironment } from "./environment";
 export type { RailwayProjectArgs } from "./project";
 export { RailwayProject } from "./project";
+export type { RailwayProjectTokenArgs } from "./project-token";
+export { RailwayProjectToken } from "./project-token";
 export type { RailwayProviderArgs } from "./provider";
 export { RailwayProvider } from "./provider";
 export type { RailwayServiceArgs } from "./service";
