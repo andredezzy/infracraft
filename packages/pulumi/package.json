@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/pulumi",
-	"version": "1.9.0",
+	"version": "1.10.0",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
@@ -24,6 +24,10 @@
 		"./fly": {
 			"types": "./dist/fly/index.d.mts",
 			"default": "./dist/fly/index.mjs"
+		},
+		"./agents/hint": {
+			"types": "./dist/agents/hint.d.mts",
+			"default": "./dist/agents/hint.mjs"
 		},
 		"./hash": {
 			"types": "./dist/hash.d.mts",
