@@ -130,13 +130,6 @@ export interface VercelProjectInputs {
 interface VercelProjectOutputs extends VercelProjectInputs {
 	/** Vercel-assigned project ID. */
 	projectId: string;
-
-	/**
-	 * The project's production URL (with `https://`), mirroring Vercel's
-	 * `VERCEL_PROJECT_PRODUCTION_URL`: the custom production domain if one is
-	 * attached, otherwise the `<name>.vercel.app` default.
-	 */
-	productionUrl: string;
 }
 
 /** Vercel API response shape for a project. */
@@ -331,14 +324,7 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			projectId = created.id;
 		}
 
-		const productionUrl = await fetchProductionUrl(
-			inputs.token,
-			inputs.teamId,
-			projectId,
-			inputs.name,
-		);
-
-		const outs: VercelProjectOutputs = { ...inputs, projectId, productionUrl };
+		const outs: VercelProjectOutputs = { ...inputs, projectId };
 
 		return { id: projectId, outs };
 	}
@@ -353,21 +339,9 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			throw new Error(`Vercel project "${id}" not found during refresh`);
 		}
 
-		const productionUrl = await fetchProductionUrl(
-			props.token,
-			props.teamId,
-			id,
-			project.name,
-		);
-
 		return {
 			id: project.id,
-			props: {
-				...props,
-				name: project.name,
-				projectId: project.id,
-				productionUrl,
-			},
+			props: { ...props, name: project.name, projectId: project.id },
 		};
 	}
 
@@ -394,14 +368,7 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			);
 		}
 
-		const productionUrl = await fetchProductionUrl(
-			news.token,
-			news.teamId,
-			id,
-			news.name,
-		);
-
-		return { outs: { ...news, projectId: id, productionUrl } };
+		return { outs: { ...news, projectId: id } };
 	}
 
 	async delete(): Promise<void> {
@@ -448,7 +415,6 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 /** Internal dynamic resource — not part of the public API. */
 class VercelProjectResource extends pulumi.dynamic.Resource {
 	public declare readonly projectId: pulumi.Output<string>;
-	public declare readonly productionUrl: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -467,7 +433,7 @@ class VercelProjectResource extends pulumi.dynamic.Resource {
 		super(
 			new VercelProjectResourceProvider(),
 			name,
-			{ ...args, projectId: undefined, productionUrl: undefined },
+			{ ...args, projectId: undefined },
 			opts,
 		);
 	}
@@ -556,7 +522,19 @@ export class VercelProject extends pulumi.ComponentResource {
 		);
 
 		this.id = resource.projectId;
-		this.url = resource.productionUrl;
+
+		// The production URL is fetched fresh from Vercel on every run (not persisted as
+		// dynamic-resource state), so it is always current and resolves correctly on any
+		// `up` without recreating the project. `unsecret` because a public domain is not
+		// sensitive (only the token used to fetch it is) — keeping it out of the secret
+		// serialization that feeds downstream Variable resources.
+		this.url = pulumi.unsecret(
+			pulumi
+				.all([this.id, provider.token, provider.teamId, pulumi.output(args.name)])
+				.apply(([id, token, teamId, projectName]) =>
+					fetchProductionUrl(token, teamId, id, projectName),
+				),
+		);
 
 		this.registerOutputs({ id: this.id, url: this.url });
 	}
