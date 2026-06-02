@@ -17,6 +17,14 @@ export interface NeonRoleInputs {
 
 	/** Role name (e.g. `"neondb_owner"`). */
 	name: string;
+
+	/**
+	 * When the role already exists (adopted), reset its password to a fresh value
+	 * instead of revealing the inherited one. Use on copy-on-write branches to
+	 * isolate the credential from the parent branch. Ignored when the role is
+	 * freshly created (a new role already gets its own password).
+	 */
+	resetPassword: boolean;
 }
 
 /** Persisted state for the Neon role. */
@@ -28,6 +36,12 @@ interface NeonRoleOutputs extends NeonRoleInputs {
 /** Neon API response for the reveal_password endpoint. */
 interface PasswordResponse {
 	password: string;
+}
+
+/** Neon API response for the reset_password endpoint (nested under `role`). */
+interface ResetPasswordResponse {
+	role?: { password?: string };
+	password?: string;
 }
 
 /** Neon API response for listing roles. */
@@ -70,12 +84,42 @@ async function revealPassword(
 }
 
 /**
+ * Resets an existing role's password to a fresh value and returns it.
+ * Used to isolate an adopted (copy-on-write) role from the parent branch's credential.
+ */
+async function resetRolePassword(
+	client: NeonClient,
+	projectId: string,
+	branchId: string,
+	name: string,
+): Promise<string> {
+	const result = await client.post<ResetPasswordResponse>(
+		`/projects/${projectId}/branches/${branchId}/roles/${name}/reset_password`,
+		{},
+	);
+
+	const password = result.role?.password ?? result.password;
+
+	if (!password) {
+		throw new Error(
+			`Neon reset_password returned no password for role "${name}"`,
+		);
+	}
+
+	return password;
+}
+
+/**
  * Dynamic provider implementing CRUD for Neon database roles.
  *
  * Uses adopt-or-create on `create()`: finds an existing role by name
  * before creating a new one.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class NeonRoleResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class NeonRoleResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(inputs: NeonRoleInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new NeonClient(inputs.apiKey);
 
@@ -91,16 +135,28 @@ class NeonRoleResourceProvider implements pulumi.dynamic.ResourceProvider {
 				`/projects/${inputs.projectId}/branches/${inputs.branchId}/roles`,
 				{ role: { name: inputs.name } },
 			);
+		} else if (inputs.resetPassword) {
+			pulumi.log.info(
+				`Resetting password for adopted Neon role "${inputs.name}" to isolate it from the parent branch`,
+			);
 		} else {
 			pulumi.log.info(`Adopting existing Neon role "${inputs.name}"`);
 		}
 
-		const password = await revealPassword(
-			client,
-			inputs.projectId,
-			inputs.branchId,
-			inputs.name,
-		);
+		const password =
+			exists && inputs.resetPassword
+				? await resetRolePassword(
+						client,
+						inputs.projectId,
+						inputs.branchId,
+						inputs.name,
+					)
+				: await revealPassword(
+						client,
+						inputs.projectId,
+						inputs.branchId,
+						inputs.name,
+					);
 
 		return {
 			id: `${inputs.branchId}/${inputs.name}`,
@@ -179,14 +235,21 @@ class NeonRoleResource extends pulumi.dynamic.Resource {
 			projectId: pulumi.Input<string>;
 			branchId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
+			resetPassword: pulumi.Input<boolean>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
+		// `password` is an output-only secret. Declaring it via additionalSecretOutputs
+		// (rather than a pulumi.secret(undefined) input placeholder) is the only reliable
+		// way to mark a dynamic-provider output secret: the placeholder gives the property
+		// both a secret-undefined input and a real output, and a downstream dynamic resource
+		// consuming it can race onto the undefined, producing "Unexpected struct type"
+		// during protobuf serialization (Pulumi #16041, #3012).
 		super(
 			new NeonRoleResourceProvider(),
 			name,
-			{ ...args, password: pulumi.secret(undefined as unknown as string) },
-			opts,
+			{ ...args, password: undefined },
+			{ ...opts, additionalSecretOutputs: ["password"] },
 		);
 	}
 }
@@ -207,6 +270,14 @@ type NeonRoleOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 export interface NeonRoleArgs {
 	/** Role name (e.g. `"neondb_owner"`). */
 	name: pulumi.Input<string>;
+
+	/**
+	 * When the role is adopted (already exists on the branch), reset its password to a
+	 * fresh value instead of inheriting the parent's. Set this on copy-on-write
+	 * (non-production) branches to isolate the credential from production. Defaults to
+	 * `false` (adopt and reveal the existing password). The reset runs once, at creation.
+	 */
+	resetPassword?: pulumi.Input<boolean>;
 }
 
 /**
@@ -236,6 +307,7 @@ export class NeonRole extends pulumi.ComponentResource {
 				projectId: project.id,
 				branchId: branch.id,
 				name: args.name,
+				resetPassword: args.resetPassword ?? false,
 			},
 			{ parent: this },
 		);

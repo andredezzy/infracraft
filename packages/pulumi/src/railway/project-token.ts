@@ -205,15 +205,22 @@ class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
+		// `value` is an output-only secret. Declaring it via additionalSecretOutputs
+		// (rather than a pulumi.secret(undefined) input placeholder) is the only reliable
+		// way to mark a dynamic-provider output secret: the placeholder gives the property
+		// both a secret-undefined input and a real output, so a downstream dynamic resource
+		// consuming the token can race onto the undefined ("malformed RPC secret: missing
+		// value" / "Unexpected struct type"). `tokenId` is a plain (non-secret) output. See
+		// Pulumi #16041, #3012.
 		super(
 			new RailwayProjectTokenResourceProvider(),
 			name,
 			{
 				...args,
-				value: pulumi.secret(undefined as unknown as string),
+				value: undefined,
 				tokenId: undefined,
 			},
-			opts,
+			{ ...opts, additionalSecretOutputs: ["value"] },
 		);
 	}
 }
