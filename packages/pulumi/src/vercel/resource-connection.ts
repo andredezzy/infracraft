@@ -11,25 +11,63 @@ interface VercelResourceConnectionInputs {
 	/** Vercel team/org ID. */
 	teamId: string;
 
-	/** Integration configuration ID (e.g. `"icfg_…"`). */
-	integrationConfigurationId: string;
+	/** The Vercel store ID of the provisioned marketplace resource (e.g. `"store_…"`). */
+	storeId: string;
 
-	/** The external resource ID of the provisioned marketplace store. */
-	resourceId: string;
-
-	/** The Vercel project ID to connect the resource to. */
+	/** The Vercel project ID to connect the store to. */
 	projectId: string;
 
-	/** Deployment environments to inject env vars into. */
+	/** Deployment environments to inject env vars into (e.g. `["production", "preview"]`). */
 	targets: string[];
+
+	/**
+	 * Whether the injected env vars are marked sensitive.
+	 * Vercel rejects sensitive env vars on the `development` target, so `targets`
+	 * must not include `development` when this is `true`.
+	 */
+	makeEnvVarsSensitive: boolean;
 }
 
 /** Persisted state for the Vercel resource connection. */
 type VercelResourceConnectionOutputs = VercelResourceConnectionInputs;
 
+/** A single store-to-project connection as returned by the Vercel API. */
+interface StoreConnection {
+	id: string;
+	projectId: string;
+}
+
+/** Vercel API response for listing a store's connections. */
+interface StoreConnectionsResponse {
+	connections: StoreConnection[];
+}
+
 /**
- * Dynamic provider that connects a Vercel marketplace resource to a project,
- * injecting env vars into the specified deployment environments.
+ * Finds an existing connection from a store to a specific project.
+ */
+async function findConnection(
+	token: string,
+	teamId: string,
+	storeId: string,
+	projectId: string,
+): Promise<StoreConnection | undefined> {
+	const response = await fetch(
+		`${VERCEL_API_URL}/v1/storage/stores/${storeId}/connections?teamId=${teamId}`,
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
+
+	if (!response.ok) {
+		return undefined;
+	}
+
+	const data = (await response.json()) as StoreConnectionsResponse;
+
+	return data.connections.find((c) => c.projectId === projectId);
+}
+
+/**
+ * Dynamic provider that connects a Vercel marketplace store to a project,
+ * injecting the store's env vars into the specified deployment environments.
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
@@ -39,8 +77,35 @@ export class VercelResourceConnectionProvider
 	async create(
 		inputs: VercelResourceConnectionInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
+		if (inputs.makeEnvVarsSensitive && inputs.targets.includes("development")) {
+			throw new Error(
+				"VercelResourceConnection: Vercel rejects sensitive env vars on the 'development' target. " +
+					"Either drop 'development' from targets or set makeEnvVarsSensitive to false.",
+			);
+		}
+
+		// Adopt-or-create: a store can only be connected to a given project once,
+		// so re-creating an out-of-band connection (or a prior partial apply) adopts it.
+		const existing = await findConnection(
+			inputs.token,
+			inputs.teamId,
+			inputs.storeId,
+			inputs.projectId,
+		);
+
+		if (existing) {
+			pulumi.log.info(
+				`Adopting existing Vercel store connection (${existing.id})`,
+			);
+
+			return {
+				id: `${inputs.storeId}:${inputs.projectId}`,
+				outs: { ...inputs },
+			};
+		}
+
 		const response = await fetch(
-			`${VERCEL_API_URL}/v1/integrations/installations/${inputs.integrationConfigurationId}/resources/${inputs.resourceId}/connections?teamId=${inputs.teamId}`,
+			`${VERCEL_API_URL}/v1/storage/stores/${inputs.storeId}/connections?teamId=${inputs.teamId}`,
 			{
 				method: "POST",
 				headers: {
@@ -50,7 +115,7 @@ export class VercelResourceConnectionProvider
 				body: JSON.stringify({
 					projectId: inputs.projectId,
 					envVarEnvironments: inputs.targets,
-					makeEnvVarsSensitive: true,
+					makeEnvVarsSensitive: inputs.makeEnvVarsSensitive,
 				}),
 			},
 		);
@@ -61,16 +126,18 @@ export class VercelResourceConnectionProvider
 			);
 		}
 
-		const outs: VercelResourceConnectionOutputs = { ...inputs };
-
-		return { id: `${inputs.resourceId}:${inputs.projectId}`, outs };
+		return {
+			id: `${inputs.storeId}:${inputs.projectId}`,
+			outs: { ...inputs },
+		};
 	}
 
 	async read(
 		id: string,
 		props: VercelResourceConnectionOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		// There is no public read endpoint for resource connections; drift is not refreshed here.
+		// The connection list endpoint exposes presence but not the targeted environments,
+		// so env-var drift is not refreshed here — only the connection's existence.
 		return { id, props };
 	}
 
@@ -91,12 +158,8 @@ export class VercelResourceConnectionProvider
 			replaces.push("teamId");
 		}
 
-		if (olds.integrationConfigurationId !== news.integrationConfigurationId) {
-			replaces.push("integrationConfigurationId");
-		}
-
-		if (olds.resourceId !== news.resourceId) {
-			replaces.push("resourceId");
+		if (olds.storeId !== news.storeId) {
+			replaces.push("storeId");
 		}
 
 		if (olds.projectId !== news.projectId) {
@@ -107,6 +170,10 @@ export class VercelResourceConnectionProvider
 		// API as envVarEnvironments, so reordering is a meaningful change.
 		if (JSON.stringify(olds.targets) !== JSON.stringify(news.targets)) {
 			replaces.push("targets");
+		}
+
+		if (olds.makeEnvVarsSensitive !== news.makeEnvVarsSensitive) {
+			replaces.push("makeEnvVarsSensitive");
 		}
 
 		return {
@@ -124,10 +191,10 @@ class VercelResourceConnectionResource extends pulumi.dynamic.Resource {
 		args: {
 			token: pulumi.Input<string>;
 			teamId: pulumi.Input<string>;
-			integrationConfigurationId: pulumi.Input<string>;
-			resourceId: pulumi.Input<string>;
+			storeId: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			targets: pulumi.Input<string[]>;
+			makeEnvVarsSensitive: pulumi.Input<boolean>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
@@ -149,39 +216,39 @@ type VercelResourceConnectionOptions = Omit<
  */
 export interface VercelResourceConnectionArgs {
 	/**
-	 * Integration configuration ID (e.g. `"icfg_…"`).
-	 * Obtain this from {@link VercelIntegration.configurationId}.
+	 * The Vercel store ID of the provisioned marketplace resource (e.g. `"store_…"`).
+	 * Obtain this from {@link VercelMarketplaceResource.id}.
 	 */
-	integrationConfigurationId: pulumi.Input<string>;
+	storeId: pulumi.Input<string>;
 
-	/**
-	 * The external resource ID of the provisioned marketplace store.
-	 * Obtain this from {@link VercelMarketplaceResource.externalResourceId}.
-	 */
-	resourceId: pulumi.Input<string>;
-
-	/** The Vercel project ID to connect the resource to. */
+	/** The Vercel project ID to connect the store to. */
 	projectId: pulumi.Input<string>;
 
 	/**
-	 * Deployment environments into which the integration env vars will be injected.
-	 * Typical values: `["production", "preview", "development"]`.
+	 * Deployment environments into which the store's env vars will be injected.
+	 * Typical values: `["production", "preview"]`. Note that `development`
+	 * cannot be combined with `makeEnvVarsSensitive: true` (Vercel rejects it).
 	 */
 	targets: pulumi.Input<string[]>;
+
+	/**
+	 * Whether the injected env vars are marked sensitive (hidden after creation).
+	 * Defaults to `true`. When `true`, `targets` must not include `development`.
+	 */
+	makeEnvVarsSensitive?: pulumi.Input<boolean>;
 }
 
 /**
- * Connects a Vercel marketplace resource to a project, injecting its env vars
- * as sensitive variables into the specified deployment environments.
+ * Connects a Vercel marketplace store to a project, injecting its env vars
+ * into the specified deployment environments.
  *
- * Calls `POST /v1/integrations/installations/{icfg}/resources/{resourceId}/connections`.
- * Deletion is a no-op — there is no public per-project disconnect endpoint;
- * disconnect manually from the Vercel dashboard if needed.
+ * Calls `POST /v1/storage/stores/{storeId}/connections`. Uses adopt-or-create:
+ * an existing connection from the store to the project is adopted rather than
+ * re-created. Deletion is a no-op — there is no public per-project disconnect
+ * endpoint; disconnect manually from the Vercel dashboard if needed.
  *
  * @example
  * ```typescript
- * const upstash = new VercelIntegration("upstash", { slug: "upstash" }, { provider });
- *
  * const kvStore = new VercelMarketplaceResource("humanes-kv", {
  *   integrationConfigurationId: upstash.configurationId,
  *   name: "rby-humanes-kv",
@@ -190,10 +257,9 @@ export interface VercelResourceConnectionArgs {
  * }, { provider });
  *
  * new VercelResourceConnection("humanes-kv-conn", {
- *   integrationConfigurationId: upstash.configurationId,
- *   resourceId: kvStore.externalResourceId,
+ *   storeId: kvStore.id,
  *   projectId: humanesProject.id,
- *   targets: ["production", "preview", "development"],
+ *   targets: ["production", "preview"],
  * }, { provider });
  * ```
  */
@@ -212,7 +278,10 @@ export class VercelResourceConnection extends pulumi.ComponentResource {
 			{
 				token: provider.token,
 				teamId: provider.teamId,
-				...args,
+				storeId: args.storeId,
+				projectId: args.projectId,
+				targets: args.targets,
+				makeEnvVarsSensitive: args.makeEnvVarsSensitive ?? true,
 			},
 			{ parent: this },
 		);
