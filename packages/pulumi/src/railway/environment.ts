@@ -22,13 +22,6 @@ interface RailwayEnvironmentInputs {
 interface RailwayEnvironmentOutputs extends RailwayEnvironmentInputs {
 	/** Railway-assigned environment UUID. */
 	environmentId: string;
-
-	/**
-	 * Whether this environment already existed and was adopted (vs. created by us).
-	 * `delete()` only removes environments we created. Absent on state written before
-	 * this field existed, which is treated as adopted (the safe, non-destructive default).
-	 */
-	wasAdopted?: boolean;
 }
 
 const ENVIRONMENT_CREATE_MUTATION = `
@@ -109,8 +102,6 @@ export class RailwayEnvironmentResourceProvider
 			inputs.name,
 		);
 
-		const wasAdopted = environmentId !== undefined;
-
 		if (environmentId) {
 			pulumi.log.info(
 				`Adopting existing Railway environment "${inputs.name}" (${environmentId})`,
@@ -152,11 +143,7 @@ export class RailwayEnvironmentResourceProvider
 			);
 		}
 
-		const outs: RailwayEnvironmentOutputs = {
-			...inputs,
-			environmentId,
-			wasAdopted,
-		};
+		const outs: RailwayEnvironmentOutputs = { ...inputs, environmentId };
 
 		return { id: environmentId, outs };
 	}
@@ -184,7 +171,7 @@ export class RailwayEnvironmentResourceProvider
 
 	async update(
 		_id: string,
-		olds: RailwayEnvironmentOutputs,
+		_olds: RailwayEnvironmentOutputs,
 		news: RailwayEnvironmentInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
 		const client = new RailwayClient(news.token);
@@ -201,25 +188,15 @@ export class RailwayEnvironmentResourceProvider
 			);
 		}
 
-		return {
-			outs: { ...news, environmentId, wasAdopted: olds.wasAdopted },
-		};
+		return { outs: { ...news, environmentId } };
 	}
 
 	/**
-	 * Deletes the environment only if we created it. Adopted environments (and
-	 * state written before `wasAdopted` existed) are left untouched, so a feature
-	 * env's destroy never removes the shared production environment.
+	 * Deletes the environment (which cascades its per-environment service instances).
+	 * Protection of the shared production environment is the consumer's responsibility
+	 * via the `protect` resource option, not provider logic.
 	 */
 	async delete(_id: string, props: RailwayEnvironmentOutputs): Promise<void> {
-		if (props.wasAdopted !== false) {
-			pulumi.log.warn(
-				`Railway environment "${props.name}" deletion skipped — adopted (not created by Pulumi)`,
-			);
-
-			return;
-		}
-
 		const client = new RailwayClient(props.token);
 
 		try {

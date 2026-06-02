@@ -22,15 +22,7 @@ export interface NeonBranchInputs {
 }
 
 /** Persisted state for the Neon branch. */
-interface NeonBranchOutputs extends NeonBranchInputs {
-	/**
-	 * Whether this branch already existed and was adopted (vs. created by us).
-	 * `delete()` only removes branches we created. Absent on state written before
-	 * this field existed, which is treated as adopted (the safe, non-destructive
-	 * default) so a feature env's destroy never deletes the adopted production branch.
-	 */
-	wasAdopted?: boolean;
-}
+interface NeonBranchOutputs extends NeonBranchInputs {}
 
 /** Neon API response for a branch. */
 interface BranchResponse {
@@ -95,8 +87,6 @@ export class NeonBranchResourceProvider
 			inputs.name,
 		);
 
-		const wasAdopted = branchId !== undefined;
-
 		if (branchId) {
 			if (inputs.parentName) {
 				pulumi.log.warn(
@@ -136,7 +126,7 @@ export class NeonBranchResourceProvider
 			branchId = result.branch.id;
 		}
 
-		return { id: branchId, outs: { ...inputs, wasAdopted } };
+		return { id: branchId, outs: { ...inputs } };
 	}
 
 	async read(
@@ -158,18 +148,10 @@ export class NeonBranchResourceProvider
 	}
 
 	/**
-	 * Deletes the branch only if we created it. Adopted branches (and state written
-	 * before `wasAdopted` existed) are left untouched.
+	 * Deletes the branch. Protection of shared/production branches is the consumer's
+	 * responsibility via the `protect` resource option, not provider logic.
 	 */
 	async delete(id: string, props: NeonBranchOutputs): Promise<void> {
-		if (props.wasAdopted !== false) {
-			pulumi.log.warn(
-				`Neon branch "${props.name}" deletion skipped — adopted (not created by Pulumi)`,
-			);
-
-			return;
-		}
-
 		const client = new NeonClient(props.apiKey);
 
 		try {

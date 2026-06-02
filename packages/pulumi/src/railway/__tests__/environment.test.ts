@@ -110,7 +110,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 	});
 
 	describe("delete", () => {
-		it("deletes an environment it created", async () => {
+		it("deletes the environment via environmentDelete", async () => {
 			mockQuery.mockResolvedValue({});
 
 			await new RailwayEnvironmentResourceProvider().delete("env-feature", {
@@ -118,36 +118,12 @@ describe("RailwayEnvironmentResourceProvider", () => {
 				projectId: "proj-123",
 				name: "feature",
 				environmentId: "env-feature",
-				wasAdopted: false,
 			});
 
 			expect(mockQuery).toHaveBeenCalledTimes(1);
 			const [mutation, vars] = mockQuery.mock.calls[0];
 			expect(mutation).toContain("environmentDelete");
 			expect(vars).toEqual({ id: "env-feature" });
-		});
-
-		it("skips deletion for an adopted environment", async () => {
-			await new RailwayEnvironmentResourceProvider().delete("env-prod", {
-				token: "tok",
-				projectId: "proj-123",
-				name: "production",
-				environmentId: "env-prod",
-				wasAdopted: true,
-			});
-
-			expect(mockQuery).not.toHaveBeenCalled();
-		});
-
-		it("skips deletion for legacy state without wasAdopted (safe default)", async () => {
-			await new RailwayEnvironmentResourceProvider().delete("env-prod", {
-				token: "tok",
-				projectId: "proj-123",
-				name: "production",
-				environmentId: "env-prod",
-			});
-
-			expect(mockQuery).not.toHaveBeenCalled();
 		});
 	});
 });

@@ -130,13 +130,6 @@ export interface VercelProjectInputs {
 interface VercelProjectOutputs extends VercelProjectInputs {
 	/** Vercel-assigned project ID. */
 	projectId: string;
-
-	/**
-	 * Whether this project already existed and was adopted (vs. created by us).
-	 * `delete()` only removes projects we created. Absent on state written before
-	 * this field existed, which is treated as adopted (the safe, non-destructive default).
-	 */
-	wasAdopted?: boolean;
 }
 
 /** Vercel API response shape for a project. */
@@ -284,7 +277,7 @@ function buildProjectBody(
  *
  * On `create()`, calls `GET /v9/projects/{name}?teamId=…`. If found, adopts
  * the existing project. If 404, creates a new one via `POST /v9/projects`.
- * `delete()` removes only projects this resource created (see `wasAdopted`).
+ * `delete()` removes the project; protect shared projects via the `protect` option.
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
@@ -336,11 +329,7 @@ export class VercelProjectResourceProvider
 			projectId = created.id;
 		}
 
-		const outs: VercelProjectOutputs = {
-			...inputs,
-			projectId,
-			wasAdopted: existing !== null,
-		};
+		const outs: VercelProjectOutputs = { ...inputs, projectId };
 
 		return { id: projectId, outs };
 	}
@@ -363,7 +352,7 @@ export class VercelProjectResourceProvider
 
 	async update(
 		id: string,
-		olds: VercelProjectOutputs,
+		_olds: VercelProjectOutputs,
 		news: VercelProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
 		const response = await fetch(
@@ -384,23 +373,14 @@ export class VercelProjectResourceProvider
 			);
 		}
 
-		return { outs: { ...news, projectId: id, wasAdopted: olds.wasAdopted } };
+		return { outs: { ...news, projectId: id } };
 	}
 
 	/**
-	 * Deletes the project only if we created it. Adopted projects (and state written
-	 * before `wasAdopted` existed) are left untouched, protecting projects that
-	 * predate the stack.
+	 * Deletes the project. Protection of shared/production projects is the consumer's
+	 * responsibility via the `protect` resource option, not provider logic.
 	 */
 	async delete(id: string, props: VercelProjectOutputs): Promise<void> {
-		if (props.wasAdopted !== false) {
-			pulumi.log.warn(
-				`Vercel project "${props.name}" deletion skipped — adopted (not created by Pulumi)`,
-			);
-
-			return;
-		}
-
 		const response = await fetch(
 			`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(id)}?teamId=${props.teamId}`,
 			{
