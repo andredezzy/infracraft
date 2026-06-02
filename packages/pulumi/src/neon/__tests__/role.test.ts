@@ -36,6 +36,7 @@ describe("NeonRoleResourceProvider", () => {
 				"/projects/proj/branches/br-staging/roles/neondb_owner/reset_password",
 				{},
 			);
+
 			// reveal_password (GET) must not be used when resetting.
 			expect(mockGet).toHaveBeenCalledTimes(1); // only the roles-list check
 			expect(result.outs.password).toBe("fresh-pw");
@@ -57,9 +58,11 @@ describe("NeonRoleResourceProvider", () => {
 			});
 
 			expect(mockPost).not.toHaveBeenCalled();
+
 			expect(mockGet).toHaveBeenCalledWith(
 				"/projects/proj/branches/br-staging/roles/neondb_owner/reveal_password",
 			);
+
 			expect(result.outs.password).toBe("inherited-pw");
 		});
 
@@ -67,6 +70,7 @@ describe("NeonRoleResourceProvider", () => {
 			mockGet
 				.mockResolvedValueOnce({ roles: [] }) // role does not exist
 				.mockResolvedValueOnce({ password: "generated-pw" }); // reveal_password
+
 			mockPost.mockResolvedValueOnce({}); // create role
 
 			const provider = new NeonRoleResourceProvider();
@@ -83,11 +87,13 @@ describe("NeonRoleResourceProvider", () => {
 				"/projects/proj/branches/br-new/roles",
 				{ role: { name: "neondb_owner" } },
 			);
+
 			// A freshly created role already has its own password — no reset.
 			expect(mockPost).not.toHaveBeenCalledWith(
 				expect.stringContaining("reset_password"),
 				expect.anything(),
 			);
+
 			expect(result.outs.password).toBe("generated-pw");
 		});
 	});

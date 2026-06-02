@@ -1,5 +1,8 @@
-import { describe, expect, it } from "vitest";
-import { pickProductionDomain } from "../project";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+	pickProductionDomain,
+	VercelProjectResourceProvider,
+} from "../project";
 
 const verified = (name: string) => ({
 	name,
@@ -69,5 +72,48 @@ describe("pickProductionDomain", () => {
 				"proj",
 			),
 		).toBe("https://real.example.com");
+	});
+});
+
+describe("VercelProjectResourceProvider.delete", () => {
+	let mockFetch: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockFetch = vi.fn();
+		vi.stubGlobal("fetch", mockFetch);
+	});
+
+	afterEach(() => {
+		vi.unstubAllGlobals();
+	});
+
+	const props = (wasAdopted?: boolean) => ({
+		token: "tok",
+		teamId: "team_1",
+		name: "rby-feature-nexus",
+		projectId: "prj_1",
+		wasAdopted,
+	});
+
+	it("deletes a project it created", async () => {
+		mockFetch.mockResolvedValue({ ok: true, status: 204 });
+
+		await new VercelProjectResourceProvider().delete("prj_1", props(false));
+
+		const [url, init] = mockFetch.mock.calls[0];
+		expect(url).toContain("/v9/projects/prj_1");
+		expect(init.method).toBe("DELETE");
+	});
+
+	it("skips deletion for an adopted project", async () => {
+		await new VercelProjectResourceProvider().delete("prj_1", props(true));
+
+		expect(mockFetch).not.toHaveBeenCalled();
+	});
+
+	it("skips deletion for legacy state without wasAdopted (safe default)", async () => {
+		await new VercelProjectResourceProvider().delete("prj_1", props(undefined));
+
+		expect(mockFetch).not.toHaveBeenCalled();
 	});
 });

@@ -121,4 +121,52 @@ describe("NeonBranchResourceProvider", () => {
 			expect(result.props.parentName).toBe("production");
 		});
 	});
+
+	describe("delete", () => {
+		it("deletes a branch it created", async () => {
+			const mockDelete = vi
+				.spyOn(NeonClient.prototype, "delete")
+				.mockResolvedValue(undefined);
+
+			await new NeonBranchResourceProvider().delete("br-feature", {
+				apiKey: "key",
+				projectId: "proj-abc",
+				name: "feature",
+				wasAdopted: false,
+			});
+
+			expect(mockDelete).toHaveBeenCalledWith(
+				"/projects/proj-abc/branches/br-feature",
+			);
+		});
+
+		it("skips deletion for an adopted branch", async () => {
+			const mockDelete = vi
+				.spyOn(NeonClient.prototype, "delete")
+				.mockResolvedValue(undefined);
+
+			await new NeonBranchResourceProvider().delete("br-prod", {
+				apiKey: "key",
+				projectId: "proj-abc",
+				name: "production",
+				wasAdopted: true,
+			});
+
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+
+		it("skips deletion for legacy state without wasAdopted (safe default)", async () => {
+			const mockDelete = vi
+				.spyOn(NeonClient.prototype, "delete")
+				.mockResolvedValue(undefined);
+
+			await new NeonBranchResourceProvider().delete("br-prod", {
+				apiKey: "key",
+				projectId: "proj-abc",
+				name: "production",
+			});
+
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+	});
 });

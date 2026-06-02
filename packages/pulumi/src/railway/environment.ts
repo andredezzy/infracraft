@@ -22,6 +22,13 @@ interface RailwayEnvironmentInputs {
 interface RailwayEnvironmentOutputs extends RailwayEnvironmentInputs {
 	/** Railway-assigned environment UUID. */
 	environmentId: string;
+
+	/**
+	 * Whether this environment already existed and was adopted (vs. created by us).
+	 * `delete()` only removes environments we created. Absent on state written before
+	 * this field existed, which is treated as adopted (the safe, non-destructive default).
+	 */
+	wasAdopted?: boolean;
 }
 
 const ENVIRONMENT_CREATE_MUTATION = `
@@ -31,6 +38,10 @@ const ENVIRONMENT_CREATE_MUTATION = `
       name
     }
   }
+`;
+
+const ENVIRONMENT_DELETE_MUTATION = `
+  mutation($id: String!) { environmentDelete(id: $id) }
 `;
 
 const PROJECT_ENVIRONMENTS_QUERY = `
@@ -98,6 +109,8 @@ export class RailwayEnvironmentResourceProvider
 			inputs.name,
 		);
 
+		const wasAdopted = environmentId !== undefined;
+
 		if (environmentId) {
 			pulumi.log.info(
 				`Adopting existing Railway environment "${inputs.name}" (${environmentId})`,
@@ -139,7 +152,11 @@ export class RailwayEnvironmentResourceProvider
 			);
 		}
 
-		const outs: RailwayEnvironmentOutputs = { ...inputs, environmentId };
+		const outs: RailwayEnvironmentOutputs = {
+			...inputs,
+			environmentId,
+			wasAdopted,
+		};
 
 		return { id: environmentId, outs };
 	}
@@ -167,7 +184,7 @@ export class RailwayEnvironmentResourceProvider
 
 	async update(
 		_id: string,
-		_olds: RailwayEnvironmentOutputs,
+		olds: RailwayEnvironmentOutputs,
 		news: RailwayEnvironmentInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
 		const client = new RailwayClient(news.token);
@@ -184,13 +201,40 @@ export class RailwayEnvironmentResourceProvider
 			);
 		}
 
-		return { outs: { ...news, environmentId } };
+		return {
+			outs: { ...news, environmentId, wasAdopted: olds.wasAdopted },
+		};
 	}
 
-	async delete(): Promise<void> {
-		pulumi.log.warn(
-			"Railway environment deletion skipped — environments are not deleted by Pulumi",
-		);
+	/**
+	 * Deletes the environment only if we created it. Adopted environments (and
+	 * state written before `wasAdopted` existed) are left untouched, so a feature
+	 * env's destroy never removes the shared production environment.
+	 */
+	async delete(_id: string, props: RailwayEnvironmentOutputs): Promise<void> {
+		if (props.wasAdopted !== false) {
+			pulumi.log.warn(
+				`Railway environment "${props.name}" deletion skipped — adopted (not created by Pulumi)`,
+			);
+
+			return;
+		}
+
+		const client = new RailwayClient(props.token);
+
+		try {
+			await client.query(ENVIRONMENT_DELETE_MUTATION, {
+				id: props.environmentId,
+			});
+
+			pulumi.log.info(
+				`Deleted Railway environment "${props.name}" (${props.environmentId})`,
+			);
+		} catch {
+			pulumi.log.warn(
+				`Failed to delete Railway environment "${props.name}" (may already be deleted)`,
+			);
+		}
 	}
 
 	async diff(

@@ -130,6 +130,13 @@ export interface VercelProjectInputs {
 interface VercelProjectOutputs extends VercelProjectInputs {
 	/** Vercel-assigned project ID. */
 	projectId: string;
+
+	/**
+	 * Whether this project already existed and was adopted (vs. created by us).
+	 * `delete()` only removes projects we created. Absent on state written before
+	 * this field existed, which is treated as adopted (the safe, non-destructive default).
+	 */
+	wasAdopted?: boolean;
 }
 
 /** Vercel API response shape for a project. */
@@ -204,6 +211,7 @@ export function pickProductionDomain(
 	const custom = production.find(
 		(domain) => !domain.name.endsWith(".vercel.app"),
 	);
+
 	const fallback = production.find((domain) =>
 		domain.name.endsWith(".vercel.app"),
 	);
@@ -276,9 +284,13 @@ function buildProjectBody(
  *
  * On `create()`, calls `GET /v9/projects/{name}?teamId=…`. If found, adopts
  * the existing project. If 404, creates a new one via `POST /v9/projects`.
- * Deletion is a no-op to protect production projects.
+ * `delete()` removes only projects this resource created (see `wasAdopted`).
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class VercelProjectResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(
 		inputs: VercelProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -324,7 +336,11 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			projectId = created.id;
 		}
 
-		const outs: VercelProjectOutputs = { ...inputs, projectId };
+		const outs: VercelProjectOutputs = {
+			...inputs,
+			projectId,
+			wasAdopted: existing !== null,
+		};
 
 		return { id: projectId, outs };
 	}
@@ -347,7 +363,7 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 
 	async update(
 		id: string,
-		_olds: VercelProjectOutputs,
+		olds: VercelProjectOutputs,
 		news: VercelProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
 		const response = await fetch(
@@ -368,13 +384,38 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			);
 		}
 
-		return { outs: { ...news, projectId: id } };
+		return { outs: { ...news, projectId: id, wasAdopted: olds.wasAdopted } };
 	}
 
-	async delete(): Promise<void> {
-		pulumi.log.warn(
-			"Vercel project deletion skipped — projects are not deleted by Pulumi",
+	/**
+	 * Deletes the project only if we created it. Adopted projects (and state written
+	 * before `wasAdopted` existed) are left untouched, protecting projects that
+	 * predate the stack.
+	 */
+	async delete(id: string, props: VercelProjectOutputs): Promise<void> {
+		if (props.wasAdopted !== false) {
+			pulumi.log.warn(
+				`Vercel project "${props.name}" deletion skipped — adopted (not created by Pulumi)`,
+			);
+
+			return;
+		}
+
+		const response = await fetch(
+			`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(id)}?teamId=${props.teamId}`,
+			{
+				method: "DELETE",
+				headers: { Authorization: `Bearer ${props.token}` },
+			},
 		);
+
+		if (!response.ok && response.status !== 404) {
+			throw new Error(
+				`Vercel API error deleting project "${props.name}" (${response.status}): ${await response.text()}`,
+			);
+		}
+
+		pulumi.log.info(`Deleted Vercel project "${props.name}" (${id})`);
 	}
 
 	async diff(
@@ -530,7 +571,12 @@ export class VercelProject extends pulumi.ComponentResource {
 		// serialization that feeds downstream Variable resources.
 		this.url = pulumi.unsecret(
 			pulumi
-				.all([this.id, provider.token, provider.teamId, pulumi.output(args.name)])
+				.all([
+					this.id,
+					provider.token,
+					provider.teamId,
+					pulumi.output(args.name),
+				])
 				.apply(([id, token, teamId, projectName]) =>
 					fetchProductionUrl(token, teamId, id, projectName),
 				),

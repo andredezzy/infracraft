@@ -146,10 +146,6 @@ const SERVICE_CONNECT = `
   }
 `;
 
-const SERVICE_DELETE = `
-  mutation($id: String!) { serviceDelete(id: $id) }
-`;
-
 /**
  * Applies service instance configuration (builder, commands, healthcheck).
  * Retries without healthcheck fields if the first call fails.
@@ -345,20 +341,15 @@ class RailwayServiceResourceProvider
 	}
 
 	/**
-	 * Deletes the Railway service. Silently succeeds if already deleted.
+	 * Deletion is a no-op. A Railway service is a project-level resource shared
+	 * across environments (forked environments adopt it by name), so a single
+	 * environment's destroy must never delete it. Deleting the *environment*
+	 * removes that environment's service instances instead.
 	 */
-	async delete(id: string, props: RailwayServiceOutputs): Promise<void> {
-		const client = new RailwayClient(props.token);
-
-		try {
-			await client.query(SERVICE_DELETE, { id });
-
-			pulumi.log.info(`Deleted Railway service "${props.name}" (${id})`);
-		} catch {
-			pulumi.log.warn(
-				`Failed to delete Railway service "${props.name}" (${id}) — may already be deleted`,
-			);
-		}
+	async delete(): Promise<void> {
+		pulumi.log.warn(
+			"Railway service deletion skipped — services are project-level; delete the environment to remove its instances",
+		);
 	}
 
 	/**

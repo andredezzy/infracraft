@@ -39,6 +39,7 @@ describe("VercelResourceConnectionProvider", () => {
 			});
 
 			const [listUrl] = mockFetch.mock.calls[0];
+
 			expect(listUrl).toContain(
 				"/v1/storage/stores/store_abc/connections?teamId=team_xyz",
 			);
@@ -46,6 +47,7 @@ describe("VercelResourceConnectionProvider", () => {
 			const [postUrl, init] = mockFetch.mock.calls[1];
 			expect(postUrl).toContain("/v1/storage/stores/store_abc/connections");
 			expect(init.method).toBe("POST");
+
 			expect(JSON.parse(init.body)).toEqual({
 				projectId: "prj_humanes",
 				envVarEnvironments: ["production", "preview"],
