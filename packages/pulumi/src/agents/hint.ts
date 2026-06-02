@@ -43,15 +43,17 @@ export interface AgentHintOptions {
  * @returns Nothing; emits to the chosen channel as a side effect.
  * @example
  * ```typescript
- * agentHint({
+ * import * as agents from "@infracraft/pulumi/agents";
+ *
+ * agents.hint({
  *   project: [
- *     "production is protected — `unprotect <urn>` first for a deliberate change",
- *     "feature env = imports:[staging], zero config; pulumi destroy is safe",
+ *     "Production is protected — `unprotect <urn>` first for a deliberate change",
+ *     "Feature env = imports:[staging], zero config; pulumi destroy is safe",
  *   ],
  * });
  * ```
  */
-export function agentHint(options: AgentHintOptions = {}): void {
+export function hint(options: AgentHintOptions = {}): void {
 	const enabled =
 		options.enabled ?? (!!process.env.CLAUDECODE || !!process.env.AI_AGENT);
 

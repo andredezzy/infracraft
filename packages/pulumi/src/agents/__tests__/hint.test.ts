@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { agentHint } from "../hint";
+import { hint } from "../hint";
 
-describe("agentHint", () => {
+describe("hint", () => {
 	let write: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
@@ -15,7 +15,7 @@ describe("agentHint", () => {
 	});
 
 	it("emits a delimited block of defaults plus project reminders when enabled", () => {
-		agentHint({ enabled: true, project: ["Production is protected"] });
+		hint({ enabled: true, project: ["Production is protected"] });
 
 		expect(write).toHaveBeenCalledTimes(1);
 		const out = write.mock.calls[0][0] as string;
@@ -26,25 +26,25 @@ describe("agentHint", () => {
 	});
 
 	it("routes through pulumi.log when channel is pulumi-log", () => {
-		agentHint({ enabled: true, channel: "pulumi-log" });
+		hint({ enabled: true, channel: "pulumi-log" });
 		expect(write).not.toHaveBeenCalled();
 	});
 
 	it("is a no-op when explicitly disabled", () => {
-		agentHint({ enabled: false, project: ["x"] });
+		hint({ enabled: false, project: ["x"] });
 		expect(write).not.toHaveBeenCalled();
 	});
 
 	it("auto-detects an agent via CLAUDECODE", () => {
 		vi.stubEnv("CLAUDECODE", "1");
-		agentHint();
+		hint();
 		expect(write).toHaveBeenCalledTimes(1);
 	});
 
 	it("is a no-op for humans (no agent env var)", () => {
 		vi.stubEnv("CLAUDECODE", "");
 		vi.stubEnv("AI_AGENT", "");
-		agentHint();
+		hint();
 		expect(write).not.toHaveBeenCalled();
 	});
 });
