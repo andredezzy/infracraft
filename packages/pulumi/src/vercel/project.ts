@@ -130,12 +130,27 @@ export interface VercelProjectInputs {
 interface VercelProjectOutputs extends VercelProjectInputs {
 	/** Vercel-assigned project ID. */
 	projectId: string;
+
+	/**
+	 * The project's production URL (with `https://`), mirroring Vercel's
+	 * `VERCEL_PROJECT_PRODUCTION_URL`: the custom production domain if one is
+	 * attached, otherwise the `<name>.vercel.app` default.
+	 */
+	productionUrl: string;
 }
 
 /** Vercel API response shape for a project. */
 interface VercelProjectResponse {
 	id: string;
 	name: string;
+}
+
+/** A single entry from `GET /v9/projects/{id}/domains`. */
+interface VercelDomainEntry {
+	name: string;
+	verified: boolean;
+	redirect: string | null;
+	gitBranch: string | null;
 }
 
 /**
@@ -163,6 +178,72 @@ async function fetchProject(
 	}
 
 	return (await response.json()) as VercelProjectResponse;
+}
+
+/**
+ * Picks a project's production domain from its domain list, mirroring how Vercel
+ * derives `VERCEL_PROJECT_PRODUCTION_URL`: a verified, non-redirect, non-branch
+ * domain, preferring a custom domain over the `*.vercel.app` default. Returns a
+ * full `https://` URL. Falls back to `<name>.vercel.app` when the list is empty
+ * (e.g. a freshly created project whose domain has not yet propagated).
+ *
+ * @param domains Domain entries from `GET /v9/projects/{id}/domains`
+ * @param name Project name, used for the `<name>.vercel.app` fallback
+ * @returns The production URL, e.g. `https://app.example.com`
+ * @example
+ * ```typescript
+ * pickProductionDomain(
+ *   [{ name: "x.vercel.app", verified: true, redirect: null, gitBranch: null },
+ *    { name: "app.example.com", verified: true, redirect: null, gitBranch: null }],
+ *   "x",
+ * ); // => "https://app.example.com"
+ * ```
+ */
+export function pickProductionDomain(
+	domains: VercelDomainEntry[],
+	name: string,
+): string {
+	const production = domains.filter(
+		(domain) =>
+			domain.verified && domain.redirect === null && domain.gitBranch === null,
+	);
+
+	const custom = production.find(
+		(domain) => !domain.name.endsWith(".vercel.app"),
+	);
+	const fallback = production.find((domain) =>
+		domain.name.endsWith(".vercel.app"),
+	);
+
+	return `https://${custom?.name ?? fallback?.name ?? `${name}.vercel.app`}`;
+}
+
+/**
+ * Fetches a project's production URL from the Vercel domains API.
+ * Throws on API failure — a wrong URL would silently misconfigure the app.
+ */
+async function fetchProductionUrl(
+	token: string,
+	teamId: string,
+	idOrName: string,
+	name: string,
+): Promise<string> {
+	const response = await fetch(
+		`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(idOrName)}/domains?teamId=${teamId}`,
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
+
+	if (!response.ok) {
+		throw new Error(
+			`Vercel API error fetching domains for "${idOrName}" (${response.status}): ${await response.text()}`,
+		);
+	}
+
+	const { domains = [] } = (await response.json()) as {
+		domains?: VercelDomainEntry[];
+	};
+
+	return pickProductionDomain(domains, name);
 }
 
 /**
@@ -250,7 +331,14 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			projectId = created.id;
 		}
 
-		const outs: VercelProjectOutputs = { ...inputs, projectId };
+		const productionUrl = await fetchProductionUrl(
+			inputs.token,
+			inputs.teamId,
+			projectId,
+			inputs.name,
+		);
+
+		const outs: VercelProjectOutputs = { ...inputs, projectId, productionUrl };
 
 		return { id: projectId, outs };
 	}
@@ -265,9 +353,21 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			throw new Error(`Vercel project "${id}" not found during refresh`);
 		}
 
+		const productionUrl = await fetchProductionUrl(
+			props.token,
+			props.teamId,
+			id,
+			project.name,
+		);
+
 		return {
 			id: project.id,
-			props: { ...props, name: project.name, projectId: project.id },
+			props: {
+				...props,
+				name: project.name,
+				projectId: project.id,
+				productionUrl,
+			},
 		};
 	}
 
@@ -294,7 +394,14 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 			);
 		}
 
-		return { outs: { ...news, projectId: id } };
+		const productionUrl = await fetchProductionUrl(
+			news.token,
+			news.teamId,
+			id,
+			news.name,
+		);
+
+		return { outs: { ...news, projectId: id, productionUrl } };
 	}
 
 	async delete(): Promise<void> {
@@ -341,6 +448,7 @@ class VercelProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 /** Internal dynamic resource — not part of the public API. */
 class VercelProjectResource extends pulumi.dynamic.Resource {
 	public declare readonly projectId: pulumi.Output<string>;
+	public declare readonly productionUrl: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -359,7 +467,7 @@ class VercelProjectResource extends pulumi.dynamic.Resource {
 		super(
 			new VercelProjectResourceProvider(),
 			name,
-			{ ...args, projectId: undefined },
+			{ ...args, projectId: undefined, productionUrl: undefined },
 			opts,
 		);
 	}
@@ -412,13 +520,21 @@ export interface VercelProjectArgs {
  *
  * new VercelVariable("nexus-vars", {
  *   projectId: project.id,
- *   variables: { NEXT_PUBLIC_API_URL: meshUrl },
+ *   // The app's own URL comes from the project, not from config or a derived name.
+ *   variables: { NEXTAUTH_URL: project.url },
  * }, { provider });
  * ```
  */
 export class VercelProject extends pulumi.ComponentResource {
 	/** Vercel-assigned project ID. */
 	public readonly id: pulumi.Output<string>;
+
+	/**
+	 * The project's production URL (with `https://`), e.g. `https://app.example.com`.
+	 * Resolves to the custom production domain when one is attached, otherwise the
+	 * `<name>.vercel.app` default — the source of truth for the app's own URL.
+	 */
+	public readonly url: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -440,7 +556,8 @@ export class VercelProject extends pulumi.ComponentResource {
 		);
 
 		this.id = resource.projectId;
+		this.url = resource.productionUrl;
 
-		this.registerOutputs({ id: this.id });
+		this.registerOutputs({ id: this.id, url: this.url });
 	}
 }

@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/pulumi",
-	"version": "1.6.6",
+	"version": "1.7.0",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
@@ -46,8 +46,8 @@
 		"lint": "biome check --write"
 	},
 	"peerDependencies": {
-		"@pulumi/pulumi": "^3",
-		"@pulumi/command": "^1"
+		"@pulumi/command": "^1",
+		"@pulumi/pulumi": "^3"
 	},
 	"peerDependenciesMeta": {
 		"@pulumi/command": {
