@@ -281,7 +281,11 @@ export class RailwayVolume extends pulumi.ComponentResource {
 				environmentId: environment.id,
 				mountPath: args.mountPath,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options to the underlying resource. Pulumi
+			// auto-inherits `provider`/`protect` from the parent component, but NOT options
+			// like `retainOnDelete` — without this pass-through, setting `retainOnDelete` on a
+			// RailwayVolume would silently never reach the actual cloud volume.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.registerOutputs({});

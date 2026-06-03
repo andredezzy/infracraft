@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/pulumi",
-	"version": "1.13.0",
+	"version": "1.13.1",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
