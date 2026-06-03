@@ -409,47 +409,6 @@ const guard = gitGuard("/path/to/repo")
 | Vercel | `@pulumiverse/vercel` — no adopt-or-create, no CLI deploys | Adopt-or-create projects + consumer-controlled deploy triggers |
 | Fly.io | `@ediri/pulumi-fly` — bridges a Terraform provider Fly archived March 2024; no secrets support | Hand-rolled `dynamic` resources matching every other provider — secrets, adopt-or-create, consumer-controlled deploys; no unmaintained upstream |
 
-## Recent releases
-
-### v1.12.0 (current) — Unified `hash()`
-- Merges `hashDirectory` and the env-fingerprint helper into one overloaded `hash()`: a directory path hashes file contents (synchronous `string`), an env map hashes to a single non-secret `Output<string>` digest
-- Building a deploy trigger from `hash(env)` instead of spreading raw secret values keeps secret `Output`s out of dynamic-resource state, avoiding the Pulumi #16041 serialization race — deploys are safe to create at full parallelism (no `--parallel 1`)
-
-### v1.11.0 — agents.hint namespace
-- Refines the v1.10.0 agent-hint API into an `agents` namespace: call `agents.hint(...)` via `import * as agents from "@infracraft/pulumi/agents"`
-- Replaces the flat `agentHint` function (previously accessible only as an internal export) with the `agents.hint(...)` namespace API
-- Opens the `agents/` namespace for future agent utilities
-
-### v1.10.0 — agentHint: reminders for AI coding agents
-- Adds `@infracraft/pulumi/agents` — surfaces a stack's operating rules to AI coding agents, modeled on Vercel's AGENTS.md guidance
-- Emits a delimited `<infracraft-hint>` block with infracraft defaults plus caller-supplied reminders
-- Auto-detects an AI agent via `CLAUDECODE` / `AI_AGENT` env vars; no-op for humans
-- Defaults to `channel: "stderr"` so hints appear before Pulumi output; `"pulumi-log"` routes through Diagnostics
-
-### v1.9.0 — Protection belongs to the consumer
-- Removes the `wasAdopted` gate from v1.8.0 — provider logic no longer reimplements Pulumi's native `protect` option
-- `RailwayEnvironment`, `VercelProject`, and `NeonBranch` now delete unconditionally; use `protect: true` to guard shared/production resources
-- `RailwayService` retains its unconditional no-op delete because it is project-level and shared across all environments
-
-### v1.8.0 — Safe destroy: delete only what Pulumi created
-- `RailwayEnvironment`, `VercelProject`, and `NeonBranch` record `wasAdopted` at create time and only delete resources they created
-- `RailwayService.delete` is now an unconditional no-op
-
-### v1.7.1 — Fix VercelProject.url resolution
-- `VercelProject.url` is now resolved via `Output.apply` (fetched from Vercel's API each run) instead of persisted dynamic-resource state
-
-### v1.7.0 — Expose VercelProject.url
-- Adds a `url` output on `VercelProject`; prefers custom production domain over `<name>.vercel.app`
-
-### v1.6.6 — Isolate copy-on-write role passwords
-- Isolates copy-on-write Neon role passwords reset on non-parent branches
-- Hardens dynamic secret outputs via `additionalSecretOutputs`
-
-### v1.6.0 — Multi-environment building blocks
-- Adds `NeonBranch.parent` for copy-on-write branching
-- Adds `RailwayEnvironment` with optional fork from a source environment
-- Adds Vercel marketplace primitives: `VercelIntegration`, `VercelMarketplaceResource`, `VercelResourceConnection`
-
 ## License
 
 MIT
