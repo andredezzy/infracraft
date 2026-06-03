@@ -24,11 +24,14 @@ interface GraphQLResponse<T> {
  * ```
  */
 export class RailwayClient {
-	/** Railway API bearer token. */
+	/** Railway API token sent as `Authorization: Bearer` (account/team-scoped). */
 	private readonly token: string;
 
 	/**
-	 * @param token Railway API bearer token (project-scoped or account-scoped)
+	 * @param token Railway **account- or team-scoped** API token. This client sends
+	 *   `Authorization: Bearer <token>`, which Railway's GraphQL v2 API accepts for
+	 *   account/team tokens. Railway **project** tokens are NOT accepted as Bearer here —
+	 *   they require the `Project-Access-Token` header — so do not pass a project token.
 	 */
 	constructor(token: string) {
 		this.token = token;

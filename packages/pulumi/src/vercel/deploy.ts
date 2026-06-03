@@ -54,6 +54,12 @@ export interface VercelDeployArgs {
  * ```
  */
 export class VercelDeploy extends pulumi.ComponentResource {
+	/**
+	 * The production deployment URL printed by `vercel deploy` (its final stdout line).
+	 * Surfaces the deployed link in stack outputs after `pulumi up` without visiting the dashboard.
+	 */
+	public readonly deploymentUrl: pulumi.Output<string>;
+
 	constructor(name: string, args: VercelDeployArgs, opts: VercelDeployOptions) {
 		const { provider, project, ...pulumiOpts } = opts;
 
@@ -69,7 +75,7 @@ export class VercelDeploy extends pulumi.ComponentResource {
 			);
 		}
 
-		new command.local.Command(
+		const deployCmd = new command.local.Command(
 			`${name}-deploy`,
 			{
 				create: "vercel deploy --prod --yes",
@@ -84,6 +90,10 @@ export class VercelDeploy extends pulumi.ComponentResource {
 			{ parent: this },
 		);
 
-		this.registerOutputs({});
+		this.deploymentUrl = deployCmd.stdout.apply(
+			(out) => out.trim().split("\n").pop() ?? "",
+		);
+
+		this.registerOutputs({ deploymentUrl: this.deploymentUrl });
 	}
 }
