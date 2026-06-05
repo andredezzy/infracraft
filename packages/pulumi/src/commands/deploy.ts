@@ -1,9 +1,9 @@
-// src/deploy-command.ts
+// src/commands/deploy.ts
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 
-import { isGitGuard } from "./git-guard";
-import { buildSandboxScript, isDeploySandbox } from "./sandbox";
+import { isGitGuard } from "../git-guard";
+import { buildSandboxScript, isDeploySandbox } from "../sandbox";
 
 export interface CreateDeployCommandArgs {
 	/** Resource name; the child command is `<name>` and the sandbox dir uses it. */

@@ -1,7 +1,7 @@
 // src/fly/deploy.ts  (replace entire file)
 import * as pulumi from "@pulumi/pulumi";
 
-import { createDeployCommand } from "../deploy-command";
+import { createDeployCommand } from "../commands/deploy";
 import type { FlyApp } from "./app";
 import type { FlyProvider } from "./provider";
 import { type FlyTomlConfig, generateFlyToml } from "./toml";

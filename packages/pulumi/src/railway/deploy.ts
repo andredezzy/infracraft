@@ -1,7 +1,7 @@
 // src/railway/deploy.ts  (replace entire file)
 import * as pulumi from "@pulumi/pulumi";
 
-import { createDeployCommand } from "../deploy-command";
+import { createDeployCommand } from "../commands/deploy";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
 import type { RailwayProvider } from "./provider";

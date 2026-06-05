@@ -1,4 +1,4 @@
-// src/__tests__/deploy-command.test.ts
+// src/commands/__tests__/deploy.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { commandCalls } = vi.hoisted(() => ({
@@ -54,9 +54,9 @@ vi.mock("@pulumi/pulumi", () => {
 	};
 });
 
-import { createDeployCommand } from "../deploy-command";
-import { GitGuard } from "../git-guard";
-import { DeploySandbox } from "../sandbox";
+import { GitGuard } from "../../git-guard";
+import { DeploySandbox } from "../../sandbox";
+import { createDeployCommand } from "../deploy";
 
 beforeEach(() => {
 	commandCalls.length = 0;
