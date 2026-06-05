@@ -153,7 +153,7 @@ export function recoverStaleGuard(monorepoRoot: string): boolean {
  * enumerate them) while none of the history is exposed.
  *
  * On success it also writes an agent-facing `README.md` and an
- * `infracraft-deploy.lock` into the stub (so a coding agent that stumbles onto
+ * `infracraft.lock` into the stub (so a coding agent that stumbles onto
  * the unusual state leaves it alone instead of "fixing" it), and best-effort
  * marks the moved-aside real history immutable via {@link setGuardImmutable} so
  * it cannot be accidentally restored while the deploy is in progress.
@@ -253,7 +253,7 @@ export const STUB_README_NAME = "README.md";
  * Basename of the lock file written into the stub `.git`. Its presence — with a
  * live `pid` — marks an in-progress deploy that owns the guard.
  */
-export const LOCK_FILE_NAME = "infracraft-deploy.lock";
+export const LOCK_FILE_NAME = "infracraft.lock";
 
 /**
  * Builds the agent-facing explainer placed at `.git/README.md` inside the stub.
