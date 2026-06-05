@@ -83,7 +83,7 @@ describe("VercelDeploy", () => {
 		);
 		expect(commandCalls).toHaveLength(1);
 		const { name, args } = commandCalls[0];
-		expect(name).toBe("nexus-deploy");
+		expect(name).toBe("nexus");
 		expect(args.dir).toBeUndefined();
 		expect(args.environment).toEqual({
 			VERCEL_TOKEN: "vercel-token",

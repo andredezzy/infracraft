@@ -69,7 +69,7 @@ describe("createDeployCommand", () => {
 	it("sandbox + gitGuard → stub-mode script", () => {
 		createDeployCommand(
 			{
-				name: "nexus-deploy",
+				name: "nexus",
 				cli: "vercel deploy --prod --yes",
 				excludePaths: ["apps/mesh"],
 				triggers: [],
@@ -88,7 +88,7 @@ describe("createDeployCommand", () => {
 
 	it("sandbox only → original-.git script", () => {
 		createDeployCommand(
-			{ name: "nexus-deploy", cli: "vercel deploy --prod --yes", triggers: [] },
+			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
 		const create = (
@@ -102,7 +102,7 @@ describe("createDeployCommand", () => {
 
 	it("neither → raw live-tree script", () => {
 		createDeployCommand(
-			{ name: "nexus-deploy", cli: "vercel deploy --prod --yes", triggers: [] },
+			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
 			{},
 		);
 		const create = (
@@ -117,7 +117,7 @@ describe("createDeployCommand", () => {
 	it("gitGuard without sandbox throws", () => {
 		expect(() =>
 			createDeployCommand(
-				{ name: "x-deploy", cli: "x", triggers: [] },
+				{ name: "x", cli: "x", triggers: [] },
 				{ dependsOn: [gitGuard] },
 			),
 		).toThrow(/GitGuard.*DeploySandbox/i);
@@ -125,7 +125,7 @@ describe("createDeployCommand", () => {
 
 	it("derives deploymentUrl from the cli's last stdout line", () => {
 		const { deploymentUrl } = createDeployCommand(
-			{ name: "nexus-deploy", cli: "vercel deploy --prod --yes", triggers: [] },
+			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
 		expect(deploymentUrl).toBe("https://x.app");
@@ -134,7 +134,7 @@ describe("createDeployCommand", () => {
 	it("forwards dependsOn, environment, and triggers to the command", () => {
 		createDeployCommand(
 			{
-				name: "api-deploy",
+				name: "api",
 				cli: "fly deploy",
 				triggers: ["h"],
 				environment: { FLY_API_TOKEN: "t" },

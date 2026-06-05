@@ -62,7 +62,7 @@ export function createDeployCommand(
 		buildSandboxScript({
 			sandbox,
 			gitGuard,
-			appName: args.name.replace(/-deploy$/, ""),
+			appName: args.name,
 			env,
 			excludePaths: args.excludePaths,
 			setup: args.setup,

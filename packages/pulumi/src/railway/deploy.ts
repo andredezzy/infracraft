@@ -79,7 +79,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 
 		createDeployCommand(
 			{
-				name: `${name}-deploy`,
+				name,
 				cli,
 				triggers: args.triggers,
 				excludePaths: args.excludePaths,

@@ -61,7 +61,7 @@ export class FlyDeploy extends pulumi.ComponentResource {
 
 		createDeployCommand(
 			{
-				name: `${name}-deploy`,
+				name,
 				cli,
 				triggers,
 				setup,

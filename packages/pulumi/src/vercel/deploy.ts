@@ -52,7 +52,7 @@ export class VercelDeploy extends pulumi.ComponentResource {
 
 		const { deploymentUrl } = createDeployCommand(
 			{
-				name: `${name}-deploy`,
+				name,
 				cli: "vercel deploy --prod --yes",
 				triggers: args.triggers,
 				excludePaths: args.excludePaths,
