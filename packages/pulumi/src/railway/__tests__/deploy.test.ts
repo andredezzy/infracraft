@@ -87,5 +87,31 @@ describe("RailwayDeploy", () => {
 		expect(create).toContain("railpack.json"); // setup runs in the sandbox
 		expect(create).toContain("git init -q && git add -A"); // stub mode
 		expect(commandCalls[0].args.environment).toBeUndefined(); // token is inlined, not env
+		// The deploy-wait poller's IC_* bindings must be wired (a rename/reorder
+		// here would otherwise fail silently — the poller can't poll without them).
+		expect(create).toContain("IC_TOK=tok_1");
+		expect(create).toContain("IC_PROJ=proj_1");
+		expect(create).toContain("IC_ENV=env_1");
+		expect(create).toContain("IC_SVC=svc_1");
+		// IC_SINCE is captured before `railway up` and forwarded to the poller, so
+		// it can tell the new deployment from the previous one by createdAt.
+		expect(create).toContain("IC_SINCE=$(node -e");
+		expect(create).toContain("IC_SINCE=$IC_SINCE node -e");
+	});
+
+	it("escapes railpackConfig values containing an apostrophe (POSIX single-quote)", () => {
+		new RailwayDeploy(
+			"mesh",
+			{ triggers: [], railpackConfig: { note: "it's fine" } },
+			{ ...ctx, dependsOn: [sandbox, gitGuard] },
+		);
+		const create = (
+			commandCalls[0].args.create as {
+				apply: (f: (s: string) => string) => string;
+			}
+		).apply((s) => s);
+		// `printf '%s'` (not a bare format) + POSIX ' -> '\'' escaping.
+		expect(create).toContain("printf '%s' '");
+		expect(create).toContain("it'\\''s fine"); // apostrophe escaped, not broken
 	});
 });

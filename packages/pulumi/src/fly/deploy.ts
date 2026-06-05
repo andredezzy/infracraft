@@ -1,7 +1,7 @@
 // src/fly/deploy.ts  (replace entire file)
 import * as pulumi from "@pulumi/pulumi";
 
-import { createDeployCommand } from "../commands/deploy";
+import { createDeployCommand, dependsOnList } from "../commands/deploy";
 import type { FlyApp } from "./app";
 import type { FlyProvider } from "./provider";
 import { type FlyTomlConfig, generateFlyToml } from "./toml";
@@ -29,6 +29,9 @@ export interface FlyDeployArgs {
  * Isolation/git are the seam's job (list a `DeploySandbox`, optionally a `GitGuard`).
  */
 export class FlyDeploy extends pulumi.ComponentResource {
+	/** The deploy CLI's final stdout line (the Fly app URL when emitted). */
+	public readonly deploymentUrl: pulumi.Output<string>;
+
 	constructor(name: string, args: FlyDeployArgs, opts: FlyDeployOptions) {
 		const { provider, app, ...pulumiOpts } = opts;
 
@@ -49,17 +52,11 @@ export class FlyDeploy extends pulumi.ComponentResource {
 			.output(args.triggers)
 			.apply((values) => [...values, tomlContent]);
 
-		let consumerDeps: pulumi.Resource[];
+		// Keep the `app` ordering anchor first; append the consumer's deps
+		// (DeploySandbox / GitGuard) using the seam's shared normaliser.
+		const consumerDeps = dependsOnList(pulumiOpts) as pulumi.Resource[];
 
-		if (Array.isArray(pulumiOpts.dependsOn)) {
-			consumerDeps = pulumiOpts.dependsOn as pulumi.Resource[];
-		} else if (pulumiOpts.dependsOn) {
-			consumerDeps = [pulumiOpts.dependsOn as pulumi.Resource];
-		} else {
-			consumerDeps = [];
-		}
-
-		createDeployCommand(
+		const { deploymentUrl } = createDeployCommand(
 			{
 				name,
 				cli,
@@ -73,6 +70,8 @@ export class FlyDeploy extends pulumi.ComponentResource {
 			{ ...pulumiOpts, parent: this, dependsOn: [app, ...consumerDeps] },
 		);
 
-		this.registerOutputs({});
+		this.deploymentUrl = deploymentUrl;
+
+		this.registerOutputs({ deploymentUrl: this.deploymentUrl });
 	}
 }

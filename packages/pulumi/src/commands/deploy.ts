@@ -3,7 +3,7 @@ import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 
 import { isGitGuard } from "../git-guard";
-import { buildSandboxScript, isDeploySandbox } from "../sandbox";
+import { buildSandboxScript, isDeploySandbox, SandboxMode } from "../sandbox";
 
 export interface CreateDeployCommandArgs {
 	/** Resource name; the child command is `<name>` and the sandbox dir uses it. */
@@ -27,7 +27,9 @@ export interface CreateDeployCommandResult {
 }
 
 /** Reads a `dependsOn` opt into a flat array of resource instances. */
-function dependsOnList(opts: pulumi.ComponentResourceOptions): unknown[] {
+export function dependsOnList(
+	opts: pulumi.ComponentResourceOptions,
+): unknown[] {
 	const dep = opts.dependsOn;
 
 	if (Array.isArray(dep)) {
@@ -56,12 +58,17 @@ export function createDeployCommand(
 		);
 	}
 
+	let mode = SandboxMode.NONE;
+
+	if (sandbox) {
+		mode = gitGuard ? SandboxMode.STUB : SandboxMode.ORIGINAL;
+	}
+
 	const env = pulumi.getStack();
 
 	const create = pulumi.output(args.cli).apply((cli) =>
 		buildSandboxScript({
-			sandbox,
-			gitGuard,
+			mode,
 			appName: args.name,
 			env,
 			excludePaths: args.excludePaths,
