@@ -4,7 +4,7 @@ import * as path from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { hash } from "../hash";
+import { hash, hashApp } from "../hash";
 
 function resolve(output: pulumi.Output<string>): Promise<string> {
 	return new Promise((res) => {
@@ -69,6 +69,61 @@ describe("hash", () => {
 			const withoutTests = hash(tmpDir, { ignore: new Set(["__tests__"]) });
 
 			expect(withTests).not.toBe(withoutTests);
+		});
+	});
+
+	describe("hashApp (app + transitive workspace deps)", () => {
+		let root: string;
+
+		const write = (rel: string, body: string) => {
+			const full = path.join(root, rel);
+			fs.mkdirSync(path.dirname(full), { recursive: true });
+			fs.writeFileSync(full, body);
+		};
+
+		beforeEach(() => {
+			root = fs.mkdtempSync(path.join(os.tmpdir(), "hashapp-"));
+			// web -> @acme/ui -> @acme/core ; @acme/other is unrelated.
+			write(
+				"apps/web/package.json",
+				'{"name":"@acme/web","dependencies":{"@acme/ui":"workspace:*"}}',
+			);
+			write("apps/web/index.ts", "export const web = 1;");
+			write(
+				"packages/ui/package.json",
+				'{"name":"@acme/ui","dependencies":{"@acme/core":"workspace:*"}}',
+			);
+			write("packages/ui/ui.ts", "export const ui = 1;");
+			write("packages/core/package.json", '{"name":"@acme/core"}');
+			write("packages/core/core.ts", "export const core = 1;");
+			write("packages/other/package.json", '{"name":"@acme/other"}');
+			write("packages/other/other.ts", "export const other = 1;");
+		});
+
+		afterEach(() => {
+			fs.rmSync(root, { recursive: true, force: true });
+		});
+
+		it("is deterministic", () => {
+			expect(hashApp(root, "apps/web")).toBe(hashApp(root, "apps/web"));
+		});
+
+		it("retriggers when a TRANSITIVE dep (@acme/core via @acme/ui) changes", () => {
+			const before = hashApp(root, "apps/web");
+			write("packages/core/core.ts", "export const core = 2;");
+			expect(hashApp(root, "apps/web")).not.toBe(before);
+		});
+
+		it("does NOT retrigger when an unrelated package (@acme/other) changes", () => {
+			const before = hashApp(root, "apps/web");
+			write("packages/other/other.ts", "export const other = 2;");
+			expect(hashApp(root, "apps/web")).toBe(before);
+		});
+
+		it("retriggers when the app's own source changes", () => {
+			const before = hashApp(root, "apps/web");
+			write("apps/web/index.ts", "export const web = 2;");
+			expect(hashApp(root, "apps/web")).not.toBe(before);
 		});
 	});
 
