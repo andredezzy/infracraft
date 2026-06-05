@@ -1,3 +1,7 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
+import * as pulumi from "@pulumi/pulumi";
+
 /** Escapes a path literal for embedding inside an awk ERE. */
 function escapeAwkRegex(path: string): string {
 	return path.replace(/[.[\]{}()*+?^$|\\/]/g, "\\$&");
@@ -85,4 +89,66 @@ export function buildSandboxScript(options: SandboxScriptOptions): string {
 		`cp -R "$REPO/.git" "$SANDBOX/.git"`;
 
 	return `${head}; ${makeSandbox}; ${copy}; ${copyGit}; cd "$SANDBOX"; ${runSetupAndCli}`;
+}
+
+/** Cross-bundle brand: `instanceof` is unreliable when the seam and the resource
+ * come from different built entries, so the seam detects sandboxes by this. */
+const DEPLOY_SANDBOX_BRAND = Symbol.for("@infracraft/pulumi/DeploySandbox");
+
+/** Sweep sandboxes orphaned by a hard-killed run (older than this). */
+const STALE_SANDBOX_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Isolation marker + workspace lifecycle. Listing it in a deploy's `dependsOn`
+ * makes that deploy run in an isolated `/tmp/infracraft` copy. Carries no config;
+ * the repo root is derived at runtime by the deploy command.
+ */
+export class DeploySandbox extends pulumi.ComponentResource {
+	constructor(name: string, opts?: pulumi.ComponentResourceOptions) {
+		super("infracraft:sandbox:DeploySandbox", name, {}, opts);
+
+		(this as Record<symbol, unknown>)[DEPLOY_SANDBOX_BRAND] = true;
+
+		if (!pulumi.runtime.isDryRun()) {
+			this.prepareWorkspace();
+		}
+
+		this.registerOutputs({});
+	}
+
+	/** mkdir the workspace root and GC stale sandboxes (best-effort). */
+	private prepareWorkspace(): void {
+		fs.mkdirSync(SANDBOX_ROOT, { recursive: true });
+
+		let entries: string[] = [];
+
+		try {
+			entries = fs.readdirSync(SANDBOX_ROOT) as string[];
+		} catch {
+			return;
+		}
+
+		const now = Date.now();
+
+		for (const entry of entries) {
+			const full = path.join(SANDBOX_ROOT, entry);
+
+			try {
+				if (now - fs.statSync(full).mtimeMs > STALE_SANDBOX_MS) {
+					fs.rmSync(full, { recursive: true, force: true });
+				}
+			} catch {
+				// Racing with an in-flight deploy's cleanup — ignore.
+			}
+		}
+	}
+}
+
+/** Bundle-safe check for a `DeploySandbox` in a `dependsOn` array. */
+export function isDeploySandbox(value: unknown): value is DeploySandbox {
+	return (
+		typeof value === "object" &&
+		value !== null &&
+		(value as Record<symbol, unknown>)[DEPLOY_SANDBOX_BRAND] === true
+	);
 }

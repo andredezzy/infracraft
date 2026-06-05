@@ -1,5 +1,32 @@
-import { describe, expect, it } from "vitest";
-import { buildSandboxFileFilter, buildSandboxScript } from "../sandbox";
+import { describe, expect, it, vi } from "vitest";
+import {
+	buildSandboxFileFilter,
+	buildSandboxScript,
+	DeploySandbox,
+	isDeploySandbox,
+} from "../sandbox";
+
+vi.mock("@pulumi/pulumi", () => ({
+	runtime: { isDryRun: vi.fn(() => false) },
+	ComponentResource: class {
+		constructor(
+			public type: string,
+			public name: string,
+		) {}
+		registerOutputs(_outputs?: unknown): void {}
+	},
+}));
+
+vi.mock("node:fs", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:fs")>();
+	return {
+		...actual,
+		mkdirSync: vi.fn(),
+		readdirSync: vi.fn(() => []),
+		statSync: vi.fn(),
+		rmSync: vi.fn(),
+	};
+});
 
 describe("buildSandboxFileFilter", () => {
 	it("is a passthrough when nothing is excluded", () => {
@@ -82,5 +109,32 @@ describe("buildSandboxScript", () => {
 		expect(script.indexOf("railpack.json")).toBeLessThan(
 			script.indexOf(base.cli),
 		);
+	});
+});
+
+describe("DeploySandbox", () => {
+	it("is recognised by isDeploySandbox (brand), not by structural luck", () => {
+		const sandbox = new DeploySandbox("deploy-sandbox");
+		expect(isDeploySandbox(sandbox)).toBe(true);
+		expect(isDeploySandbox({})).toBe(false);
+		expect(isDeploySandbox(null)).toBe(false);
+	});
+
+	it("prepares the workspace root on up", async () => {
+		const fs = await import("node:fs");
+		(fs.mkdirSync as ReturnType<typeof vi.fn>).mockClear();
+		new DeploySandbox("deploy-sandbox");
+		expect(fs.mkdirSync).toHaveBeenCalledWith("/tmp/infracraft", {
+			recursive: true,
+		});
+	});
+
+	it("does not touch the filesystem during preview (dry run)", async () => {
+		const { runtime } = await import("@pulumi/pulumi");
+		const fs = await import("node:fs");
+		(runtime.isDryRun as ReturnType<typeof vi.fn>).mockReturnValueOnce(true);
+		(fs.mkdirSync as ReturnType<typeof vi.fn>).mockClear();
+		new DeploySandbox("deploy-sandbox");
+		expect(fs.mkdirSync).not.toHaveBeenCalled();
 	});
 });
