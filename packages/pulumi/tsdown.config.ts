@@ -9,6 +9,7 @@ export default library({
 		"src/agents/index.ts",
 		"src/hash.ts",
 		"src/git-guard.ts",
+		"src/sandbox.ts",
 	],
 	minify: false,
 });

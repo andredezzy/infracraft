@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/pulumi",
-	"version": "1.15.1",
+	"version": "1.16.0",
 	"type": "module",
 	"license": "MIT",
 	"repository": {
@@ -36,6 +36,10 @@
 		"./git-guard": {
 			"types": "./dist/git-guard.d.mts",
 			"default": "./dist/git-guard.mjs"
+		},
+		"./sandbox": {
+			"types": "./dist/sandbox.d.mts",
+			"default": "./dist/sandbox.mjs"
 		}
 	},
 	"files": [
