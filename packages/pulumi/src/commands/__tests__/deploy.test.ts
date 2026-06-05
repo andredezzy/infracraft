@@ -81,7 +81,9 @@ describe("createDeployCommand", () => {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
-		expect(create).toContain('mktemp -d "$PROJECT_DIR/staging-nexus.');
+		expect(create).toContain(
+			'mktemp -d "/tmp/infracraft/$PROJECT-staging-nexus.',
+		);
 		expect(create).toContain("git init -q && git add -A");
 		expect(create).toContain("apps\\/mesh");
 	});
