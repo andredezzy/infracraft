@@ -56,11 +56,14 @@ export function createDeployCommand(
 		);
 	}
 
+	const env = pulumi.getStack();
+
 	const create = pulumi.output(args.cli).apply((cli) =>
 		buildSandboxScript({
 			sandbox,
 			gitGuard,
 			appName: args.name.replace(/-deploy$/, ""),
+			env,
 			excludePaths: args.excludePaths,
 			setup: args.setup,
 			cli,

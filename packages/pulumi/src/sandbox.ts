@@ -40,8 +40,11 @@ interface SandboxScriptOptions {
 	sandbox: boolean;
 	/** Whether the sandbox `.git` is a metadata-free stub (true) or the real one. */
 	gitGuard: boolean;
-	/** Resource-derived name, used only for the sandbox dir prefix. */
+	/** Resource-derived name, used in the sandbox dir prefix. */
 	appName: string;
+	/** Stack/environment name, prefixed to the sandbox dir so leftovers and
+	 * concurrent deploys are identifiable (e.g. `staging-vercel-deploy-nexus.XXXX`). */
+	env?: string;
 	/** Upload-scoping excludes; applied only in stub mode (see design spec). */
 	excludePaths?: string[];
 	/** Shell run in the working dir before `cli` (e.g. write railpack.json). */
@@ -55,7 +58,7 @@ interface SandboxScriptOptions {
  * docs/superpowers/specs/2026-06-05-deploy-sandbox-design.md for the modes.
  */
 export function buildSandboxScript(options: SandboxScriptOptions): string {
-	const { sandbox, gitGuard, appName, excludePaths, setup, cli } = options;
+	const { sandbox, gitGuard, appName, env, excludePaths, setup, cli } = options;
 
 	const head = `REPO=$(git rev-parse --show-toplevel)`;
 	const runSetupAndCli = [setup, cli].filter(Boolean).join("; ");
@@ -64,8 +67,11 @@ export function buildSandboxScript(options: SandboxScriptOptions): string {
 		return `${head}; cd "$REPO"; ${runSetupAndCli}`;
 	}
 
+	// Prefix the dir with the env so leftovers/concurrent deploys are identifiable.
+	const dirPrefix = env ? `${env}-${appName}` : appName;
+
 	const makeSandbox = [
-		`SANDBOX=$(mktemp -d ${SANDBOX_ROOT}/${appName}.XXXXXX)`,
+		`SANDBOX=$(mktemp -d ${SANDBOX_ROOT}/${dirPrefix}.XXXXXX)`,
 		`trap 'rm -rf "$SANDBOX"' EXIT`,
 	].join("; ");
 

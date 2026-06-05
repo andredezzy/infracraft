@@ -84,6 +84,16 @@ describe("buildSandboxScript", () => {
 		expect(script).not.toContain("cp -c -R"); // stub does not copy the real .git
 	});
 
+	it("prefixes the sandbox dir with the env when provided", () => {
+		const script = buildSandboxScript({
+			...base,
+			sandbox: true,
+			gitGuard: true,
+			env: "staging",
+		});
+		expect(script).toContain("mktemp -d /tmp/infracraft/staging-nexus.");
+	});
+
 	it("original mode copies the full tree and CoW-copies the real .git (no filter)", () => {
 		const script = buildSandboxScript({
 			...base,

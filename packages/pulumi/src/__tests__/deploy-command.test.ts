@@ -43,6 +43,7 @@ vi.mock("@pulumi/pulumi", () => {
 				"",
 			),
 		runtime: { isDryRun: () => false },
+		getStack: () => "staging",
 		ComponentResource: class {
 			constructor(
 				public type: string,
@@ -80,7 +81,7 @@ describe("createDeployCommand", () => {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
-		expect(create).toContain("mktemp -d /tmp/infracraft/nexus.");
+		expect(create).toContain("mktemp -d /tmp/infracraft/staging-nexus.");
 		expect(create).toContain("git init -q && git add -A");
 		expect(create).toContain("apps\\/mesh");
 	});

@@ -41,6 +41,7 @@ vi.mock("@pulumi/pulumi", () => {
 				"",
 			),
 		runtime: { isDryRun: () => false },
+		getStack: () => "staging",
 		ComponentResource: class {
 			constructor(
 				public type: string,
