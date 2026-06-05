@@ -109,7 +109,9 @@ async function findVolumeByService(
  * before creating a new one. Volumes are immutable after creation — changing
  * `serviceId`, `mountPath`, `environmentId`, or `projectId` triggers replacement.
  */
-class RailwayVolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class RailwayVolumeResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(
 		inputs: RailwayVolumeInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -145,22 +147,34 @@ class RailwayVolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	async read(
-		_id: string,
+		id: string,
 		props: RailwayVolumeOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
 		const client = new RailwayClient(props.token);
 
-		const volumeId = await findVolumeByService(
-			client,
-			props.projectId,
-			props.serviceId,
-		);
+		let volumeId: string | undefined;
 
-		if (!volumeId) {
-			throw new Error("Railway volume not found during refresh");
+		try {
+			volumeId = await findVolumeByService(
+				client,
+				props.projectId,
+				props.serviceId,
+			);
+		} catch (error) {
+			pulumi.log.warn(
+				`Railway volume refresh lookup failed; keeping existing state: ${String(error)}`,
+			);
 		}
 
-		return { id: volumeId, props: { ...props, volumeId } };
+		// A project-level service's volume can be momentarily unresolvable at
+		// refresh (eventual consistency / environment-scoped volume instances), so
+		// fall back to the stored id rather than throwing — that turned a healthy
+		// volume into a refresh error. A genuinely-deleted volume is re-adopted or
+		// recreated on the next `up` (create is adopt-or-create). `read` never
+		// fabricates drift and never hard-fails.
+		const resolvedId = volumeId ?? props.volumeId ?? id;
+
+		return { id: resolvedId, props: { ...props, volumeId: resolvedId } };
 	}
 
 	async delete(id: string, props: RailwayVolumeOutputs): Promise<void> {
