@@ -76,8 +76,14 @@ describe("buildSandboxScript", () => {
 			gitGuard: true,
 			excludePaths: ["apps/mesh"],
 		});
-		expect(script).toContain("mktemp -d /tmp/infracraft/nexus.");
-		expect(script).toContain("trap 'rm -rf \"$SANDBOX\"' EXIT");
+		expect(script).toContain(
+			'PROJECT_DIR="/tmp/infracraft/$(basename "$REPO")"',
+		);
+		expect(script).toContain('mkdir -p "$PROJECT_DIR"');
+		expect(script).toContain('mktemp -d "$PROJECT_DIR/nexus.');
+		expect(script).toContain(
+			'trap \'rm -rf "$SANDBOX"; rmdir "$PROJECT_DIR" 2>/dev/null || true\' EXIT',
+		);
 		expect(script).toContain('git -C "$REPO" ls-files');
 		expect(script).toContain("apps\\/mesh"); // filter is applied
 		expect(script).toContain("git init -q && git add -A");
@@ -91,7 +97,7 @@ describe("buildSandboxScript", () => {
 			gitGuard: true,
 			env: "staging",
 		});
-		expect(script).toContain("mktemp -d /tmp/infracraft/staging-nexus.");
+		expect(script).toContain('mktemp -d "$PROJECT_DIR/staging-nexus.');
 	});
 
 	it("original mode copies the full tree and CoW-copies the real .git (no filter)", () => {
@@ -101,7 +107,7 @@ describe("buildSandboxScript", () => {
 			gitGuard: false,
 			excludePaths: ["apps/mesh"],
 		});
-		expect(script).toContain("mktemp -d /tmp/infracraft/nexus.");
+		expect(script).toContain('mktemp -d "$PROJECT_DIR/nexus.');
 		expect(script).toContain(
 			'cp -c -R "$REPO/.git" "$SANDBOX/.git" 2>/dev/null || cp -R "$REPO/.git" "$SANDBOX/.git"',
 		);

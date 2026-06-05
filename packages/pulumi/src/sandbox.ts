@@ -70,9 +70,15 @@ export function buildSandboxScript(options: SandboxScriptOptions): string {
 	// Prefix the dir with the env so leftovers/concurrent deploys are identifiable.
 	const dirPrefix = env ? `${env}-${appName}` : appName;
 
+	// Group a repo's sandboxes under a per-project dir (named after the repo
+	// folder) so concurrent deploys of different repos never mix. The project dir
+	// is removed only once empty — `rmdir` fails on a non-empty dir, so it
+	// survives until the project's last deploy has cleaned up its own sandbox.
 	const makeSandbox = [
-		`SANDBOX=$(mktemp -d ${SANDBOX_ROOT}/${dirPrefix}.XXXXXX)`,
-		`trap 'rm -rf "$SANDBOX"' EXIT`,
+		`PROJECT_DIR="${SANDBOX_ROOT}/$(basename "$REPO")"`,
+		`mkdir -p "$PROJECT_DIR"`,
+		`SANDBOX=$(mktemp -d "$PROJECT_DIR/${dirPrefix}.XXXXXX")`,
+		`trap 'rm -rf "$SANDBOX"; rmdir "$PROJECT_DIR" 2>/dev/null || true' EXIT`,
 	].join("; ");
 
 	if (gitGuard) {
@@ -122,29 +128,54 @@ export class DeploySandbox extends pulumi.ComponentResource {
 		this.registerOutputs({});
 	}
 
-	/** mkdir the workspace root and GC stale sandboxes (best-effort). */
+	/**
+	 * mkdir the workspace root and GC stale sandboxes (best-effort). Sandboxes are
+	 * nested one level under a per-project dir (`/tmp/infracraft/<project>/<sandbox>`),
+	 * so this sweeps individual stale sandboxes and then drops any now-empty project
+	 * dir (`rmdir` is a no-op on a project dir with live deploys).
+	 */
 	private prepareWorkspace(): void {
 		fs.mkdirSync(SANDBOX_ROOT, { recursive: true });
 
-		let entries: string[] = [];
+		const now = Date.now();
+
+		let projects: string[] = [];
 
 		try {
-			entries = fs.readdirSync(SANDBOX_ROOT) as string[];
+			projects = fs.readdirSync(SANDBOX_ROOT) as string[];
 		} catch {
 			return;
 		}
 
-		const now = Date.now();
+		for (const project of projects) {
+			const projectDir = path.join(SANDBOX_ROOT, project);
 
-		for (const entry of entries) {
-			const full = path.join(SANDBOX_ROOT, entry);
+			let sandboxes: string[] = [];
 
 			try {
-				if (now - fs.statSync(full).mtimeMs > STALE_SANDBOX_MS) {
-					fs.rmSync(full, { recursive: true, force: true });
-				}
+				sandboxes = fs.readdirSync(projectDir) as string[];
 			} catch {
-				// Racing with an in-flight deploy's cleanup — ignore.
+				// Not a directory (e.g. a stray file) — skip.
+				continue;
+			}
+
+			for (const sandbox of sandboxes) {
+				const full = path.join(projectDir, sandbox);
+
+				try {
+					if (now - fs.statSync(full).mtimeMs > STALE_SANDBOX_MS) {
+						fs.rmSync(full, { recursive: true, force: true });
+					}
+				} catch {
+					// Racing with an in-flight deploy's cleanup — ignore.
+				}
+			}
+
+			// Drop the project dir only if the sweep left it empty (best-effort).
+			try {
+				fs.rmdirSync(projectDir);
+			} catch {
+				// Non-empty (live deploys) or already gone — ignore.
 			}
 		}
 	}
