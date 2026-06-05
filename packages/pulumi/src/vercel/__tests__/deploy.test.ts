@@ -33,6 +33,7 @@ vi.mock("@pulumi/command", () => ({
 				public opts: unknown,
 			) {
 				commandCalls.push({ name, args, opts });
+
 				this.stdout = {
 					apply: (fn) => fn("Building…\nUploading…\nhttps://nexus.vercel.app"),
 				};
@@ -118,9 +119,11 @@ describe("buildVercelDeployCommand", () => {
 
 	it("restores the parked file and releases the lock in a background timer", () => {
 		expect(cmd).toMatch(/\{ sleep 8;.*\} &/);
+
 		expect(cmd).toContain(
 			"[ -f .vercelignore.infracraft-bak ] && mv .vercelignore.infracraft-bak .vercelignore",
 		);
+
 		expect(cmd).toContain("rmdir /tmp/.vercel-upload-lock");
 	});
 
@@ -177,6 +180,7 @@ describe("VercelDeploy", () => {
 		expect(name).toBe("nexus-deploy");
 		expect(args.create).toBe(buildVercelDeployCommand());
 		expect(args.dir).toBe(stableDir("/repo"));
+
 		expect(args.environment).toEqual({
 			VERCEL_TOKEN: "vercel-token",
 			VERCEL_ORG_ID: "team_abc",

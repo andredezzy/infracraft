@@ -1,5 +1,6 @@
 import { execFileSync } from "node:child_process";
 import * as fs from "node:fs";
+import * as os from "node:os";
 import * as path from "node:path";
 import * as command from "@pulumi/command";
 import { runtime } from "@pulumi/pulumi";
@@ -129,6 +130,10 @@ export function recoverStaleGuard(monorepoRoot: string): boolean {
 			continue;
 		}
 
+		// A crashed run may have left the guard dir immutable; lift the lock so the
+		// recovery rename can proceed.
+		setGuardImmutable(guardPath, false);
+
 		if (fs.existsSync(gitPath)) {
 			fs.rmSync(gitPath, { recursive: true, force: true });
 		}
@@ -146,6 +151,12 @@ export function recoverStaleGuard(monorepoRoot: string): boolean {
  * place. The stub is a fresh `git init` whose index is copied from the real
  * repository, so `git ls-files` still reports the tracked files (deploy tools
  * enumerate them) while none of the history is exposed.
+ *
+ * On success it also writes an agent-facing `README.md` and an
+ * `infracraft-deploy.lock` into the stub (so a coding agent that stumbles onto
+ * the unusual state leaves it alone instead of "fixing" it), and best-effort
+ * marks the moved-aside real history immutable via {@link setGuardImmutable} so
+ * it cannot be accidentally restored while the deploy is in progress.
  *
  * Idempotent and safe to call on every `up`: it no-ops when there is no `.git`
  * to hide, and refuses to overwrite an existing guard dir (which would destroy
@@ -182,6 +193,10 @@ export function hideGit(monorepoRoot: string): void {
 			`[git-guard] Failed to create stub .git in ${monorepoRoot}: ${String(error)}`,
 		);
 	}
+
+	writeStubMetadata(gitPath, GUARD_DIR);
+
+	setGuardImmutable(guardPath, true);
 }
 
 /**
@@ -199,6 +214,10 @@ export function restoreGit(monorepoRoot: string): void {
 	const gitPath = path.join(monorepoRoot, ".git");
 
 	try {
+		// Lift the immutability lock before moving the real history back, otherwise
+		// the rename fails on a guard dir that hideGit marked immutable.
+		setGuardImmutable(guardPath, false);
+
 		if (fs.existsSync(gitPath)) {
 			fs.rmSync(gitPath, { recursive: true, force: true });
 		}
@@ -223,4 +242,130 @@ export function ensureGitignore(gitignorePath: string): void {
 	const newline = content.length > 0 && !content.endsWith("\n") ? "\n" : "";
 
 	fs.appendFileSync(gitignorePath, `${newline}${GUARD_DIR}\n`);
+}
+
+/**
+ * Basename of the human/agent-facing explainer written into the stub `.git`.
+ */
+export const STUB_README_NAME = "README.md";
+
+/**
+ * Basename of the lock file written into the stub `.git`. Its presence — with a
+ * live `pid` — marks an in-progress deploy that owns the guard.
+ */
+export const LOCK_FILE_NAME = "infracraft-deploy.lock";
+
+/**
+ * Builds the agent-facing explainer placed at `.git/README.md` inside the stub.
+ *
+ * An automated coding agent that trips over the unusual git state (an unborn
+ * `main`; `git ls-files` works but `git log` fails with `unable to read <sha>`)
+ * should read this and leave the repository alone instead of "fixing" it
+ * mid-deploy.
+ *
+ * @param guardDir - Basename of the sibling dir holding the real, locked history
+ */
+export function buildStubReadme(guardDir: string): string {
+	return `# Managed STUB \`.git\` — do not modify or restore it
+
+This is **not** the real repository. It is a lightweight stub created
+automatically by [\`@infracraft/pulumi\`](https://github.com/andredezzy/infracraft)
+(the \`git-guard\`) while a deploy (\`pulumi up\` / \`vercel deploy\`) is in progress.
+
+## Why it exists
+Deploy tools would otherwise ingest the full git history. The guard moves the real
+\`.git\` aside to \`../${guardDir}\` and leaves this stub, copying only the index so
+\`git ls-files\` still lists tracked files for the deploy tool.
+
+## It restores itself — automatically
+When the deploy finishes (success or failure) the guard discards this stub and
+moves the real \`.git\` back. **You do not need to do anything.**
+
+## DO NOT try to "fix" this
+While the deploy runs, the real history in \`../${guardDir}\` is **locked**
+(filesystem-immutable, best-effort). Do not run \`git init\` / \`reset\` / \`checkout\`
+here, do not \`rm -rf .git\`, and do not \`mv ../${guardDir} .git\` — the move is
+intentionally blocked and will fail.
+
+Symptoms you can safely ignore: an unborn \`main\` branch; \`git ls-files\` works but
+\`git log\` / \`git diff\` fail with \`unable to read <sha>\` (the objects live in the
+locked guard dir).
+
+## If a deploy crashed and this looks stuck
+The guard self-heals on the next deploy. Only if you are certain no deploy is
+running, recover manually from the repo root:
+
+\`\`\`sh
+chflags -R nouchg "../${guardDir}" 2>/dev/null || chattr -R -i "../${guardDir}" 2>/dev/null || true
+rm -rf .git && mv "../${guardDir}" .git
+\`\`\`
+
+See \`./${LOCK_FILE_NAME}\` for the owning process id and start time.
+`;
+}
+
+/**
+ * Writes the stub explainer and the deploy lock into the freshly created stub
+ * `.git`. Best-effort: the stub already satisfies deploy tools without these
+ * files, so a write failure here must never abort an otherwise-successful hide.
+ */
+function writeStubMetadata(gitPath: string, guardDir: string): void {
+	try {
+		fs.writeFileSync(
+			path.join(gitPath, STUB_README_NAME),
+			buildStubReadme(guardDir),
+		);
+
+		const lock = {
+			tool: "@infracraft/pulumi git-guard",
+			pid: process.pid,
+			startedAt: new Date().toISOString(),
+			host: os.hostname(),
+			guardDir,
+			note: "Deploy in progress. The real .git is moved aside and locked. Do not restore it manually; it restores automatically when the deploy finishes.",
+		};
+
+		fs.writeFileSync(
+			path.join(gitPath, LOCK_FILE_NAME),
+			`${JSON.stringify(lock, null, 2)}\n`,
+		);
+	} catch (error) {
+		console.error(
+			`[git-guard] Failed to write stub metadata: ${String(error)}`,
+		);
+	}
+}
+
+/**
+ * Best-effort filesystem lock on the moved-aside real history so it cannot be
+ * accidentally restored mid-deploy (e.g. a manual `mv` fails on an immutable
+ * dir). Uses `chflags uchg` on macOS and `chattr +i` on Linux, and silently
+ * no-ops where the flag is unsupported or not permitted (e.g. unprivileged CI) —
+ * the lock is a guard rail, never a deploy blocker. The legitimate restore and
+ * recover paths call this with `immutable = false` before moving the dir back.
+ *
+ * @param guardPath - Absolute path to the guard dir holding the real history
+ * @param immutable - `true` to lock, `false` to unlock
+ */
+export function setGuardImmutable(guardPath: string, immutable: boolean): void {
+	if (!fs.existsSync(guardPath)) {
+		return;
+	}
+
+	try {
+		if (process.platform === "darwin") {
+			execFileSync(
+				"chflags",
+				["-R", immutable ? "uchg" : "nouchg", guardPath],
+				{ stdio: "ignore" },
+			);
+		} else if (process.platform === "linux") {
+			execFileSync("chattr", ["-R", immutable ? "+i" : "-i", guardPath], {
+				stdio: "ignore",
+			});
+		}
+	} catch {
+		// Lacking the privilege to set the flag (common in CI) must never break the
+		// guard — the lock is best-effort hardening, not a hard dependency.
+	}
 }

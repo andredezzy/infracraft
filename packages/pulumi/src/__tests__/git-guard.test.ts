@@ -11,16 +11,31 @@ import {
 	gitGuard,
 	hideGit,
 	LEGACY_GUARD_DIRS,
+	LOCK_FILE_NAME,
 	recoverStaleGuard,
 	restoreGit,
+	STUB_README_NAME,
+	setGuardImmutable,
 } from "../git-guard";
 
 // Delegates to the real `git` binary by default so repo setup works, but lets a
 // single test force `git init` to fail and exercise hideGit's rollback path.
+// The OS immutability calls (chflags/chattr) are neutralised so tests never
+// actually lock temp dirs — keeping teardown portable and assertions
+// platform-agnostic while still recording the call for inspection.
 vi.mock("node:child_process", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("node:child_process")>();
 
-	return { ...actual, execFileSync: vi.fn(actual.execFileSync) };
+	const passthrough = actual.execFileSync;
+
+	return {
+		...actual,
+		execFileSync: vi.fn((...callArgs: Parameters<typeof passthrough>) =>
+			callArgs[0] === "chflags" || callArgs[0] === "chattr"
+				? ""
+				: passthrough(...callArgs),
+		),
+	};
 });
 
 // `gitGuard` constructs a `command.local.Command` and reads `runtime.isDryRun()`.
@@ -152,6 +167,74 @@ describe("hideGit", () => {
 		hideGit(dir);
 		expect(read(dir, GUARD_DIR, "MARKER")).toBe("real");
 		expect(exists(dir, ".git", "MARKER")).toBe(false);
+	});
+});
+
+describe("stub metadata and immutability lock", () => {
+	it("writes an agent-facing README and a deploy lock into the stub", () => {
+		const dir = makeRepo();
+
+		hideGit(dir);
+
+		const readme = read(dir, ".git", STUB_README_NAME);
+		expect(readme).toContain("Managed STUB");
+		expect(readme).toContain(GUARD_DIR);
+
+		const lock = JSON.parse(read(dir, ".git", LOCK_FILE_NAME)) as {
+			pid: number;
+			guardDir: string;
+			startedAt: string;
+		};
+
+		expect(lock.pid).toBe(process.pid);
+		expect(lock.guardDir).toBe(GUARD_DIR);
+		expect(typeof lock.startedAt).toBe("string");
+	});
+
+	it("locks the guard dir immutable on hide and unlocks it on restore", () => {
+		const dir = makeRepo();
+		const guardPath = path.join(dir, GUARD_DIR);
+		const lockFlag = process.platform === "darwin" ? "uchg" : "+i";
+		const unlockFlag = process.platform === "darwin" ? "nouchg" : "-i";
+
+		hideGit(dir);
+
+		const lockCall = vi
+			.mocked(execFileSync)
+			.mock.calls.filter(
+				(call) => call[0] === "chflags" || call[0] === "chattr",
+			)
+			.at(-1);
+
+		expect(lockCall?.[1]).toContain(lockFlag);
+		expect(lockCall?.[1]).toContain(guardPath);
+
+		restoreGit(dir);
+
+		const unlockCall = vi
+			.mocked(execFileSync)
+			.mock.calls.filter(
+				(call) => call[0] === "chflags" || call[0] === "chattr",
+			)
+			.at(-1);
+
+		expect(unlockCall?.[1]).toContain(unlockFlag);
+		expect(read(dir, ".git", "MARKER")).toBe("real");
+	});
+
+	it("setGuardImmutable no-ops when the guard dir is absent", () => {
+		const dir = makeEmptyDir();
+		vi.mocked(execFileSync).mockClear();
+
+		setGuardImmutable(path.join(dir, GUARD_DIR), true);
+
+		const flagCalls = vi
+			.mocked(execFileSync)
+			.mock.calls.filter(
+				(call) => call[0] === "chflags" || call[0] === "chattr",
+			);
+
+		expect(flagCalls).toHaveLength(0);
 	});
 });
 
