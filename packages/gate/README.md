@@ -113,7 +113,7 @@ Writes are merge-not-clobber: other keys in the native file are preserved. Verce
 
 ## Migrating from vergate
 
-The first interactive Vercel command (login, switch, deploy without an explicit account) checks whether you have vergate accounts stored. If gate has no Vercel accounts yet and vergate does, gate offers to migrate them automatically. vergate is deprecated in favor of gate.
+The first interactive Vercel command (switch, list, whoami, or deploy without an explicit account) checks whether you have vergate accounts stored. If gate has no Vercel accounts yet and vergate does, gate offers to migrate them automatically. vergate is deprecated in favor of gate.
 
 ## Library
 
