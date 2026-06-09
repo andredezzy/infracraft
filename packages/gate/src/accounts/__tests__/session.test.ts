@@ -39,6 +39,7 @@ function seed(session: ProviderSession): GateAccount {
 		identity: "andre",
 		session,
 	};
+
 	store.add(account);
 
 	return account;
@@ -48,6 +49,7 @@ beforeEach(() => {
 	store = new AccountStore(
 		fs.mkdtempSync(path.join(os.tmpdir(), "gate-session-")),
 	);
+
 	native = null;
 });
 
@@ -86,6 +88,7 @@ describe("ensureValidSession", () => {
 
 	it("refreshes an expired token and persists it", async () => {
 		const expired = Math.floor(Date.now() / 1000) - 10;
+
 		const account = seed({
 			token: "old",
 			refreshToken: "r",
@@ -108,11 +111,13 @@ describe("ensureValidSession", () => {
 
 	it("writes through to the native file when the refreshed account was active", async () => {
 		const expired = Math.floor(Date.now() / 1000) - 10;
+
 		const account = seed({
 			token: "old",
 			refreshToken: "r",
 			expiresAt: expired,
 		});
+
 		native = { token: "old" };
 
 		const provider = fakeProvider({
@@ -129,11 +134,13 @@ describe("ensureValidSession", () => {
 
 	it("does not write through when the refreshed account was not active", async () => {
 		const expired = Math.floor(Date.now() / 1000) - 10;
+
 		const account = seed({
 			token: "old",
 			refreshToken: "r",
 			expiresAt: expired,
 		});
+
 		native = { token: "someone-else" };
 
 		const provider = fakeProvider({
@@ -192,6 +199,23 @@ describe("ensureValidSession", () => {
 		const result = await ensureValidSession(provider, store, account);
 
 		expect(result.session.token).toBe("from-login");
+	});
+
+	it("falls through to login when identity cannot be confirmed mid-recovery", async () => {
+		const account = seed({ token: "dead" });
+		native = { token: "native-good" };
+
+		const provider = fakeProvider({
+			validate: vi.fn(async (token: string) => token !== "dead"),
+			identity: vi.fn(async () => {
+				throw new Error("revoked mid-flight");
+			}),
+		});
+
+		const result = await ensureValidSession(provider, store, account);
+
+		expect(result.session.token).toBe("from-login");
+		expect(provider.login).toHaveBeenCalled();
 	});
 
 	it("falls back to a browser login as the last resort", async () => {

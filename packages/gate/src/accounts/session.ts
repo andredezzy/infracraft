@@ -83,10 +83,12 @@ export async function ensureValidSession(
 	const native = provider.readNativeSession();
 
 	if (native && (await provider.validate(native.token))) {
-		const nativeIdentity = await provider.identity(native.token);
-
-		if (nativeIdentity === account.identity) {
-			return adopt(native);
+		try {
+			if ((await provider.identity(native.token)) === account.identity) {
+				return adopt(native);
+			}
+		} catch {
+			// Could not confirm whose session this is — never adopt it; re-login instead.
 		}
 	}
 
