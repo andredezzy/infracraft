@@ -129,6 +129,7 @@ export function makeDeployCommand(provider: GateProvider, store: AccountStore) {
 		},
 		async run({ rawArgs }) {
 			p.intro(`gate ${provider.binary} ${provider.layout.deployVerb}`);
+
 			await runAction(() =>
 				runDeployCommand(provider, store, rawArgs as string[]),
 			);

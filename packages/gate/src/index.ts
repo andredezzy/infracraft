@@ -1,3 +1,4 @@
+export { SandboxMode } from "@infracraft/sandbox";
 export { detectActiveAccount, ensureValidSession } from "./accounts/session";
 export type { GateAccount } from "./accounts/store";
 export { AccountStore } from "./accounts/store";

@@ -38,6 +38,7 @@ describe("makeProviderNamespace", () => {
 				{ subCommands?: Record<string, unknown> }
 			>
 		).auth;
+
 		expect(Object.keys(auth.subCommands ?? {})).toEqual(
 			expect.arrayContaining(AUTH_VERBS),
 		);
