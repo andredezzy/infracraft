@@ -117,6 +117,11 @@ export const vercelProvider: GateProvider = {
 			const discovery = await fetch(
 				"https://vercel.com/.well-known/openid-configuration",
 			);
+
+			if (!discovery.ok) {
+				return null;
+			}
+
 			const { token_endpoint } = (await discovery.json()) as {
 				token_endpoint: string;
 			};

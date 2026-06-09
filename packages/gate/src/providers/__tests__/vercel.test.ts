@@ -22,10 +22,12 @@ describe("vercelProvider identity card", () => {
 	it("declares the contract surface", () => {
 		expect(vercelProvider.id).toBe(Provider.VERCEL);
 		expect(vercelProvider.binary).toBe("vercel");
+
 		expect(vercelProvider.layout).toEqual({
 			authMount: [],
 			deployVerb: "deploy",
 		});
+
 		expect(vercelProvider.loginArgv).toEqual(["vercel", "login"]);
 		expect(vercelProvider.refresh).toBeDefined();
 	});
@@ -56,6 +58,7 @@ describe("native session round-trip", () => {
 
 	it("writeNativeSession merges over unrelated keys", () => {
 		const file = process.env.GATE_VERCEL_AUTH_FILE as string;
+
 		fs.writeFileSync(
 			file,
 			JSON.stringify({ token: "old", skippedTeamSelection: true }),
@@ -68,12 +71,33 @@ describe("native session round-trip", () => {
 		});
 
 		const written = JSON.parse(fs.readFileSync(file, "utf-8"));
+
 		expect(written).toEqual({
 			token: "new",
 			refreshToken: "r2",
 			expiresAt: 9,
 			skippedTeamSelection: true,
 		});
+	});
+
+	it("writeNativeSession drops refreshToken when the new session has none", () => {
+		const file = process.env.GATE_VERCEL_AUTH_FILE as string;
+
+		fs.writeFileSync(
+			file,
+			JSON.stringify({
+				token: "old",
+				refreshToken: "old-r",
+				skippedTeamSelection: true,
+			}),
+		);
+
+		vercelProvider.writeNativeSession({ token: "new" });
+
+		const written = JSON.parse(fs.readFileSync(file, "utf-8"));
+		expect(written).not.toHaveProperty("refreshToken");
+		expect(written.token).toBe("new");
+		expect(written.skippedTeamSelection).toBe(true);
 	});
 });
 
@@ -94,6 +118,7 @@ describe("API calls", () => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValue(
 			new Response("{}", { status: 403 }),
 		);
+
 		expect(await vercelProvider.validate("tok")).toBe(false);
 
 		vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
@@ -150,6 +175,7 @@ describe("API calls", () => {
 		vi.spyOn(globalThis, "fetch").mockResolvedValue(
 			new Response("{}", { status: 400 }),
 		);
+
 		expect(
 			await vercelProvider.refresh?.({ token: "t", refreshToken: "r" }),
 		).toBeNull();
@@ -172,6 +198,7 @@ describe("deployCli", () => {
 			"--prod",
 			"--force",
 		]);
+
 		expect(command.env).toEqual({});
 	});
 });
