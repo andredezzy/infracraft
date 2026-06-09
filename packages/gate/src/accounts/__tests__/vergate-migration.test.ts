@@ -12,9 +12,11 @@ import {
 } from "../vergate-migration";
 
 let dir: string;
+let storeDir: string;
 
 beforeEach(() => {
 	dir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-vergate-"));
+	storeDir = fs.mkdtempSync(path.join(os.tmpdir(), "gate-vergate-store-"));
 	process.env.GATE_VERGATE_ACCOUNTS_FILE = path.join(dir, "accounts.json");
 });
 
@@ -76,7 +78,7 @@ describe("readVergateAccounts", () => {
 
 describe("shouldOfferVergateMigration", () => {
 	it("is true only when gate has no Vercel accounts and vergate has some", () => {
-		const store = new AccountStore(dir);
+		const store = new AccountStore(storeDir);
 		writeVergateFile([{ label: "a", username: "u", token: "t" }]);
 
 		expect(shouldOfferVergateMigration(store)).toBe(true);
@@ -87,17 +89,19 @@ describe("shouldOfferVergateMigration", () => {
 			identity: "u",
 			session: { token: "t" },
 		});
+
 		expect(shouldOfferVergateMigration(store)).toBe(false);
 	});
 
 	it("is false when vergate has nothing", () => {
-		expect(shouldOfferVergateMigration(new AccountStore(dir))).toBe(false);
+		expect(shouldOfferVergateMigration(new AccountStore(storeDir))).toBe(false);
 	});
 });
 
 describe("migrateVergateAccounts", () => {
 	it("copies accounts, skipping label collisions, and reports the count", () => {
-		const store = new AccountStore(dir);
+		const store = new AccountStore(storeDir);
+
 		store.add({
 			provider: Provider.VERCEL,
 			label: "work",
