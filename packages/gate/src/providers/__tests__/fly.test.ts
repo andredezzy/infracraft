@@ -24,10 +24,12 @@ afterEach(() => {
 describe("flyProvider identity card", () => {
 	it("declares the contract surface", () => {
 		expect(flyProvider.id).toBe(Provider.FLY);
+
 		expect(flyProvider.layout).toEqual({
 			authMount: ["auth"],
 			deployVerb: "deploy",
 		});
+
 		expect(flyProvider.loginArgv).toEqual(["fly", "auth", "login"]);
 		expect(flyProvider.refresh).toBeUndefined();
 	});

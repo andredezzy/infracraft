@@ -35,6 +35,7 @@ function resolveConfigDir(): string {
  */
 export class AccountStore {
 	private readonly file: string;
+	private cache: StoreData | null = null;
 
 	constructor(directory: string = resolveConfigDir()) {
 		this.file = path.join(directory, "accounts.json");
@@ -104,6 +105,10 @@ export class AccountStore {
 	}
 
 	private load(): StoreData {
+		if (this.cache !== null) {
+			return this.cache;
+		}
+
 		const raw = readTextFile(this.file);
 
 		if (raw === null) {
@@ -127,5 +132,6 @@ export class AccountStore {
 
 	private save(data: StoreData): void {
 		atomicWriteFile(this.file, JSON.stringify(data, null, 2));
+		this.cache = data;
 	}
 }
