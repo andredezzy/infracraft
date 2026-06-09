@@ -1,0 +1,39 @@
+import * as p from "@clack/prompts";
+import { defineCommand } from "citty";
+
+import type { AccountStore } from "../accounts/store";
+import type { GateProvider } from "../providers/provider";
+import { resolveAccount } from "./resolve-account";
+
+export async function runLogout(
+	provider: GateProvider,
+	store: AccountStore,
+	label: string | undefined,
+): Promise<void> {
+	const account = await resolveAccount(provider, store, label);
+
+	store.remove(provider.id, account.label);
+
+	p.log.success(`Removed "${account.label}" (${account.identity}).`);
+}
+
+export function makeLogoutCommand(provider: GateProvider, store: AccountStore) {
+	return defineCommand({
+		meta: {
+			name: "logout",
+			description: `Remove a stored ${provider.name} account`,
+		},
+		args: {
+			label: {
+				type: "positional",
+				description: "Account label",
+				required: false,
+			},
+		},
+		async run({ args }) {
+			p.intro(`gate ${provider.binary} logout`);
+			await runLogout(provider, store, args.label as string | undefined);
+			p.outro("Done!");
+		},
+	});
+}
