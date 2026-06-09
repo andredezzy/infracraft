@@ -3,6 +3,8 @@ import { library } from "@infracraft/config-tsdown/library";
 export default library({
 	entry: [
 		"src/railway/index.ts",
+		// Standalone runnable: `node dist/railway/bin/monitor-deployment.mjs` (invoked by RailwayDeploy).
+		"src/railway/bin/monitor-deployment.ts",
 		"src/neon/index.ts",
 		"src/vercel/index.ts",
 		"src/fly/index.ts",

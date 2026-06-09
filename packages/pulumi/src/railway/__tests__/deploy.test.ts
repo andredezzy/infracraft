@@ -71,7 +71,7 @@ beforeEach(() => {
 });
 
 describe("RailwayDeploy", () => {
-	it("inlines the token and appends the deploy-wait poller inside the sandbox", () => {
+	it("uploads with --detach and hands off to the monitor bin inside the sandbox", () => {
 		new RailwayDeploy(
 			"mesh",
 			{ triggers: [], railpackConfig: { apt: ["libatomic1"] } },
@@ -82,21 +82,28 @@ describe("RailwayDeploy", () => {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
-		expect(create).toContain("RAILWAY_TOKEN=tok_1 railway up --ci");
-		expect(create).toContain("node -e");
+		// Detached upload (no flaky build-log stream); JSON for the exact deployment id.
+		expect(create).toContain("RAILWAY_TOKEN=tok_1 railway up --detach --json");
+		// The CLI exit code no longer short-circuits: its output + exit are captured and
+		// handed to the API-authoritative monitor bin instead of an inline `node -e` blob.
+		expect(create).toContain("IC_UP_OUT=$(");
+		expect(create).toContain("IC_UP_EXIT=$?");
+		expect(create).toContain("bin/monitor-deployment.mjs");
+		expect(create).not.toContain("railway up --ci");
+		expect(create).not.toContain("node -e '"); // poller is a real module now, not inline
 		expect(create).toContain("railpack.json"); // setup runs in the sandbox
 		expect(create).toContain("git init -q && git add -A"); // stub mode
 		expect(commandCalls[0].args.environment).toBeUndefined(); // token is inlined, not env
-		// The deploy-wait poller's IC_* bindings must be wired (a rename/reorder
-		// here would otherwise fail silently — the poller can't poll without them).
+		// The monitor's IC_* bindings must be wired (a rename/reorder here would otherwise
+		// fail silently — the monitor can't poll without them).
 		expect(create).toContain("IC_TOK=tok_1");
 		expect(create).toContain("IC_PROJ=proj_1");
 		expect(create).toContain("IC_ENV=env_1");
 		expect(create).toContain("IC_SVC=svc_1");
-		// IC_SINCE is captured before `railway up` and forwarded to the poller, so
-		// it can tell the new deployment from the previous one by createdAt.
+		expect(create).toContain("IC_UP_EXIT=$IC_UP_EXIT");
+		// IC_SINCE is captured before `railway up` and forwarded as a createdAt fallback.
 		expect(create).toContain("IC_SINCE=$(node -e");
-		expect(create).toContain("IC_SINCE=$IC_SINCE node -e");
+		expect(create).toContain("IC_SINCE=$IC_SINCE");
 	});
 
 	it("escapes railpackConfig values containing an apostrophe (POSIX single-quote)", () => {
