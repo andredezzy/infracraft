@@ -53,7 +53,13 @@ export class AccountStore {
 	add(account: GateAccount): void {
 		const data = this.load();
 
-		if (this.find(account.provider, account.label)) {
+		const duplicate = data.accounts.some(
+			(candidate) =>
+				candidate.provider === account.provider &&
+				candidate.label === account.label,
+		);
+
+		if (duplicate) {
 			throw new Error(
 				`Account "${account.label}" already exists for ${account.provider}.`,
 			);

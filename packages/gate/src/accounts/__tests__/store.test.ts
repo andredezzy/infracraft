@@ -62,6 +62,7 @@ describe("AccountStore", () => {
 		store.remove(Provider.VERCEL, "personal");
 
 		expect(store.list(Provider.VERCEL)).toEqual([]);
+
 		expect(() => store.remove(Provider.VERCEL, "personal")).toThrow(
 			/not found/,
 		);
@@ -69,6 +70,7 @@ describe("AccountStore", () => {
 
 	it("updates a session in place", () => {
 		store.add(personal);
+
 		store.updateSession(Provider.VERCEL, "personal", {
 			token: "tok-2",
 			expiresAt: 99,
@@ -98,5 +100,18 @@ describe("AccountStore", () => {
 		expect(fs.statSync(path.join(dir, "accounts.json")).mode & 0o777).toBe(
 			0o600,
 		);
+	});
+
+	it("honors GATE_CONFIG_DIR for the default directory", () => {
+		process.env.GATE_CONFIG_DIR = dir;
+
+		try {
+			const defaultStore = new AccountStore();
+			defaultStore.add(personal);
+
+			expect(fs.existsSync(path.join(dir, "accounts.json"))).toBe(true);
+		} finally {
+			delete process.env.GATE_CONFIG_DIR;
+		}
 	});
 });
