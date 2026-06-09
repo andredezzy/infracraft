@@ -31,4 +31,17 @@ describe("splitDeployArgs", () => {
 			SandboxMode.NONE,
 		);
 	});
+
+	it("supports the --account=label equals form", () => {
+		const result = splitDeployArgs(["--account=work", "--prod"]);
+
+		expect(result.accountLabel).toBe("work");
+		expect(result.passthroughArgs).toEqual(["--prod"]);
+	});
+
+	it("--git-metadata after --no-sandbox wins too", () => {
+		expect(splitDeployArgs(["--no-sandbox", "--git-metadata"]).mode).toBe(
+			SandboxMode.ORIGINAL,
+		);
+	});
 });

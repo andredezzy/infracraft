@@ -8,6 +8,7 @@ import type { AccountStore } from "../accounts/store";
 import { runDeploy } from "../deploy/runner";
 import type { GateProvider } from "../providers/provider";
 import { resolveAccount } from "./resolve-account";
+import { runAction } from "./run-action";
 
 export interface SplitDeployArgs {
 	accountLabel: string | undefined;
@@ -25,6 +26,12 @@ export function splitDeployArgs(rawArgs: string[]): SplitDeployArgs {
 
 	for (let index = 0; index < rawArgs.length; index += 1) {
 		const arg = rawArgs[index] as string;
+
+		if (arg.startsWith("--account=")) {
+			accountLabel = arg.slice("--account=".length);
+
+			continue;
+		}
 
 		if (arg === "--account" || arg === "-a") {
 			accountLabel = rawArgs[index + 1];
@@ -67,6 +74,7 @@ export async function runDeployCommand(
 				"Not a git repository — skipping the sandbox, deploying natively.",
 			),
 		);
+
 		mode = SandboxMode.NONE;
 	}
 
@@ -104,6 +112,7 @@ export async function runDeployCommand(
 		p.log.error(
 			`${provider.binary} ${provider.layout.deployVerb} failed (exit code ${result.exitCode})`,
 		);
+
 		process.exitCode = result.exitCode;
 
 		return;
@@ -120,7 +129,9 @@ export function makeDeployCommand(provider: GateProvider, store: AccountStore) {
 		},
 		async run({ rawArgs }) {
 			p.intro(`gate ${provider.binary} ${provider.layout.deployVerb}`);
-			await runDeployCommand(provider, store, rawArgs as string[]);
+			await runAction(() =>
+				runDeployCommand(provider, store, rawArgs as string[]),
+			);
 		},
 	});
 }

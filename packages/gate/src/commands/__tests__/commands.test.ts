@@ -152,7 +152,9 @@ describe("runList", () => {
 		const lines = vi
 			.mocked(p.log.message)
 			.mock.calls.map((call) => String(call[0]));
+
 		expect(lines.find((line) => line.includes("b"))).toContain("active");
+
 		expect(
 			lines.find((line) => line.includes("a") && !line.includes("b")),
 		).not.toContain("active");
@@ -192,6 +194,7 @@ describe("vergate migration offer", () => {
 		const vergateDir = fs.mkdtempSync(
 			path.join(os.tmpdir(), "gate-cmd-vergate-"),
 		);
+
 		process.env.GATE_VERGATE_ACCOUNTS_FILE = path.join(
 			vergateDir,
 			"accounts.json",

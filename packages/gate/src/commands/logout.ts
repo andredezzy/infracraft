@@ -4,6 +4,7 @@ import { defineCommand } from "citty";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import { resolveAccount } from "./resolve-account";
+import { runAction } from "./run-action";
 
 export async function runLogout(
 	provider: GateProvider,
@@ -32,8 +33,11 @@ export function makeLogoutCommand(provider: GateProvider, store: AccountStore) {
 		},
 		async run({ args }) {
 			p.intro(`gate ${provider.binary} logout`);
-			await runLogout(provider, store, args.label as string | undefined);
-			p.outro("Done!");
+
+			await runAction(async () => {
+				await runLogout(provider, store, args.label as string | undefined);
+				p.outro("Done!");
+			});
 		},
 	});
 }

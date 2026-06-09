@@ -4,6 +4,7 @@ import pc from "picocolors";
 
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
+import { runAction } from "./run-action";
 
 export async function runImport(
 	provider: GateProvider,
@@ -24,12 +25,14 @@ export async function runImport(
 	}
 
 	const identity = await provider.identity(session.token);
+
 	const existing = store
 		.list(provider.id)
 		.find((account) => account.identity === identity);
 
 	if (existing) {
 		store.updateSession(provider.id, existing.label, session);
+
 		p.log.success(
 			`Updated tokens for "${pc.green(existing.label)}" (${identity}).`,
 		);
@@ -75,8 +78,11 @@ export function makeImportCommand(provider: GateProvider, store: AccountStore) {
 		},
 		async run() {
 			p.intro(`gate ${provider.binary} import`);
-			await runImport(provider, store);
-			p.outro("Done!");
+
+			await runAction(async () => {
+				await runImport(provider, store);
+				p.outro("Done!");
+			});
 		},
 	});
 }

@@ -6,6 +6,7 @@ import { detectActiveAccount } from "../accounts/session";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import { maybeOfferVergateMigration } from "./resolve-account";
+import { runAction } from "./run-action";
 
 export async function runList(
 	provider: GateProvider,
@@ -25,6 +26,7 @@ export async function runList(
 
 	for (const account of accounts) {
 		const marker = account.label === active?.label ? pc.green(" ● active") : "";
+
 		p.log.message(
 			`${pc.bold(account.label)}  ${pc.gray(account.identity)}${marker}`,
 		);
@@ -39,8 +41,11 @@ export function makeListCommand(provider: GateProvider, store: AccountStore) {
 		},
 		async run() {
 			p.intro(`gate ${provider.binary} list`);
-			await runList(provider, store);
-			p.outro("Done!");
+
+			await runAction(async () => {
+				await runList(provider, store);
+				p.outro("Done!");
+			});
 		},
 	});
 }

@@ -26,6 +26,7 @@ export async function maybeOfferVergateMigration(
 
 	if (confirmed === true) {
 		const count = migrateVergateAccounts(store);
+
 		p.log.success(
 			`Migrated ${count} account${count === 1 ? "" : "s"} from vergate.`,
 		);

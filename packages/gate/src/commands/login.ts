@@ -4,6 +4,7 @@ import pc from "picocolors";
 
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
+import { runAction } from "./run-action";
 
 export async function runLogin(
 	provider: GateProvider,
@@ -52,8 +53,11 @@ export function makeLoginCommand(provider: GateProvider, store: AccountStore) {
 		},
 		async run() {
 			p.intro(`gate ${provider.binary} login`);
-			await runLogin(provider, store);
-			p.outro("Done!");
+
+			await runAction(async () => {
+				await runLogin(provider, store);
+				p.outro("Done!");
+			});
 		},
 	});
 }

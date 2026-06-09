@@ -6,6 +6,7 @@ import { detectActiveAccount } from "../accounts/session";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import { resolveAccount } from "./resolve-account";
+import { runAction } from "./run-action";
 
 export async function runWhoami(
 	provider: GateProvider,
@@ -21,6 +22,7 @@ export async function runWhoami(
 
 	p.log.message(`Label:    ${pc.bold(account.label)}`);
 	p.log.message(`Identity: ${pc.bold(account.identity)}`);
+
 	p.log.message(
 		`Status:   ${valid ? pc.green("valid") : pc.red("invalid or expired")}`,
 	);
@@ -41,8 +43,11 @@ export function makeWhoamiCommand(provider: GateProvider, store: AccountStore) {
 		},
 		async run({ args }) {
 			p.intro(`gate ${provider.binary} whoami`);
-			await runWhoami(provider, store, args.label as string | undefined);
-			p.outro("Done!");
+
+			await runAction(async () => {
+				await runWhoami(provider, store, args.label as string | undefined);
+				p.outro("Done!");
+			});
 		},
 	});
 }
