@@ -65,12 +65,9 @@ export function buildDeployScript(
 		return null;
 	}
 
-	const envPrefix = Object.entries(command.env)
-		.map(([key, value]) => `${key}=${shellEscape(value)}`)
-		.join(" ");
-
-	const argvString = command.argv.map(shellEscape).join(" ");
-	const cli = envPrefix ? `${envPrefix} ${argvString}` : argvString;
+	// Token-bearing env vars ride the spawn env (inherited by sh), never the
+	// script string — a script literal would be visible in `ps` output.
+	const cli = command.argv.map(shellEscape).join(" ");
 
 	return buildSandboxScript({ mode, appName, cli });
 }
@@ -101,7 +98,11 @@ export async function runDeploy(
 		spawned =
 			script === null
 				? spawner(command.argv, { ...process.env, ...command.env }, cwd)
-				: spawner(["/bin/sh", "-c", script], { ...process.env }, cwd);
+				: spawner(
+						["/bin/sh", "-c", script],
+						{ ...process.env, ...command.env },
+						cwd,
+					);
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			throw new Error(
@@ -132,6 +133,8 @@ export async function runDeploy(
 		const { done, value } = await reader.read();
 
 		if (done) {
+			buffer += decoder.decode();
+
 			break;
 		}
 

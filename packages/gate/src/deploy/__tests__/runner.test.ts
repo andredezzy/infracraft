@@ -51,7 +51,7 @@ describe("buildDeployScript", () => {
 		).toBeNull();
 	});
 
-	it("STUB mode wraps the CLI in a sandbox script with env prefixes", () => {
+	it("STUB mode wraps the CLI in a sandbox script, keeping env out of the script", () => {
 		const script = buildDeployScript(
 			{ argv: ["vercel", "deploy"], env: { FLY_API_TOKEN: "t" } },
 			SandboxMode.STUB,
@@ -59,7 +59,8 @@ describe("buildDeployScript", () => {
 		);
 
 		expect(script).toContain("git init -q");
-		expect(script).toContain("FLY_API_TOKEN='t' 'vercel' 'deploy'");
+		expect(script).toContain("'vercel' 'deploy'");
+		expect(script).not.toContain("FLY_API_TOKEN");
 	});
 
 	it("ORIGINAL mode produces a sandbox script without the stub git", () => {
@@ -140,11 +141,13 @@ describe("runDeploy", () => {
 		expect(seenEnv.EXTRA).toBe("1");
 	});
 
-	it("runs /bin/sh -c <script> in STUB mode", async () => {
+	it("runs /bin/sh -c <script> with command env in STUB mode", async () => {
 		let seenArgv: string[] = [];
+		let seenEnv: Record<string, string | undefined> = {};
 
-		const spawner: DeploySpawner = (argv) => {
+		const spawner: DeploySpawner = (argv, env) => {
 			seenArgv = argv;
+			seenEnv = env;
 
 			return { stdout: linesToStream([]), exited: Promise.resolve(0) };
 		};
@@ -160,6 +163,26 @@ describe("runDeploy", () => {
 		expect(seenArgv[0]).toBe("/bin/sh");
 		expect(seenArgv[1]).toBe("-c");
 		expect(seenArgv[2]).toContain("git init -q");
+		// env vars must not be inlined in the script string (would be visible in ps)
+		expect(seenArgv[2]).not.toContain("EXTRA=");
+		expect(seenEnv.EXTRA).toBe("1");
+	});
+
+	it("reassembles a line split across two chunks", async () => {
+		const spawner: DeploySpawner = () => ({
+			stdout: linesToStream(["https://my-app-abc.", "vercel.app\nDone\n"]),
+			exited: Promise.resolve(0),
+		});
+
+		const result = await runDeploy({
+			provider,
+			token: "tok",
+			passthroughArgs: [],
+			mode: SandboxMode.NONE,
+			spawner,
+		});
+
+		expect(result.url).toBe("https://my-app-abc.vercel.app");
 	});
 
 	it("turns a spawner ENOENT into a friendly install message", async () => {
