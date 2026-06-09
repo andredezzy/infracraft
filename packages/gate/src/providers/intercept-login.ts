@@ -25,9 +25,9 @@ const defaultSpawner: LoginSpawner = async (argv) => {
 };
 
 /**
- * The vergate interception dance, generalized: hold the native auth file aside
- * so the native browser login mints a FRESH session, capture it, then restore
- * whatever was there before. The user's current native login is never lost.
+ * Holds the native auth file aside so the native browser login mints a FRESH
+ * session, captures it, then restores whatever was there before. The user's
+ * current native login is never lost.
  */
 export async function interceptNativeLogin(
 	target: LoginTarget,

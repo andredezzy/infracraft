@@ -44,6 +44,7 @@ describe("interceptNativeLogin", () => {
 		const session = await interceptNativeLogin(target(), loginSucceeds);
 
 		expect(session.token).toBe("fresh");
+
 		expect(JSON.parse(fs.readFileSync(authFile, "utf-8")).token).toBe(
 			"original",
 		);
@@ -62,6 +63,7 @@ describe("interceptNativeLogin", () => {
 		await expect(interceptNativeLogin(target(), loginFails)).rejects.toThrow(
 			/login failed/i,
 		);
+
 		expect(JSON.parse(fs.readFileSync(authFile, "utf-8")).token).toBe(
 			"original",
 		);
@@ -77,6 +79,7 @@ describe("interceptNativeLogin", () => {
 		await expect(interceptNativeLogin(target(), spawnerThrows)).rejects.toThrow(
 			"ENOENT-ish",
 		);
+
 		expect(JSON.parse(fs.readFileSync(authFile, "utf-8")).token).toBe(
 			"original",
 		);
@@ -88,5 +91,7 @@ describe("interceptNativeLogin", () => {
 		await expect(interceptNativeLogin(target(), noWrite)).rejects.toThrow(
 			/could not read/i,
 		);
+
+		expect(fs.existsSync(authFile)).toBe(false);
 	});
 });
