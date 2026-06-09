@@ -2,6 +2,8 @@
 	"workspaces": {
 		".": {},
 		"packages/pulumi": {},
+		"packages/sandbox": {},
+		"packages/gate": {},
 		"packages/config-tsdown": {},
 		"packages/config-typescript": {},
 		"packages/config-test": {}

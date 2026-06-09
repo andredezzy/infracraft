@@ -1,0 +1,39 @@
+{
+	"name": "@infracraft/sandbox",
+	"version": "0.0.0",
+	"type": "module",
+	"license": "MIT",
+	"description": "Isolated /tmp working copies for CLI deploys — sandbox shell-script builders shared by @infracraft/pulumi and @infracraft/gate.",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/andredezzy/infracraft",
+		"directory": "packages/sandbox"
+	},
+	"publishConfig": {
+		"access": "public"
+	},
+	"exports": {
+		".": {
+			"types": "./dist/index.d.mts",
+			"default": "./dist/index.mjs"
+		}
+	},
+	"files": [
+		"dist/**"
+	],
+	"scripts": {
+		"build": "tsdown",
+		"dev": "tsdown --watch",
+		"typecheck": "tsc --noEmit",
+		"test": "vitest run",
+		"lint": "biome check --write"
+	},
+	"devDependencies": {
+		"@infracraft/config-test": "workspace:*",
+		"@infracraft/config-tsdown": "workspace:*",
+		"@infracraft/typescript-config": "workspace:*",
+		"@types/node": "25.9.1",
+		"typescript": "6.0.3",
+		"vitest": "4.1.7"
+	}
+}
