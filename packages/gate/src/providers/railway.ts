@@ -55,7 +55,7 @@ async function queryMe(token: string): Promise<RailwayMeResponse | null> {
 			return null;
 		}
 
-		return (await response.clone().json()) as RailwayMeResponse;
+		return (await response.json()) as RailwayMeResponse;
 	} catch {
 		return null;
 	}

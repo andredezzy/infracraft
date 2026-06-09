@@ -62,14 +62,26 @@ describe("native session round-trip", () => {
 		expect(written.user.token).toBe("new");
 		expect(written.user.name).toBe("x");
 	});
+
+	it("writeNativeSession creates the user object when the config has none", () => {
+		fs.writeFileSync(file, JSON.stringify({ projects: { keep: "me" } }));
+
+		railwayProvider.writeNativeSession({ token: "new" });
+
+		const written = JSON.parse(fs.readFileSync(file, "utf-8"));
+		expect(written.projects).toEqual({ keep: "me" });
+		expect(written.user.token).toBe("new");
+	});
 });
 
 describe("API calls", () => {
 	it("validate + identity query the GraphQL me endpoint", async () => {
-		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-			new Response(JSON.stringify({ data: { me: { email: "a@b.c" } } }), {
-				status: 200,
-			}),
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+			Promise.resolve(
+				new Response(JSON.stringify({ data: { me: { email: "a@b.c" } } }), {
+					status: 200,
+				}),
+			),
 		);
 
 		expect(await railwayProvider.validate("tok")).toBe(true);
@@ -77,6 +89,7 @@ describe("API calls", () => {
 
 		const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
 		expect(url).toBe("https://backboard.railway.com/graphql/v2");
+
 		expect((init.headers as Record<string, string>).Authorization).toBe(
 			"Bearer tok",
 		);
@@ -89,6 +102,22 @@ describe("API calls", () => {
 				{ status: 200 },
 			),
 		);
+
+		expect(await railwayProvider.validate("tok")).toBe(false);
+	});
+
+	it("identity throws when the response has no email or name", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ data: { me: {} } }), { status: 200 }),
+		);
+
+		await expect(railwayProvider.identity("tok")).rejects.toThrow(
+			/failed to resolve/i,
+		);
+	});
+
+	it("validate is false on network error", async () => {
+		vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
 
 		expect(await railwayProvider.validate("tok")).toBe(false);
 	});
