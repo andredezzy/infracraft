@@ -29,6 +29,7 @@ vi.mock("@pulumi/pulumi", () => {
 		v && typeof v === "object" && "v" in (v as object)
 			? String((v as { v: unknown }).v)
 			: String(v);
+
 	return {
 		output: (v: unknown) => ({
 			apply: (fn: (x: unknown) => unknown) => ({
@@ -58,6 +59,7 @@ import { RailwayDeploy } from "../deploy";
 
 const sandbox = new DeploySandbox("deploy-sandbox");
 const gitGuard = new GitGuard("git-guard");
+
 const ctx = {
 	provider: {} as never,
 	project: { id: "proj_1" } as never,
@@ -77,11 +79,13 @@ describe("RailwayDeploy", () => {
 			{ triggers: [], railpackConfig: { apt: ["libatomic1"] } },
 			{ ...ctx, dependsOn: [sandbox, gitGuard] },
 		);
+
 		const create = (
 			commandCalls[0].args.create as {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
+
 		// Detached upload (no flaky build-log stream); JSON for the exact deployment id.
 		expect(create).toContain("RAILWAY_TOKEN=tok_1 railway up --detach --json");
 		// The CLI exit code no longer short-circuits: its output + exit are captured and
@@ -112,11 +116,13 @@ describe("RailwayDeploy", () => {
 			{ triggers: [], railpackConfig: { note: "it's fine" } },
 			{ ...ctx, dependsOn: [sandbox, gitGuard] },
 		);
+
 		const create = (
 			commandCalls[0].args.create as {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
+
 		// `printf '%s'` (not a bare format) + POSIX ' -> '\'' escaping.
 		expect(create).toContain("printf '%s' '");
 		expect(create).toContain("it'\\''s fine"); // apostrophe escaped, not broken

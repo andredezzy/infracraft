@@ -24,6 +24,7 @@ function makeFetch(routes: {
 	const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
 		if (rejectsLeft > 0) {
 			rejectsLeft--;
+
 			throw new Error("network down");
 		}
 
@@ -104,6 +105,7 @@ describe("parseDeploymentId", () => {
 	it("extracts the id from a Build Logs URL query param", () => {
 		const out =
 			"Build Logs: https://railway.com/project/p/service/s?id=11111111-2222-3333-4444-555555555555&";
+
 		expect(parseDeploymentId(out)).toBe("11111111-2222-3333-4444-555555555555");
 	});
 

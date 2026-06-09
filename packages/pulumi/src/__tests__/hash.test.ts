@@ -83,16 +83,20 @@ describe("hash", () => {
 
 		beforeEach(() => {
 			root = fs.mkdtempSync(path.join(os.tmpdir(), "hashapp-"));
+
 			// web -> @acme/ui -> @acme/core ; @acme/other is unrelated.
 			write(
 				"apps/web/package.json",
 				'{"name":"@acme/web","dependencies":{"@acme/ui":"workspace:*"}}',
 			);
+
 			write("apps/web/index.ts", "export const web = 1;");
+
 			write(
 				"packages/ui/package.json",
 				'{"name":"@acme/ui","dependencies":{"@acme/core":"workspace:*"}}',
 			);
+
 			write("packages/ui/ui.ts", "export const ui = 1;");
 			write("packages/core/package.json", '{"name":"@acme/core"}');
 			write("packages/core/core.ts", "export const core = 1;");

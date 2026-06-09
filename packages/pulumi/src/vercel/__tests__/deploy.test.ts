@@ -35,6 +35,7 @@ vi.mock("@pulumi/pulumi", () => {
 			apply: (fn2: (x: unknown) => unknown) => fn2(fn(v)),
 		}),
 	});
+
 	return {
 		output,
 		runtime: { isDryRun: () => false },
@@ -57,6 +58,7 @@ const provider = {
 	token: "vercel-token",
 	teamId: "team_abc",
 } as unknown as VercelProvider;
+
 const sandbox = new DeploySandbox("deploy-sandbox");
 
 beforeEach(() => {
@@ -81,18 +83,22 @@ describe("VercelDeploy", () => {
 			{ projectId: "prj_1", triggers: ["h"] },
 			{ provider, dependsOn: [sandbox] },
 		);
+
 		expect(commandCalls).toHaveLength(1);
 		const { name, args } = commandCalls[0];
 		expect(name).toBe("nexus");
 		expect(args.dir).toBeUndefined();
+
 		expect(args.environment).toEqual({
 			VERCEL_TOKEN: "vercel-token",
 			VERCEL_ORG_ID: "team_abc",
 			VERCEL_PROJECT_ID: "prj_1",
 		});
+
 		const create = (
 			args.create as { apply: (f: (s: string) => string) => string }
 		).apply((s) => s);
+
 		expect(create).toContain("vercel deploy --prod --yes");
 	});
 
@@ -102,6 +108,7 @@ describe("VercelDeploy", () => {
 			{ projectId: "prj_1", triggers: [] },
 			{ provider, dependsOn: [sandbox] },
 		);
+
 		expect(deploy.deploymentUrl).toBe("https://nexus.vercel.app");
 	});
 });

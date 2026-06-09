@@ -48,6 +48,7 @@ import { DeploySandbox } from "../../sandbox";
 import { FlyDeploy } from "../deploy";
 
 const sandbox = new DeploySandbox("deploy-sandbox");
+
 const ctx = {
 	provider: { token: "fly-token" } as never,
 	app: { name: "api" } as never,
@@ -67,15 +68,19 @@ describe("FlyDeploy", () => {
 			},
 			{ ...ctx, dependsOn: [sandbox] },
 		);
+
 		const create = (
 			commandCalls[0].args.create as {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
+
 		expect(create).toContain("mkdir -p .fly");
+
 		expect(create).toContain(
 			"fly deploy --config .fly/rby-api.toml --remote-only",
 		);
+
 		const env = commandCalls[0].args.environment as Record<string, string>;
 		expect(env.FLY_API_TOKEN).toBe("fly-token");
 		expect(typeof env.FLY_TOML_CONTENT).toBe("string");

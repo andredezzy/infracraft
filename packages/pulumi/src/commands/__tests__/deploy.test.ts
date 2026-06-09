@@ -35,6 +35,7 @@ vi.mock("@pulumi/pulumi", () => {
 			apply: (fn2: (x: unknown) => unknown) => fn2(fn(v)),
 		}),
 	});
+
 	return {
 		output,
 		interpolate: (strings: TemplateStringsArray, ...vals: unknown[]) =>
@@ -76,14 +77,17 @@ describe("createDeployCommand", () => {
 			},
 			{ dependsOn: [sandbox, gitGuard] },
 		);
+
 		const create = (
 			commandCalls[0].args.create as {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
+
 		expect(create).toContain(
 			'mktemp -d "/tmp/infracraft/$PROJECT-staging-nexus.',
 		);
+
 		expect(create).toContain("git init -q && git add -A");
 		expect(create).toContain("apps\\/mesh");
 	});
@@ -93,11 +97,13 @@ describe("createDeployCommand", () => {
 			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
+
 		const create = (
 			commandCalls[0].args.create as {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
+
 		expect(create).toContain('cp -c -R "$REPO/.git"');
 		expect(create).not.toContain("git init");
 	});
@@ -107,11 +113,13 @@ describe("createDeployCommand", () => {
 			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
 			{},
 		);
+
 		const create = (
 			commandCalls[0].args.create as {
 				apply: (f: (s: string) => string) => string;
 			}
 		).apply((s) => s);
+
 		expect(create).not.toContain("mktemp");
 		expect(create).toContain('cd "$REPO"');
 	});
@@ -130,6 +138,7 @@ describe("createDeployCommand", () => {
 			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
+
 		expect(deploymentUrl).toBe("https://x.app");
 	});
 
@@ -143,8 +152,10 @@ describe("createDeployCommand", () => {
 			},
 			{ dependsOn: [sandbox] },
 		);
+
 		expect(commandCalls[0].args.environment).toEqual({ FLY_API_TOKEN: "t" });
 		expect(commandCalls[0].args.triggers).toEqual(["h"]);
+
 		expect(
 			(commandCalls[0].opts as { dependsOn: unknown[] }).dependsOn,
 		).toEqual([sandbox]);

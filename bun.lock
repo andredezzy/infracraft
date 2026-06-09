@@ -58,6 +58,7 @@
       "devDependencies": {
         "@infracraft/config-test": "workspace:*",
         "@infracraft/config-tsdown": "workspace:*",
+        "@infracraft/sandbox": "workspace:*",
         "@infracraft/typescript-config": "workspace:*",
         "@pulumi/command": "1.2.1",
         "@pulumi/pulumi": "3.243.0",

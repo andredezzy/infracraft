@@ -146,6 +146,7 @@ describe("prepareSandboxWorkspace", () => {
 
 	it("sweeps entries older than the stale threshold", () => {
 		vi.mocked(fs.readdirSync).mockReturnValue(["old-sandbox.abc"] as never);
+
 		vi.mocked(fs.statSync).mockReturnValue({
 			mtimeMs: Date.now() - 4 * 60 * 60 * 1000,
 		} as never);

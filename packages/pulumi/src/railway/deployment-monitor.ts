@@ -296,8 +296,10 @@ export async function monitorRailwayDeployment(
 	deps: MonitorDeps,
 ): Promise<MonitorResult> {
 	const resolveAttempts = input.resolveAttempts ?? DEFAULTS.resolveAttempts;
+
 	const resolveIntervalMs =
 		input.resolveIntervalMs ?? DEFAULTS.resolveIntervalMs;
+
 	const pollAttempts = input.pollAttempts ?? DEFAULTS.pollAttempts;
 	const pollIntervalMs = input.pollIntervalMs ?? DEFAULTS.pollIntervalMs;
 	const failureLogLimit = input.failureLogLimit ?? DEFAULTS.failureLogLimit;
