@@ -1,0 +1,13 @@
+{
+	"extends": "@infracraft/typescript-config/base.json",
+	"compilerOptions": {
+		"rootDir": "./src",
+		"outDir": "./dist",
+		"composite": false,
+		"module": "esnext",
+		"moduleResolution": "bundler",
+		"types": ["bun"]
+	},
+	"include": ["src/**/*.ts"],
+	"exclude": ["node_modules", "dist", "**/*.test.ts"]
+}
