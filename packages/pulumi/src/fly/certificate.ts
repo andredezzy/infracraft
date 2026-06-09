@@ -17,7 +17,7 @@ export interface FlyDnsRequirements {
 }
 
 /** Resolved inputs for the Fly certificate dynamic provider. */
-export interface FlyCertificateInputs {
+interface FlyCertificateInputs {
 	/** Fly API token. */
 	token: string;
 

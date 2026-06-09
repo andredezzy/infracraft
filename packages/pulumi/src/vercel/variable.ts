@@ -5,7 +5,7 @@ import type { VercelProvider } from "./provider";
 const VERCEL_API_URL = "https://api.vercel.com";
 
 /** Resolved inputs for the Vercel variable dynamic provider. */
-export interface VercelVariableInputs {
+interface VercelVariableInputs {
 	/** Vercel API bearer token. */
 	token: string;
 

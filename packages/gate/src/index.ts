@@ -11,6 +11,7 @@ export type {
 	DeployRunOptions,
 	DeployRunResult,
 	DeploySpawner,
+	SpawnedDeploy,
 } from "./deploy/runner";
 export { runDeploy } from "./deploy/runner";
 export { flyProvider } from "./providers/fly";

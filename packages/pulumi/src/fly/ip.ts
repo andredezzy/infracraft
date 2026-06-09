@@ -16,7 +16,7 @@ export enum FlyIpType {
 }
 
 /** Resolved inputs for the Fly IP dynamic provider. */
-export interface FlyIpInputs {
+interface FlyIpInputs {
 	/** Fly API token. */
 	token: string;
 

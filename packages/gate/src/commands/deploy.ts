@@ -59,7 +59,7 @@ function isInsideGitRepo(): boolean {
 	return result.exitCode === 0;
 }
 
-export async function runDeployCommand(
+async function runDeployCommand(
 	provider: GateProvider,
 	store: AccountStore,
 	rawArgs: string[],

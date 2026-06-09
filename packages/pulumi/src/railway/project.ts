@@ -3,7 +3,7 @@ import { RailwayClient } from "./client";
 import type { RailwayProvider } from "./provider";
 
 /** Resolved inputs for the Railway project dynamic provider. */
-export interface RailwayProjectInputs {
+interface RailwayProjectInputs {
 	/** Railway API bearer token. */
 	token: string;
 

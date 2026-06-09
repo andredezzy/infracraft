@@ -4,7 +4,7 @@ import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
 
 /** Resolved inputs for the Fly app dynamic provider. */
-export interface FlyAppInputs {
+interface FlyAppInputs {
 	/** Fly API token. */
 	token: string;
 

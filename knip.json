@@ -1,12 +1,24 @@
 {
 	"workspaces": {
 		".": {},
-		"packages/pulumi": {},
+		"packages/pulumi": {
+			"ignoreMembers": [
+				"ROLLING",
+				"IMMEDIATE",
+				"CANARY",
+				"ALWAYS",
+				"NEVER",
+				"STOP",
+				"SUSPEND",
+				"CONNECTIONS"
+			]
+		},
 		"packages/sandbox": {},
 		"packages/gate": {},
 		"packages/config-tsdown": {},
 		"packages/config-typescript": {},
-		"packages/config-test": {}
-	},
-	"ignore": ["dist", ".turbo"]
+		"packages/config-test": {
+			"ignoreDependencies": ["@vitest/coverage-v8"]
+		}
+	}
 }

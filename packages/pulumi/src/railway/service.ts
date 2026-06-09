@@ -35,7 +35,7 @@ interface RailwayServiceSource {
 }
 
 /** Resolved inputs for the Railway service dynamic provider. */
-export interface RailwayServiceInputs {
+interface RailwayServiceInputs {
 	/** Railway API bearer token. */
 	token: string;
 

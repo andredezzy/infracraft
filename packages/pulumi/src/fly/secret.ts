@@ -5,7 +5,7 @@ import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
 
 /** Resolved inputs for the Fly secret dynamic provider. */
-export interface FlySecretInputs {
+interface FlySecretInputs {
 	/** Fly API token. */
 	token: string;
 

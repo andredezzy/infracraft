@@ -6,7 +6,7 @@ import type { RailwayProvider } from "./provider";
 import type { RailwayService } from "./service";
 
 /** Resolved inputs for the Railway domain dynamic provider. */
-export interface RailwayDomainInputs {
+interface RailwayDomainInputs {
 	/** Railway API bearer token. */
 	token: string;
 

@@ -3,7 +3,7 @@ import { NeonClient } from "./client";
 import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon project dynamic provider. */
-export interface NeonProjectInputs {
+interface NeonProjectInputs {
 	/** Neon API key. */
 	apiKey: string;
 

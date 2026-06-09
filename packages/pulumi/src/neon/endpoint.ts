@@ -5,7 +5,7 @@ import type { NeonProject } from "./project";
 import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon endpoint dynamic provider. */
-export interface NeonEndpointInputs {
+interface NeonEndpointInputs {
 	/** Neon API key. */
 	apiKey: string;
 

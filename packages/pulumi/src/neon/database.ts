@@ -5,7 +5,7 @@ import type { NeonProject } from "./project";
 import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon database dynamic provider. */
-export interface NeonDatabaseInputs {
+interface NeonDatabaseInputs {
 	/** Neon API key. */
 	apiKey: string;
 

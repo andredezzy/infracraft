@@ -15,6 +15,7 @@ export type {
 	FlyBuildConfig,
 	FlyCheck,
 	FlyConcurrency,
+	FlyCpuCount,
 	FlyDeployConfig,
 	FlyHttpService,
 	FlyMount,
