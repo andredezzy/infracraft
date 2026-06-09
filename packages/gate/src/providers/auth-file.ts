@@ -1,20 +1,17 @@
-import {
-	chmodSync,
-	existsSync,
-	mkdirSync,
-	readFileSync,
-	renameSync,
-	writeFileSync,
-} from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
 /** Reads a file as UTF-8, or null when it does not exist. */
 export function readTextFile(filePath: string): string | null {
-	if (!existsSync(filePath)) {
-		return null;
-	}
+	try {
+		return readFileSync(filePath, "utf-8");
+	} catch (error) {
+		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+			return null;
+		}
 
-	return readFileSync(filePath, "utf-8");
+		throw error;
+	}
 }
 
 /**
@@ -31,5 +28,4 @@ export function atomicWriteFile(filePath: string, content: string): void {
 
 	writeFileSync(tempPath, content, { encoding: "utf-8", mode: 0o600 });
 	renameSync(tempPath, filePath);
-	chmodSync(filePath, 0o600);
 }
