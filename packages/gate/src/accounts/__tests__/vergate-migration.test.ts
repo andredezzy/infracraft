@@ -22,6 +22,8 @@ beforeEach(() => {
 
 afterEach(() => {
 	delete process.env.GATE_VERGATE_ACCOUNTS_FILE;
+	fs.rmSync(dir, { recursive: true, force: true });
+	fs.rmSync(storeDir, { recursive: true, force: true });
 });
 
 function writeVergateFile(accounts: unknown): void {
@@ -73,6 +75,20 @@ describe("readVergateAccounts", () => {
 		);
 
 		expect(readVergateAccounts()).toEqual([]);
+	});
+
+	it("skips malformed entries (missing token or label)", () => {
+		writeVergateFile([
+			{ label: "good", username: "andre", token: "t" },
+			{ label: "no-token", username: "andre" },
+			{ username: "no-label", token: "t2" },
+			{ label: "", username: "empty-label", token: "t3" },
+		]);
+
+		const accounts = readVergateAccounts();
+
+		expect(accounts).toHaveLength(1);
+		expect(accounts[0]?.label).toBe("good");
 	});
 });
 

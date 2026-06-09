@@ -30,29 +30,38 @@ function resolveVergateFile(): string {
 /** Reads vergate's store read-only and maps it to gate accounts. Best-effort:
  * any problem yields [] — migration must never block gate. */
 export function readVergateAccounts(): GateAccount[] {
-	const raw = readTextFile(resolveVergateFile());
-
-	if (raw === null) {
-		return [];
-	}
-
 	try {
+		const raw = readTextFile(resolveVergateFile());
+
+		if (raw === null) {
+			return [];
+		}
+
 		const data = JSON.parse(raw) as { accounts?: VergateAccount[] };
 
 		if (!Array.isArray(data.accounts)) {
 			return [];
 		}
 
-		return data.accounts.map((account) => ({
-			provider: Provider.VERCEL,
-			label: account.label,
-			identity: account.username,
-			session: {
-				token: account.token,
-				refreshToken: account.refreshToken,
-				expiresAt: account.expiresAt,
-			},
-		}));
+		return data.accounts
+			.filter(
+				(account) =>
+					typeof account.label === "string" &&
+					account.label.length > 0 &&
+					typeof account.username === "string" &&
+					typeof account.token === "string" &&
+					account.token.length > 0,
+			)
+			.map((account) => ({
+				provider: Provider.VERCEL,
+				label: account.label,
+				identity: account.username,
+				session: {
+					token: account.token,
+					refreshToken: account.refreshToken,
+					expiresAt: account.expiresAt,
+				},
+			}));
 	} catch {
 		return [];
 	}
