@@ -154,11 +154,11 @@ describe("runList", () => {
 			.mocked(p.log.message)
 			.mock.calls.map((call) => String(call[0]));
 
-		expect(lines.find((line) => line.includes("b"))).toContain("active");
+		expect(lines.find((line) => line.includes("b"))).toContain("●");
 
 		expect(
 			lines.find((line) => line.includes("a") && !line.includes("b")),
-		).not.toContain("active");
+		).not.toContain("●");
 	});
 });
 
@@ -354,12 +354,14 @@ describe("active marker with healed tokens", () => {
 		seed("hat", "old-2");
 		seed("dz0", "t9");
 		store.remove(Provider.VERCEL, "dz0");
+
 		store.add({
 			provider: Provider.VERCEL,
 			label: "dz0",
 			identity: "dz0btc",
 			session: { token: "t9" },
 		});
+
 		native = { token: "fresh-tok" };
 
 		await runList(fakeProvider(), store);
@@ -367,9 +369,10 @@ describe("active marker with healed tokens", () => {
 		const lines = vi
 			.mocked(p.log.message)
 			.mock.calls.map((call) => String(call[0]));
-		expect(lines.find((line) => line.includes("hc"))).toContain("active");
-		expect(lines.find((line) => line.includes("hat"))).toContain("active");
-		expect(lines.find((line) => line.includes("dz0"))).not.toContain("active");
+
+		expect(lines.find((line) => line.includes("hc"))).toContain("●");
+		expect(lines.find((line) => line.includes("hat"))).toContain("●");
+		expect(lines.find((line) => line.includes("dz0"))).not.toContain("●");
 		expect(p.confirm).not.toHaveBeenCalled();
 	});
 });

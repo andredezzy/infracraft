@@ -121,7 +121,10 @@ export async function resolveAccount(
 	const selected = await p.select({
 		message: "Select account:",
 		options: accounts.map((account) => ({
-			label: `${account.label} ${pc.gray(`(${account.identity})`)}${account.session.token === nativeToken ? pc.green(" ● active") : ""}`,
+			label:
+				account.session.token === nativeToken
+					? pc.green(`${account.label} (${account.identity}) ●`)
+					: `${account.label} ${pc.gray(`(${account.identity})`)}`,
 			value: account.label,
 		})),
 	});

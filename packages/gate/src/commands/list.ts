@@ -24,11 +24,12 @@ export async function runList(
 	const nativeToken = provider.readNativeSession()?.token;
 
 	for (const account of accounts) {
-		const marker =
-			account.session.token === nativeToken ? pc.green(" ● active") : "";
+		const isActive = account.session.token === nativeToken;
 
 		p.log.message(
-			`${pc.bold(account.label)}  ${pc.gray(account.identity)}${marker}`,
+			isActive
+				? pc.green(`${pc.bold(account.label)}  ${account.identity} ●`)
+				: `${pc.bold(account.label)}  ${pc.gray(account.identity)}`,
 		);
 	}
 }
