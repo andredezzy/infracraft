@@ -1,5 +1,11 @@
 # @infracraft/gate
 
+## 0.4.1
+
+### Patch Changes
+
+- cf0ec60: Active accounts in `list` and the account picker now render as a green line ending with a circle, instead of the appended "active" label.
+
 ## 0.4.0
 
 ### Minor Changes
