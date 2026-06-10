@@ -129,6 +129,7 @@ describe("AccountStore", () => {
 		const written = JSON.parse(
 			fs.readFileSync(path.join(dir, "accounts.json"), "utf-8"),
 		);
+
 		expect(written.declinedIdentities.VERCEL).toEqual(["andre"]);
 	});
 
