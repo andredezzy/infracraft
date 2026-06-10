@@ -40,7 +40,7 @@ export async function promptLabelAndAdd(
 	p.log.success(`Account "${(label as string).trim()}" imported.`);
 }
 
-export enum AdoptAction {
+enum AdoptAction {
 	UPDATE = "UPDATE",
 	RENAME = "RENAME",
 }

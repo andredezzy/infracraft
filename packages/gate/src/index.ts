@@ -4,6 +4,7 @@ export {
 	classifyNativeSession,
 	NativeSessionStatus,
 } from "./accounts/discovery";
+export { findDuplicateIdentityGroups } from "./accounts/duplicates";
 export { detectActiveAccount, ensureValidSession } from "./accounts/session";
 export type { GateAccount } from "./accounts/store";
 export { AccountStore } from "./accounts/store";

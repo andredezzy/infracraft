@@ -392,9 +392,11 @@ describe("adoptSession update-or-rename", () => {
 		await runLogin(fakeProvider(), store);
 
 		expect(store.find(Provider.VERCEL, "hc")).toBeUndefined();
+
 		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
 			"fresh",
 		);
+
 		expect(store.list(Provider.VERCEL)).toHaveLength(1);
 	});
 
@@ -415,6 +417,7 @@ describe("adoptSession update-or-rename", () => {
 		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
 			"native-tok",
 		);
+
 		expect(store.list(Provider.VERCEL)).toHaveLength(1);
 	});
 });
