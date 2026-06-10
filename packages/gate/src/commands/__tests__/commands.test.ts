@@ -26,11 +26,11 @@ import { AccountStore } from "../../accounts/store";
 import { makeFakeProvider } from "../../providers/__tests__/fake-provider";
 import type { GateProvider, ProviderSession } from "../../providers/provider";
 import { Provider } from "../../providers/provider";
+import { InteractionMode } from "../../registry/command-spec";
 import { runImport } from "../import";
 import { runList } from "../list";
 import { runLogin } from "../login";
 import { runLogout } from "../logout";
-import { InteractionMode } from "../../registry/command-spec";
 import { maybeOfferAdoption, resolveAccount } from "../resolve-account";
 import { runSwitch } from "../switch";
 import { runWhoami } from "../whoami";
@@ -496,7 +496,9 @@ describe("non-interactive account resolution", () => {
 			resolveAccount(fakeProvider(), store, undefined, {
 				interaction: InteractionMode.NON_INTERACTIVE,
 			}),
-		).rejects.toThrow(/No active Fake.*--account <label>.*gate fake auth switch/s);
+		).rejects.toThrow(
+			/No active Fake.*--account <label>.*gate fake auth switch/s,
+		);
 
 		expect(p.select).not.toHaveBeenCalled();
 	});
