@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/gate",
-	"version": "0.6.1",
+	"version": "0.7.0",
 	"type": "module",
 	"license": "MIT",
 	"description": "Run any Vercel, Railway, or Fly.io CLI command as any account. Real native-CLI switching, per-invocation credential injection, and sandboxed deploys.",
