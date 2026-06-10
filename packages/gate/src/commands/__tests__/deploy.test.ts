@@ -93,6 +93,24 @@ describe("splitDeployArgs", () => {
 		expect(splitDeployArgs(provider, ["--prod"]).createTarget).toBe(false);
 	});
 
+	it("keeps --project native in deploy args even when the provider targets passthrough", () => {
+		const targeting = makeFakeProvider({
+			passthroughTarget: {
+				flag: "--project",
+				noun: "project",
+				resolveEnv: async () => ({}),
+			},
+		});
+
+		const result = splitDeployArgs(targeting, [
+			"--project",
+			"hat-rec",
+			"--prod",
+		]);
+
+		expect(result.passthroughArgs).toEqual(["--project", "hat-rec", "--prod"]);
+	});
+
 	it("--create-project coexists with the other gate-owned flags", () => {
 		const result = splitDeployArgs(provider, [
 			"--account",
