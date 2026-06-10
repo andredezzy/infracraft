@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/gate",
-	"version": "0.5.0",
+	"version": "0.5.1",
 	"type": "module",
 	"license": "MIT",
 	"description": "Multi-account switcher for Vercel, Railway, and Fly.io. Real native-CLI switching plus metadata-free sandboxed deploys.",
@@ -33,7 +33,7 @@
 	},
 	"dependencies": {
 		"@clack/prompts": "1.5.1",
-		"@infracraft/sandbox": "0.1.0",
+		"@infracraft/sandbox": "0.1.1",
 		"citty": "0.2.2",
 		"picocolors": "1.1.1",
 		"yaml": "2.9.0"
