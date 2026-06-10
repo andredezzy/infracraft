@@ -4,6 +4,8 @@ export interface PassthroughRunOptions {
 	provider: GateProvider;
 	token: string;
 	nativeArgs: string[];
+	/** Resolved target env (e.g. VERCEL_PROJECT_ID/VERCEL_ORG_ID) — wins over command env. */
+	targetEnv?: Record<string, string>;
 	spawner?: PassthroughSpawner;
 }
 
@@ -46,7 +48,11 @@ export async function runPassthrough(
 	let spawned: SpawnedPassthrough;
 
 	try {
-		spawned = spawner(command.argv, { ...process.env, ...command.env });
+		spawned = spawner(command.argv, {
+			...process.env,
+			...command.env,
+			...options.targetEnv,
+		});
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			throw new Error(

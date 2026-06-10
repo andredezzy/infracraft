@@ -67,4 +67,19 @@ describe("runPassthrough", () => {
 			}),
 		).rejects.toThrow(/fake CLI not found/);
 	});
+
+	it("merges targetEnv over the command env", async () => {
+		const { spawner, calls } = fakeSpawner(0);
+
+		await runPassthrough({
+			provider: makeFakeProvider(),
+			token: "tok",
+			nativeArgs: ["env", "ls"],
+			targetEnv: { VERCEL_PROJECT_ID: "prj_1", FAKE_TOKEN: "override" },
+			spawner,
+		});
+
+		expect(calls[0]?.env.VERCEL_PROJECT_ID).toBe("prj_1");
+		expect(calls[0]?.env.FAKE_TOKEN).toBe("override");
+	});
 });

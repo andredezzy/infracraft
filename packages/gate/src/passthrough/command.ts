@@ -48,6 +48,16 @@ export async function runPassthroughCommand(
 		interaction,
 	});
 
+	// Load-bearing: a failed lookup must abort — degrading would silently run
+	// the command against the linked project instead of the requested one.
+	const targetEnv =
+		route.targetName !== undefined && provider.passthroughTarget
+			? await provider.passthroughTarget.resolveEnv(
+					valid.session.token,
+					route.targetName,
+				)
+			: undefined;
+
 	// Called here only to surface command.notice before spawning; runPassthrough
 	// calls nativeCli again internally — identical results, nativeCli is pure.
 	const command = provider.nativeCli({
@@ -84,6 +94,7 @@ export async function runPassthroughCommand(
 		provider,
 		token: valid.session.token,
 		nativeArgs: route.nativeArgs,
+		targetEnv,
 		spawner,
 	});
 

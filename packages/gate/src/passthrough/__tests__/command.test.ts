@@ -260,4 +260,72 @@ describe("runPassthroughCommand", () => {
 			),
 		).rejects.toThrow(/--account <label>/);
 	});
+
+	it("resolves the target and injects its env into the spawn", async () => {
+		seed("a", "active-tok");
+		native = { token: "active-tok" };
+
+		const resolveEnv = vi.fn(async () => ({ VERCEL_PROJECT_ID: "prj_1" }));
+
+		const provider = fakeProvider({
+			passthroughTarget: { flag: "--project", noun: "project", resolveEnv },
+		});
+
+		const { spawner, calls } = fakeSpawner(0);
+
+		await runPassthroughCommand(
+			makeContext(provider),
+			passthroughRoute({ targetName: "hat-rec" }),
+			spawner,
+		);
+
+		expect(resolveEnv).toHaveBeenCalledWith("active-tok", "hat-rec");
+		expect(calls[0]?.env.VERCEL_PROJECT_ID).toBe("prj_1");
+	});
+
+	it("hard-fails before spawning when target resolution throws", async () => {
+		seed("a", "active-tok");
+		native = { token: "active-tok" };
+
+		const provider = fakeProvider({
+			passthroughTarget: {
+				flag: "--project",
+				noun: "project",
+				resolveEnv: vi.fn(async () => {
+					throw new Error('Project "ghost" was not found for this account.');
+				}),
+			},
+		});
+
+		const { spawner, calls } = fakeSpawner(0);
+
+		await expect(
+			runPassthroughCommand(
+				makeContext(provider),
+				passthroughRoute({ targetName: "ghost" }),
+				spawner,
+			),
+		).rejects.toThrow(/was not found/);
+
+		expect(calls).toEqual([]);
+	});
+
+	it("never resolves when no target was given", async () => {
+		seed("a", "active-tok");
+		native = { token: "active-tok" };
+
+		const resolveEnv = vi.fn(async () => ({}));
+
+		const provider = fakeProvider({
+			passthroughTarget: { flag: "--project", noun: "project", resolveEnv },
+		});
+
+		await runPassthroughCommand(
+			makeContext(provider),
+			passthroughRoute(),
+			fakeSpawner(0).spawner,
+		);
+
+		expect(resolveEnv).not.toHaveBeenCalled();
+	});
 });

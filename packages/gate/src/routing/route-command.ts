@@ -21,8 +21,8 @@ export const AUTH_NAMESPACE = "auth";
 
 export interface GateTreeRoute {
 	route: CommandRoute.GATE_TREE;
-	/** Normalized args for dispatch — a leading account re-injects after the
-	 * deploy verb as `--account <label>`. */
+	/** Normalized args for dispatch — leading account/target flags re-inject
+	 * after the deploy verb (`--account <label>`, then the target flag). */
 	gateArgs: string[];
 }
 
