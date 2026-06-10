@@ -310,6 +310,7 @@ describe("expired-but-refreshable native sessions", () => {
 		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
 			"fresh",
 		);
+
 		expect(native?.token).toBe("fresh");
 	});
 
@@ -324,6 +325,7 @@ describe("expired-but-refreshable native sessions", () => {
 		await expect(runImport(provider, store)).rejects.toThrow(
 			/invalid or expired/,
 		);
+
 		expect(native?.token).toBe("expired");
 	});
 
@@ -341,6 +343,7 @@ describe("expired-but-refreshable native sessions", () => {
 		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
 			"fresh",
 		);
+
 		expect(native?.token).toBe("fresh");
 	});
 });

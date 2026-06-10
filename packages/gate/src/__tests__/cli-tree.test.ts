@@ -44,3 +44,12 @@ describe("makeProviderNamespace", () => {
 		);
 	});
 });
+
+describe("main command meta", () => {
+	it("reports the package version", async () => {
+		const { main } = await import("../cli");
+		const packageJson = await import("../../package.json");
+
+		expect(main.meta).toMatchObject({ version: packageJson.version });
+	});
+});

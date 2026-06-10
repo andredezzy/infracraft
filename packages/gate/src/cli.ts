@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
 
+import packageJson from "../package.json";
 import { AccountStore } from "./accounts/store";
 import { makeDeployCommand } from "./commands/deploy";
 import { makeImportCommand } from "./commands/import";
@@ -56,9 +57,10 @@ export function makeProviderNamespace(
 	});
 }
 
-const main = defineCommand({
+export const main = defineCommand({
 	meta: {
 		name: "gate",
+		version: packageJson.version,
 		description:
 			"Multi-account switcher + sandboxed deploys for Vercel, Railway, and Fly.io",
 	},
