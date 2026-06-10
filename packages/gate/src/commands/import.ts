@@ -4,6 +4,7 @@ import pc from "picocolors";
 
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
+import { promptLabelAndAdd } from "./adopt-session";
 import { runAction } from "./run-action";
 
 export async function runImport(
@@ -42,32 +43,7 @@ export async function runImport(
 
 	p.log.success(`Found session for ${pc.green(identity)}.`);
 
-	const label = await p.text({
-		message: "Label for this account:",
-		validate: (value) => {
-			if (!value?.trim()) {
-				return "Label cannot be empty";
-			}
-
-			if (store.find(provider.id, value.trim())) {
-				return "An account with this label already exists";
-			}
-		},
-	});
-
-	if (p.isCancel(label)) {
-		p.cancel("Cancelled.");
-		process.exit(0);
-	}
-
-	store.add({
-		provider: provider.id,
-		label: (label as string).trim(),
-		identity,
-		session,
-	});
-
-	p.log.success(`Account "${(label as string).trim()}" imported.`);
+	await promptLabelAndAdd(provider, store, identity, session);
 }
 
 export function makeImportCommand(provider: GateProvider, store: AccountStore) {
