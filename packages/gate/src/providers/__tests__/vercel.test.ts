@@ -22,12 +22,7 @@ describe("vercelProvider identity card", () => {
 	it("declares the contract surface", () => {
 		expect(vercelProvider.id).toBe(Provider.VERCEL);
 		expect(vercelProvider.binary).toBe("vercel");
-
-		expect(vercelProvider.layout).toEqual({
-			authMount: [],
-			deployVerb: "deploy",
-		});
-
+		expect(vercelProvider.deployVerb).toBe("deploy");
 		expect(vercelProvider.loginArgv).toEqual(["vercel", "login"]);
 		expect(vercelProvider.refresh).toBeDefined();
 	});
@@ -179,27 +174,6 @@ describe("API calls", () => {
 		expect(
 			await vercelProvider.refresh?.({ token: "t", refreshToken: "r" }),
 		).toBeNull();
-	});
-});
-
-describe("deployCli", () => {
-	it("injects --token and forwards passthrough args", () => {
-		const command = vercelProvider.deployCli({
-			token: "tok",
-			passthroughArgs: ["--prod", "--force"],
-		});
-
-		expect(command.argv).toEqual([
-			"vercel",
-			"deploy",
-			"--token",
-			"tok",
-			"--yes",
-			"--prod",
-			"--force",
-		]);
-
-		expect(command.env).toEqual({});
 	});
 });
 

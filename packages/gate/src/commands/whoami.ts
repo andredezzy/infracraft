@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import { defineCommand } from "citty";
 import pc from "picocolors";
 
 import { detectActiveAccount } from "../accounts/session";
@@ -41,27 +40,3 @@ export const whoamiCommandSpec: CommandSpec = {
 		});
 	},
 };
-
-export function makeWhoamiCommand(provider: GateProvider, store: AccountStore) {
-	return defineCommand({
-		meta: {
-			name: "whoami",
-			description: `Show and validate a ${provider.name} account`,
-		},
-		args: {
-			label: {
-				type: "positional",
-				description: "Account label",
-				required: false,
-			},
-		},
-		async run({ args }) {
-			p.intro(`gate ${provider.binary} whoami`);
-
-			await runAction(async () => {
-				await runWhoami(provider, store, args.label as string | undefined);
-				p.outro("Done!");
-			});
-		},
-	});
-}

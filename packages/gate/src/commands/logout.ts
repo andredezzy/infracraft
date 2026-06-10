@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import { defineCommand } from "citty";
 
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
@@ -31,27 +30,3 @@ export const logoutCommandSpec: CommandSpec = {
 		});
 	},
 };
-
-export function makeLogoutCommand(provider: GateProvider, store: AccountStore) {
-	return defineCommand({
-		meta: {
-			name: "logout",
-			description: `Remove a stored ${provider.name} account`,
-		},
-		args: {
-			label: {
-				type: "positional",
-				description: "Account label",
-				required: false,
-			},
-		},
-		async run({ args }) {
-			p.intro(`gate ${provider.binary} logout`);
-
-			await runAction(async () => {
-				await runLogout(provider, store, args.label as string | undefined);
-				p.outro("Done!");
-			});
-		},
-	});
-}

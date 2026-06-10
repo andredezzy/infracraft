@@ -4,7 +4,6 @@ import path from "node:path";
 import { atomicWriteFile, readTextFile } from "./auth-file";
 import { interceptNativeLogin } from "./intercept-login";
 import type {
-	DeployCliContext,
 	GateProvider,
 	NativeCliCommand,
 	NativeCliContext,
@@ -66,7 +65,6 @@ export const railwayProvider: GateProvider = {
 	id: Provider.RAILWAY,
 	name: "Railway",
 	binary: "railway",
-	layout: { authMount: [], deployVerb: "up" },
 	get authFile() {
 		return resolveConfigFile();
 	},
@@ -125,13 +123,6 @@ export const railwayProvider: GateProvider = {
 	nativeCli(context: NativeCliContext): NativeCliCommand {
 		return {
 			argv: ["railway", ...context.args],
-			env: { RAILWAY_API_TOKEN: context.token },
-		};
-	},
-
-	deployCli(context: DeployCliContext): NativeCliCommand {
-		return {
-			argv: ["railway", "up", ...context.passthroughArgs],
 			env: { RAILWAY_API_TOKEN: context.token },
 		};
 	},

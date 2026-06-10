@@ -12,18 +12,6 @@ export interface ProviderSession {
 	expiresAt?: number;
 }
 
-export interface ProviderCommandLayout {
-	/** Where auth verbs mount inside the namespace: [] (root) or ["auth"] (Fly). */
-	authMount: string[];
-	/** Native deploy verb: "deploy" (Vercel, Fly) | "up" (Railway). */
-	deployVerb: string;
-}
-
-export interface DeployCliContext {
-	token: string;
-	passthroughArgs: string[];
-}
-
 export interface NativeCliContext {
 	token: string;
 	args: string[];
@@ -71,8 +59,6 @@ export interface GateProvider {
 	deployDefaultFlags: string[];
 	/** Native shorthand flags gate must never extract from native regions ("-a" on Fly). */
 	reservedNativeFlags: string[];
-	/** DEPRECATED — deleted at the dispatch cutover. */
-	layout: ProviderCommandLayout;
 
 	// ── native session IO ──────────────────────────────────────────
 	/** Absolute path to the native CLI's auth file (the real-switch target). */
@@ -96,8 +82,6 @@ export interface GateProvider {
 	// ── native CLI invocation ──────────────────────────────────────
 	/** THE single credential-injection point for any native invocation. */
 	nativeCli(context: NativeCliContext): NativeCliCommand;
-	/** DEPRECATED — deleted at the dispatch cutover (deploy composes via nativeCli). */
-	deployCli(context: DeployCliContext): NativeCliCommand;
 	/** Extracts the deployment URL from streamed stdout. */
 	deployUrlPattern: RegExp;
 	/** Optional missing-target preflight ops; providers without it skip the check. */

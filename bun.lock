@@ -55,14 +55,13 @@
     },
     "packages/gate": {
       "name": "@infracraft/gate",
-      "version": "0.0.0",
+      "version": "0.6.0",
       "bin": {
         "gate": "./dist/cli.mjs",
       },
       "dependencies": {
         "@clack/prompts": "1.5.1",
-        "@infracraft/sandbox": "0.0.0",
-        "citty": "0.2.2",
+        "@infracraft/sandbox": "0.1.1",
         "picocolors": "1.1.1",
         "yaml": "2.9.0",
       },
@@ -77,7 +76,7 @@
     },
     "packages/pulumi": {
       "name": "@infracraft/pulumi",
-      "version": "1.17.1",
+      "version": "1.17.3",
       "devDependencies": {
         "@infracraft/config-test": "workspace:*",
         "@infracraft/config-tsdown": "workspace:*",
@@ -100,7 +99,7 @@
     },
     "packages/sandbox": {
       "name": "@infracraft/sandbox",
-      "version": "0.0.0",
+      "version": "0.1.1",
       "devDependencies": {
         "@infracraft/config-test": "workspace:*",
         "@infracraft/config-tsdown": "workspace:*",
@@ -616,8 +615,6 @@
     "chardet": ["chardet@2.1.1", "", {}, "sha512-PsezH1rqdV9VvyNhxxOW32/d75r01NY7TQCmOqomRo15ZSOKbpTFVsfjghxo6JloQUCGnH4k1LGu0R4yCLlWQQ=="],
 
     "chownr": ["chownr@3.0.0", "", {}, "sha512-+IxzY9BZOQd/XuYPRmrvEVjF/nqj5kgT4kEq7VofrDoM1MxoRjEWkrCC3EtLi59TVawxTAn+orJwFQcrqEN1+g=="],
-
-    "citty": ["citty@0.2.2", "", {}, "sha512-+6vJA3L98yv+IdfKGZHBNiGW5KHn22e/JwID0Strsz8h4S/csAu/OuICwxrg44k5MRiZHWIo8XXuJgQTriRP4w=="],
 
     "cjs-module-lexer": ["cjs-module-lexer@1.4.3", "", {}, "sha512-9z8TZaGM1pfswYeXrUpzPrkx8UnWYdhJclsiYMm6x/w5+nN+8Tf/LnAgfLGQCm59qAOxU8WwHEq2vNwF6i4j+Q=="],
 

@@ -5,7 +5,6 @@ import { parse, stringify } from "yaml";
 import { atomicWriteFile, readTextFile } from "./auth-file";
 import { interceptNativeLogin } from "./intercept-login";
 import type {
-	DeployCliContext,
 	GateProvider,
 	NativeCliCommand,
 	NativeCliContext,
@@ -67,7 +66,6 @@ export const flyProvider: GateProvider = {
 	id: Provider.FLY,
 	name: "Fly.io",
 	binary: "fly",
-	layout: { authMount: ["auth"], deployVerb: "deploy" },
 	get authFile() {
 		return resolveConfigFile();
 	},
@@ -121,13 +119,6 @@ export const flyProvider: GateProvider = {
 	nativeCli(context: NativeCliContext): NativeCliCommand {
 		return {
 			argv: ["fly", ...context.args],
-			env: { FLY_API_TOKEN: context.token },
-		};
-	},
-
-	deployCli(context: DeployCliContext): NativeCliCommand {
-		return {
-			argv: ["fly", "deploy", ...context.passthroughArgs],
 			env: { FLY_API_TOKEN: context.token },
 		};
 	},

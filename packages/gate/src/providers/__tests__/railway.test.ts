@@ -23,7 +23,7 @@ afterEach(() => {
 describe("railwayProvider identity card", () => {
 	it("declares the contract surface", () => {
 		expect(railwayProvider.id).toBe(Provider.RAILWAY);
-		expect(railwayProvider.layout).toEqual({ authMount: [], deployVerb: "up" });
+		expect(railwayProvider.deployVerb).toBe("up");
 		expect(railwayProvider.loginArgv).toEqual(["railway", "login"]);
 		expect(railwayProvider.refresh).toBeUndefined();
 	});
@@ -120,18 +120,6 @@ describe("API calls", () => {
 		vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("offline"));
 
 		expect(await railwayProvider.validate("tok")).toBe(false);
-	});
-});
-
-describe("deployCli", () => {
-	it("injects RAILWAY_API_TOKEN env and forwards passthrough args", () => {
-		const command = railwayProvider.deployCli({
-			token: "tok",
-			passthroughArgs: ["--detach"],
-		});
-
-		expect(command.argv).toEqual(["railway", "up", "--detach"]);
-		expect(command.env).toEqual({ RAILWAY_API_TOKEN: "tok" });
 	});
 });
 

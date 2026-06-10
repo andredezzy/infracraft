@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import { defineCommand } from "citty";
 import pc from "picocolors";
 
 import type { AccountStore } from "../accounts/store";
@@ -37,20 +36,3 @@ export const loginCommandSpec: CommandSpec = {
 		});
 	},
 };
-
-export function makeLoginCommand(provider: GateProvider, store: AccountStore) {
-	return defineCommand({
-		meta: {
-			name: "login",
-			description: `Add a ${provider.name} account via browser login`,
-		},
-		async run() {
-			p.intro(`gate ${provider.binary} login`);
-
-			await runAction(async () => {
-				await runLogin(provider, store);
-				p.outro("Done!");
-			});
-		},
-	});
-}

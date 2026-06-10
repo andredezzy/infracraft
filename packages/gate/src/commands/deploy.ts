@@ -1,10 +1,8 @@
 import * as p from "@clack/prompts";
 import { SandboxMode } from "@infracraft/sandbox";
-import { defineCommand } from "citty";
 import pc from "picocolors";
 
 import { detectActiveAccount, ensureValidSession } from "../accounts/session";
-import type { AccountStore } from "../accounts/store";
 import { runDeploy } from "../deploy/runner";
 import type {
 	DeployTargetCapability,
@@ -170,7 +168,7 @@ function isInsideGitRepo(): boolean {
 	return result.exitCode === 0;
 }
 
-export async function runDeployCommand(
+async function runDeployCommand(
 	context: CommandContext,
 	rawArgs: string[],
 ): Promise<void> {
@@ -268,24 +266,3 @@ export const deployCommandSpec: CommandSpec = {
 		await runAction(() => runDeployCommand(context, args));
 	},
 };
-
-export function makeDeployCommand(provider: GateProvider, store: AccountStore) {
-	return defineCommand({
-		meta: {
-			name: provider.deployVerb,
-			description: `Sandboxed \`${provider.binary} ${provider.deployVerb}\` with account selection`,
-		},
-		async run({ rawArgs }) {
-			p.intro(`gate ${provider.binary} ${provider.deployVerb}`);
-
-			const interaction =
-				process.stdout.isTTY === true
-					? InteractionMode.INTERACTIVE
-					: InteractionMode.NON_INTERACTIVE;
-
-			await runAction(() =>
-				runDeployCommand({ provider, store, interaction }, rawArgs as string[]),
-			);
-		},
-	});
-}

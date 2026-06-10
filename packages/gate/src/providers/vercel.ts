@@ -4,7 +4,6 @@ import path from "node:path";
 import { atomicWriteFile, readTextFile } from "./auth-file";
 import { interceptNativeLogin } from "./intercept-login";
 import type {
-	DeployCliContext,
 	GateProvider,
 	NativeCliCommand,
 	NativeCliContext,
@@ -81,7 +80,6 @@ export const vercelProvider: GateProvider = {
 	id: Provider.VERCEL,
 	name: "Vercel",
 	binary: "vercel",
-	layout: { authMount: [], deployVerb: "deploy" },
 	get authFile() {
 		return resolveAuthFile();
 	},
@@ -218,20 +216,6 @@ export const vercelProvider: GateProvider = {
 
 		return {
 			argv: ["vercel", "--token", context.token, ...context.args],
-			env: {},
-		};
-	},
-
-	deployCli(context: DeployCliContext): NativeCliCommand {
-		return {
-			argv: [
-				"vercel",
-				"deploy",
-				"--token",
-				context.token,
-				"--yes",
-				...context.passthroughArgs,
-			],
 			env: {},
 		};
 	},

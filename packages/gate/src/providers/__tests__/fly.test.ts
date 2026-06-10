@@ -24,12 +24,7 @@ afterEach(() => {
 describe("flyProvider identity card", () => {
 	it("declares the contract surface", () => {
 		expect(flyProvider.id).toBe(Provider.FLY);
-
-		expect(flyProvider.layout).toEqual({
-			authMount: ["auth"],
-			deployVerb: "deploy",
-		});
-
+		expect(flyProvider.deployVerb).toBe("deploy");
 		expect(flyProvider.loginArgv).toEqual(["fly", "auth", "login"]);
 		expect(flyProvider.refresh).toBeUndefined();
 	});
@@ -106,18 +101,6 @@ describe("API calls", () => {
 		await expect(flyProvider.identity("tok")).rejects.toThrow(
 			/failed to resolve/i,
 		);
-	});
-});
-
-describe("deployCli", () => {
-	it("injects FLY_API_TOKEN env and forwards passthrough args", () => {
-		const command = flyProvider.deployCli({
-			token: "tok",
-			passthroughArgs: ["--remote-only"],
-		});
-
-		expect(command.argv).toEqual(["fly", "deploy", "--remote-only"]);
-		expect(command.env).toEqual({ FLY_API_TOKEN: "tok" });
 	});
 });
 

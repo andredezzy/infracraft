@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import { defineCommand } from "citty";
 import pc from "picocolors";
 
 import type { AccountStore } from "../accounts/store";
@@ -47,20 +46,3 @@ export const listCommandSpec: CommandSpec = {
 		});
 	},
 };
-
-export function makeListCommand(provider: GateProvider, store: AccountStore) {
-	return defineCommand({
-		meta: {
-			name: "list",
-			description: `List stored ${provider.name} accounts`,
-		},
-		async run() {
-			p.intro(`gate ${provider.binary} list`);
-
-			await runAction(async () => {
-				await runList(provider, store);
-				p.outro("Done!");
-			});
-		},
-	});
-}

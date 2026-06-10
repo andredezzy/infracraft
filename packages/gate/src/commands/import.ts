@@ -1,5 +1,4 @@
 import * as p from "@clack/prompts";
-import { defineCommand } from "citty";
 import pc from "picocolors";
 
 import { refreshNativeSession } from "../accounts/discovery";
@@ -55,20 +54,3 @@ export const importCommandSpec: CommandSpec = {
 		});
 	},
 };
-
-export function makeImportCommand(provider: GateProvider, store: AccountStore) {
-	return defineCommand({
-		meta: {
-			name: "import",
-			description: `Import the native ${provider.name} CLI session`,
-		},
-		async run() {
-			p.intro(`gate ${provider.binary} import`);
-
-			await runAction(async () => {
-				await runImport(provider, store);
-				p.outro("Done!");
-			});
-		},
-	});
-}

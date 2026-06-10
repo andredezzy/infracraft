@@ -17,7 +17,6 @@ export function makeFakeProvider(
 		deployVerb: "deploy",
 		deployDefaultFlags: [],
 		reservedNativeFlags: [],
-		layout: { authMount: [], deployVerb: "deploy" },
 		authFile: "/dev/null",
 		loginArgv: ["fake", "login"],
 		deployUrlPattern: /x/,
@@ -30,7 +29,6 @@ export function makeFakeProvider(
 			argv: ["fake", ...context.args],
 			env: { FAKE_TOKEN: context.token },
 		}),
-		deployCli: () => ({ argv: [], env: {} }),
 		...overrides,
 	};
 }
