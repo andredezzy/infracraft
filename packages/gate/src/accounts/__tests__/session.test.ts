@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { makeFakeProvider } from "../../providers/__tests__/fake-provider";
 import type { GateProvider, ProviderSession } from "../../providers/provider";
 import { Provider } from "../../providers/provider";
 import { detectActiveAccount, ensureValidSession } from "../session";
@@ -12,24 +13,14 @@ let store: AccountStore;
 let native: ProviderSession | null;
 
 function fakeProvider(overrides: Partial<GateProvider> = {}): GateProvider {
-	return {
-		id: Provider.VERCEL,
-		name: "Fake",
-		binary: "fake",
-		layout: { authMount: [], deployVerb: "deploy" },
-		authFile: "/dev/null",
-		loginArgv: ["fake", "login"],
-		deployUrlPattern: /x/,
+	return makeFakeProvider({
 		login: vi.fn(async () => ({ token: "from-login" })),
 		readNativeSession: () => native,
 		writeNativeSession: vi.fn((session: ProviderSession) => {
 			native = session;
 		}),
-		validate: vi.fn(async () => true),
-		identity: vi.fn(async () => "andre"),
-		deployCli: () => ({ argv: [], env: {} }),
 		...overrides,
-	};
+	});
 }
 
 function seed(session: ProviderSession): GateAccount {

@@ -134,3 +134,21 @@ describe("deployCli", () => {
 		expect(command.env).toEqual({ RAILWAY_API_TOKEN: "tok" });
 	});
 });
+
+describe("nativeCli", () => {
+	it("injects the token via env and forwards args verbatim", () => {
+		const command = railwayProvider.nativeCli({
+			token: "tok",
+			args: ["logs", "--service", "api"],
+		});
+
+		expect(command.argv).toEqual(["railway", "logs", "--service", "api"]);
+		expect(command.env).toEqual({ RAILWAY_API_TOKEN: "tok" });
+	});
+
+	it("declares deploy metadata and no reserved flags", () => {
+		expect(railwayProvider.deployVerb).toBe("up");
+		expect(railwayProvider.deployDefaultFlags).toEqual([]);
+		expect(railwayProvider.reservedNativeFlags).toEqual([]);
+	});
+});

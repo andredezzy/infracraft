@@ -8,6 +8,7 @@ import type {
 	DeployCliContext,
 	GateProvider,
 	NativeCliCommand,
+	NativeCliContext,
 	ProviderSession,
 } from "./provider";
 import { Provider } from "./provider";
@@ -71,6 +72,9 @@ export const flyProvider: GateProvider = {
 		return resolveConfigFile();
 	},
 	loginArgv: ["fly", "auth", "login"],
+	deployVerb: "deploy",
+	deployDefaultFlags: [],
+	reservedNativeFlags: ["-a"],
 	deployUrlPattern: /https?:\/\/[^\s]+\.fly\.dev[^\s]*/,
 
 	login(): Promise<ProviderSession> {
@@ -112,6 +116,13 @@ export const flyProvider: GateProvider = {
 		}
 
 		return email;
+	},
+
+	nativeCli(context: NativeCliContext): NativeCliCommand {
+		return {
+			argv: ["fly", ...context.args],
+			env: { FLY_API_TOKEN: context.token },
+		};
 	},
 
 	deployCli(context: DeployCliContext): NativeCliCommand {

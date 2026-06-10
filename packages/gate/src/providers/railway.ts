@@ -7,6 +7,7 @@ import type {
 	DeployCliContext,
 	GateProvider,
 	NativeCliCommand,
+	NativeCliContext,
 	ProviderSession,
 } from "./provider";
 import { Provider } from "./provider";
@@ -70,6 +71,9 @@ export const railwayProvider: GateProvider = {
 		return resolveConfigFile();
 	},
 	loginArgv: ["railway", "login"],
+	deployVerb: "up",
+	deployDefaultFlags: [],
+	reservedNativeFlags: [],
 	deployUrlPattern: /https:\/\/railway\.(?:app|com)\/[^\s]*/,
 
 	login(): Promise<ProviderSession> {
@@ -116,6 +120,13 @@ export const railwayProvider: GateProvider = {
 		}
 
 		return me.email ?? (me.name as string);
+	},
+
+	nativeCli(context: NativeCliContext): NativeCliCommand {
+		return {
+			argv: ["railway", ...context.args],
+			env: { RAILWAY_API_TOKEN: context.token },
+		};
 	},
 
 	deployCli(context: DeployCliContext): NativeCliCommand {

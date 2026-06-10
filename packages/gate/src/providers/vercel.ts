@@ -7,6 +7,7 @@ import type {
 	DeployCliContext,
 	GateProvider,
 	NativeCliCommand,
+	NativeCliContext,
 	ProviderSession,
 } from "./provider";
 import { Provider } from "./provider";
@@ -85,6 +86,9 @@ export const vercelProvider: GateProvider = {
 		return resolveAuthFile();
 	},
 	loginArgv: ["vercel", "login"],
+	deployVerb: "deploy",
+	deployDefaultFlags: ["--yes"],
+	reservedNativeFlags: [],
 	deployUrlPattern: /https:\/\/[^\s]+\.vercel\.app[^\s]*/,
 
 	login(): Promise<ProviderSession> {
@@ -190,6 +194,32 @@ export const vercelProvider: GateProvider = {
 		const data = (await response.json()) as VercelUserResponse;
 
 		return data.user.username;
+	},
+
+	nativeCli(context: NativeCliContext): NativeCliCommand {
+		const separatorIndex = context.args.indexOf("--");
+
+		const visibleArgs =
+			separatorIndex === -1
+				? context.args
+				: context.args.slice(0, separatorIndex);
+
+		const userSuppliedToken = visibleArgs.some(
+			(arg) => arg === "--token" || arg.startsWith("--token="),
+		);
+
+		if (userSuppliedToken) {
+			return {
+				argv: ["vercel", ...context.args],
+				env: {},
+				notice: "using your --token; gate account not applied",
+			};
+		}
+
+		return {
+			argv: ["vercel", "--token", context.token, ...context.args],
+			env: {},
+		};
 	},
 
 	deployCli(context: DeployCliContext): NativeCliCommand {

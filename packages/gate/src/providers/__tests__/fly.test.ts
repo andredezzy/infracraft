@@ -120,3 +120,21 @@ describe("deployCli", () => {
 		expect(command.env).toEqual({ FLY_API_TOKEN: "tok" });
 	});
 });
+
+describe("nativeCli", () => {
+	it("injects the token via env and forwards args verbatim", () => {
+		const command = flyProvider.nativeCli({
+			token: "tok",
+			args: ["status", "-a", "my-app"],
+		});
+
+		expect(command.argv).toEqual(["fly", "status", "-a", "my-app"]);
+		expect(command.env).toEqual({ FLY_API_TOKEN: "tok" });
+	});
+
+	it("declares deploy metadata and reserves -a", () => {
+		expect(flyProvider.deployVerb).toBe("deploy");
+		expect(flyProvider.deployDefaultFlags).toEqual([]);
+		expect(flyProvider.reservedNativeFlags).toEqual(["-a"]);
+	});
+});

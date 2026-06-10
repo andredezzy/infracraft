@@ -203,6 +203,60 @@ describe("deployCli", () => {
 	});
 });
 
+describe("nativeCli", () => {
+	it("injects --token immediately after the binary", () => {
+		const command = vercelProvider.nativeCli({
+			token: "tok",
+			args: ["env", "ls", "--json"],
+		});
+
+		expect(command.argv).toEqual([
+			"vercel",
+			"--token",
+			"tok",
+			"env",
+			"ls",
+			"--json",
+		]);
+
+		expect(command.env).toEqual({});
+		expect(command.notice).toBeUndefined();
+	});
+
+	it("skips injection when the user supplies their own --token", () => {
+		const command = vercelProvider.nativeCli({
+			token: "tok",
+			args: ["whoami", "--token", "user-tok"],
+		});
+
+		expect(command.argv).toEqual(["vercel", "whoami", "--token", "user-tok"]);
+		expect(command.notice).toContain("--token");
+	});
+
+	it("ignores a --token that sits behind a -- separator", () => {
+		const command = vercelProvider.nativeCli({
+			token: "tok",
+			args: ["dev", "--", "--token", "inner"],
+		});
+
+		expect(command.argv).toEqual([
+			"vercel",
+			"--token",
+			"tok",
+			"dev",
+			"--",
+			"--token",
+			"inner",
+		]);
+	});
+
+	it("declares deploy metadata and no reserved flags", () => {
+		expect(vercelProvider.deployVerb).toBe("deploy");
+		expect(vercelProvider.deployDefaultFlags).toEqual(["--yes"]);
+		expect(vercelProvider.reservedNativeFlags).toEqual([]);
+	});
+});
+
 describe("deployTarget", () => {
 	it("declares the project noun", () => {
 		expect(vercelProvider.deployTarget?.noun).toBe("project");

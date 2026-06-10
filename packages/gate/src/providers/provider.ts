@@ -24,9 +24,16 @@ export interface DeployCliContext {
 	passthroughArgs: string[];
 }
 
+export interface NativeCliContext {
+	token: string;
+	args: string[];
+}
+
 export interface NativeCliCommand {
 	argv: string[];
 	env: Record<string, string>;
+	/** Advisory for the command layer (stderr, TTY-only) — e.g. "user --token wins". */
+	notice?: string;
 }
 
 /**
@@ -49,20 +56,29 @@ export interface DeployTargetCapability {
 
 /**
  * The strategy contract. One implementation per platform; everything else in
- * gate (command factories, store, deploy runner) is provider-agnostic.
+ * gate (registry, routing, runners, store) is provider-agnostic.
  */
 export interface GateProvider {
+	// ── identity card ──────────────────────────────────────────────
 	id: Provider;
 	/** Display name: "Vercel". */
 	name: string;
 	/** Native CLI binary: "vercel" | "railway" | "fly". */
 	binary: string;
+	/** Native deploy verb: "deploy" (Vercel, Fly) | "up" (Railway). */
+	deployVerb: string;
+	/** Deploy-only argv injected after the verb: ["--yes"] (Vercel) | []. */
+	deployDefaultFlags: string[];
+	/** Native shorthand flags gate must never extract from native regions ("-a" on Fly). */
+	reservedNativeFlags: string[];
+	/** DEPRECATED — deleted at the dispatch cutover. */
 	layout: ProviderCommandLayout;
+
+	// ── native session IO ──────────────────────────────────────────
 	/** Absolute path to the native CLI's auth file (the real-switch target). */
 	authFile: string;
 	/** Native login argv, e.g. ["vercel", "login"] or ["fly", "auth", "login"]. */
 	loginArgv: string[];
-
 	/** Browser login via the native CLI, intercepting its auth write. */
 	login(): Promise<ProviderSession>;
 	/** Read the native CLI's current session (import + active detection). */
@@ -70,13 +86,17 @@ export interface GateProvider {
 	/** THE REAL SWITCH: merge the session into the native auth file (atomic write). */
 	writeNativeSession(session: ProviderSession): void;
 
+	// ── provider API ───────────────────────────────────────────────
 	validate(token: string): Promise<boolean>;
 	/** Silent token refresh; only Vercel implements it. */
 	refresh?(session: ProviderSession): Promise<ProviderSession | null>;
 	/** Username/email for display. */
 	identity(token: string): Promise<string>;
 
-	/** Native deploy invocation with provider-specific token injection. */
+	// ── native CLI invocation ──────────────────────────────────────
+	/** THE single credential-injection point for any native invocation. */
+	nativeCli(context: NativeCliContext): NativeCliCommand;
+	/** DEPRECATED — deleted at the dispatch cutover (deploy composes via nativeCli). */
 	deployCli(context: DeployCliContext): NativeCliCommand;
 	/** Extracts the deployment URL from streamed stdout. */
 	deployUrlPattern: RegExp;

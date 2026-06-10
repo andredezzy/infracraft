@@ -23,6 +23,7 @@ vi.mock("@clack/prompts", () => ({
 import * as p from "@clack/prompts";
 
 import { AccountStore } from "../../accounts/store";
+import { makeFakeProvider } from "../../providers/__tests__/fake-provider";
 import type { GateProvider, ProviderSession } from "../../providers/provider";
 import { Provider } from "../../providers/provider";
 import { runImport } from "../import";
@@ -37,24 +38,14 @@ let store: AccountStore;
 let native: ProviderSession | null;
 
 function fakeProvider(overrides: Partial<GateProvider> = {}): GateProvider {
-	return {
-		id: Provider.VERCEL,
-		name: "Fake",
-		binary: "fake",
-		layout: { authMount: [], deployVerb: "deploy" },
-		authFile: "/dev/null",
-		loginArgv: ["fake", "login"],
-		deployUrlPattern: /x/,
+	return makeFakeProvider({
 		login: vi.fn(async () => ({ token: "fresh" })),
 		readNativeSession: () => native,
 		writeNativeSession: vi.fn((session: ProviderSession) => {
 			native = session;
 		}),
-		validate: vi.fn(async () => true),
-		identity: vi.fn(async () => "andre"),
-		deployCli: () => ({ argv: [], env: {} }),
 		...overrides,
-	};
+	});
 }
 
 function seed(label = "a", token = "t1", identity = "andre"): void {
