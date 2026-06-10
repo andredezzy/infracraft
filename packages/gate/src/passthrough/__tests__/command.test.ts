@@ -61,6 +61,7 @@ function passthroughRoute(
 		route: CommandRoute.PASSTHROUGH,
 		nativeArgs: ["env", "ls"],
 		accountLabel: undefined,
+		targetName: undefined,
 		movedVerbHint: undefined,
 		...overrides,
 	};

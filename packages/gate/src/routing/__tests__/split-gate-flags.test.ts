@@ -6,6 +6,14 @@ import { GateFlagRegion, splitGateFlags } from "../split-gate-flags";
 const vercelLike = makeFakeProvider();
 const flyLike = makeFakeProvider({ reservedNativeFlags: ["-a"] });
 
+const targeting = makeFakeProvider({
+	passthroughTarget: {
+		flag: "--project",
+		noun: "project",
+		resolveEnv: async () => ({}),
+	},
+});
+
 describe("splitGateFlags WITH_LEADING_SLOT", () => {
 	it("extracts --account and --account= anywhere", () => {
 		expect(
@@ -16,6 +24,7 @@ describe("splitGateFlags WITH_LEADING_SLOT", () => {
 			),
 		).toEqual({
 			accountLabel: "work",
+			targetName: undefined,
 			nativeArgs: ["env", "pull"],
 			malformed: undefined,
 		});
@@ -28,6 +37,7 @@ describe("splitGateFlags WITH_LEADING_SLOT", () => {
 			),
 		).toEqual({
 			accountLabel: "work",
+			targetName: undefined,
 			nativeArgs: ["env", "pull"],
 			malformed: undefined,
 		});
@@ -116,6 +126,7 @@ describe("splitGateFlags WITH_LEADING_SLOT", () => {
 			splitGateFlags(vercelLike, [], GateFlagRegion.WITH_LEADING_SLOT),
 		).toEqual({
 			accountLabel: undefined,
+			targetName: undefined,
 			nativeArgs: [],
 			malformed: undefined,
 		});
@@ -154,5 +165,98 @@ describe("splitGateFlags NATIVE_REGION_ONLY", () => {
 
 		expect(split.accountLabel).toBe("work");
 		expect(split.nativeArgs).toEqual(["--prod"]);
+	});
+});
+
+describe("splitGateFlags target flag", () => {
+	it("extracts --project and --project= anywhere in WITH_LEADING_SLOT", () => {
+		expect(
+			splitGateFlags(
+				targeting,
+				["env", "ls", "--project", "hat-rec"],
+				GateFlagRegion.WITH_LEADING_SLOT,
+			),
+		).toEqual({
+			accountLabel: undefined,
+			targetName: "hat-rec",
+			nativeArgs: ["env", "ls"],
+			malformed: undefined,
+		});
+
+		expect(
+			splitGateFlags(
+				targeting,
+				["--project=hat-rec", "env", "ls"],
+				GateFlagRegion.WITH_LEADING_SLOT,
+			),
+		).toEqual({
+			accountLabel: undefined,
+			targetName: "hat-rec",
+			nativeArgs: ["env", "ls"],
+			malformed: undefined,
+		});
+	});
+
+	it("never extracts the target flag in NATIVE_REGION_ONLY (deploy keeps it native)", () => {
+		const split = splitGateFlags(
+			targeting,
+			["--prod", "--project", "hat-rec"],
+			GateFlagRegion.NATIVE_REGION_ONLY,
+		);
+
+		expect(split.targetName).toBeUndefined();
+		expect(split.nativeArgs).toEqual(["--prod", "--project", "hat-rec"]);
+	});
+
+	it("does not recognize the flag when the capability is absent", () => {
+		const split = splitGateFlags(
+			vercelLike,
+			["env", "ls", "--project", "hat-rec"],
+			GateFlagRegion.WITH_LEADING_SLOT,
+		);
+
+		expect(split.targetName).toBeUndefined();
+		expect(split.nativeArgs).toEqual(["env", "ls", "--project", "hat-rec"]);
+	});
+
+	it("treats empty values as not given and flag-like values as malformed", () => {
+		expect(
+			splitGateFlags(
+				targeting,
+				["--project=", "env"],
+				GateFlagRegion.WITH_LEADING_SLOT,
+			).targetName,
+		).toBeUndefined();
+
+		expect(
+			splitGateFlags(
+				targeting,
+				["env", "--project"],
+				GateFlagRegion.WITH_LEADING_SLOT,
+			).malformed,
+		).toContain("--project requires a value");
+	});
+
+	it("leaves the flag untouched after --", () => {
+		const split = splitGateFlags(
+			targeting,
+			["--", "--project", "hat-rec"],
+			GateFlagRegion.WITH_LEADING_SLOT,
+		);
+
+		expect(split.targetName).toBeUndefined();
+		expect(split.nativeArgs).toEqual(["--", "--project", "hat-rec"]);
+	});
+
+	it("extracts account and target together in the leading slot", () => {
+		const split = splitGateFlags(
+			targeting,
+			["-a", "work", "--project", "hat-rec", "env", "ls"],
+			GateFlagRegion.WITH_LEADING_SLOT,
+		);
+
+		expect(split.accountLabel).toBe("work");
+		expect(split.targetName).toBe("hat-rec");
+		expect(split.nativeArgs).toEqual(["env", "ls"]);
 	});
 });

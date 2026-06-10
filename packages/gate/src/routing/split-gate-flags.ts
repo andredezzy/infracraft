@@ -9,6 +9,8 @@ export enum GateFlagRegion {
 
 export interface SplitGateFlags {
 	accountLabel: string | undefined;
+	/** Value of the provider's passthroughTarget flag (e.g. --project), if claimed. */
+	targetName: string | undefined;
 	nativeArgs: string[];
 	/** Set when a gate flag is malformed (missing value / value is another flag). */
 	malformed: string | undefined;
@@ -23,6 +25,8 @@ const ACCOUNT_SHORTHAND = "-a";
  * - `-a <v>`: anywhere — unless the provider reserves "-a" natively, in which
  *   case only inside the leading slot (the run of gate flags before the first
  *   native token), and never in NATIVE_REGION_ONLY.
+ * - The provider's passthroughTarget flag (e.g. `--project <v>` / `--project=<v>`):
+ *   anywhere, but ONLY in WITH_LEADING_SLOT — deploy's native region keeps it native.
  * - Parsing stops at the first `--`; the separator and everything after it are
  *   kept verbatim (they belong to the native command).
  * - Empty-string values mean "no account given"; flag-like values are malformed.
@@ -33,11 +37,17 @@ export function splitGateFlags(
 	region: GateFlagRegion,
 ): SplitGateFlags {
 	let accountLabel: string | undefined;
+	let targetName: string | undefined;
 	let malformed: string | undefined;
 	const nativeArgs: string[] = [];
 
 	const shorthandReserved =
 		provider.reservedNativeFlags.includes(ACCOUNT_SHORTHAND);
+
+	const targetFlag =
+		region === GateFlagRegion.WITH_LEADING_SLOT
+			? provider.passthroughTarget?.flag
+			: undefined;
 
 	let inLeadingSlot = region === GateFlagRegion.WITH_LEADING_SLOT;
 	let parsing = true;
@@ -68,6 +78,39 @@ export function splitGateFlags(
 			continue;
 		}
 
+		if (targetFlag !== undefined && arg.startsWith(`${targetFlag}=`)) {
+			const value = arg.slice(targetFlag.length + 1);
+
+			if (value !== "") {
+				targetName = value;
+			}
+
+			continue;
+		}
+
+		if (targetFlag !== undefined && arg === targetFlag) {
+			const value = rawArgs[index + 1];
+
+			if (value === undefined || value.startsWith("-")) {
+				malformed = `${arg} requires a value.`;
+
+				return {
+					accountLabel,
+					targetName,
+					nativeArgs: [...nativeArgs, ...rawArgs.slice(index)],
+					malformed,
+				};
+			}
+
+			index += 1;
+
+			if (value !== "") {
+				targetName = value;
+			}
+
+			continue;
+		}
+
 		const isShorthandHere =
 			arg === ACCOUNT_SHORTHAND && (!shorthandReserved || inLeadingSlot);
 
@@ -79,6 +122,7 @@ export function splitGateFlags(
 
 				return {
 					accountLabel,
+					targetName,
 					nativeArgs: [...nativeArgs, ...rawArgs.slice(index)],
 					malformed,
 				};
@@ -97,5 +141,5 @@ export function splitGateFlags(
 		nativeArgs.push(arg);
 	}
 
-	return { accountLabel, nativeArgs, malformed };
+	return { accountLabel, targetName, nativeArgs, malformed };
 }

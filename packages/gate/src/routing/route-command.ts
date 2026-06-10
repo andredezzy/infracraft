@@ -31,6 +31,8 @@ export interface PassthroughRoute {
 	/** Native args with gate flags extracted (or the verbatim tail after a leading "--"). */
 	nativeArgs: string[];
 	accountLabel: string | undefined;
+	/** Value of the provider's claimed target flag (e.g. --project), if given. */
+	targetName: string | undefined;
 	/** Set when the first native token is a moved gate verb — triggers the stderr hint. */
 	movedVerbHint: GateAuthVerb | undefined;
 }
@@ -58,10 +60,10 @@ const SOLE_GATE_TOKENS = ["--help", "-h", "--version"];
  * Rules (mirrors the spec table):
  * 1. Empty, or a sole --help/-h/--version → GATE_TREE.
  * 2. auth + gate verb, bare auth, or auth + --help/-h → GATE_TREE; with an
- *    extracted account flag → INVALID (unless --help/-h rides along — then
+ *    extracted account or target flag → INVALID (unless --help/-h rides along — then
  *    GATE_TREE so dispatch renders help).
  * 3. auth + anything else → PASSTHROUGH (native `fly auth token`).
- * 4. deployVerb → GATE_TREE; an extracted account re-injects after the verb.
+ * 4. deployVerb → GATE_TREE; extracted account/target flags re-inject after the verb.
  * 5. A leading "--" → PASSTHROUGH, verbatim tail (gate flags BEFORE it apply).
  * 6. Anything else → PASSTHROUGH; movedVerbHint when the first token is a
  *    moved gate verb.
@@ -103,6 +105,7 @@ export function routeCommand(
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: rest,
 			accountLabel: split.accountLabel,
+			targetName: split.targetName,
 			movedVerbHint: undefined,
 		};
 	}
@@ -117,10 +120,13 @@ export function routeCommand(
 		if (isGateAuthForm) {
 			const helpRequested = rest.includes("--help") || rest.includes("-h");
 
-			if (split.accountLabel !== undefined && !helpRequested) {
+			const hasGateFlags =
+				split.accountLabel !== undefined || split.targetName !== undefined;
+
+			if (hasGateFlags && !helpRequested) {
 				return {
 					route: CommandRoute.INVALID,
-					message: `auth commands take a label argument — use \`gate ${provider.binary} auth <verb> <label>\`, not --account.`,
+					message: `auth commands take a label argument — use \`gate ${provider.binary} auth <verb> <label>\`.`,
 				};
 			}
 
@@ -131,15 +137,21 @@ export function routeCommand(
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: split.nativeArgs,
 			accountLabel: split.accountLabel,
+			targetName: split.targetName,
 			movedVerbHint: undefined,
 		};
 	}
 
 	if (first === provider.deployVerb) {
-		const gateArgs =
-			split.accountLabel === undefined
-				? split.nativeArgs
-				: [...split.nativeArgs, "--account", split.accountLabel];
+		const gateArgs = [...split.nativeArgs];
+
+		if (split.accountLabel !== undefined) {
+			gateArgs.push("--account", split.accountLabel);
+		}
+
+		if (split.targetName !== undefined && provider.passthroughTarget) {
+			gateArgs.push(provider.passthroughTarget.flag, split.targetName);
+		}
 
 		return { route: CommandRoute.GATE_TREE, gateArgs };
 	}
@@ -148,6 +160,7 @@ export function routeCommand(
 		route: CommandRoute.PASSTHROUGH,
 		nativeArgs: split.nativeArgs,
 		accountLabel: split.accountLabel,
+		targetName: split.targetName,
 		movedVerbHint: toGateAuthVerb(first),
 	};
 }

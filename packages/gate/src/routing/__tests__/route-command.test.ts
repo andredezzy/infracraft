@@ -72,6 +72,23 @@ describe("routeCommand GATE_TREE", () => {
 			gateArgs: ["deploy", "--prod", "--account", "work"],
 		});
 	});
+
+	it("re-injects a leading --project after the deploy verb", () => {
+		const targeting = makeFakeProvider({
+			passthroughTarget: {
+				flag: "--project",
+				noun: "project",
+				resolveEnv: async () => ({}),
+			},
+		});
+
+		expect(
+			routeCommand(targeting, ["--project", "hat-rec", "deploy", "--prod"]),
+		).toEqual({
+			route: CommandRoute.GATE_TREE,
+			gateArgs: ["deploy", "--prod", "--project", "hat-rec"],
+		});
+	});
 });
 
 describe("routeCommand PASSTHROUGH", () => {
@@ -80,6 +97,7 @@ describe("routeCommand PASSTHROUGH", () => {
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: ["env", "ls"],
 			accountLabel: "work",
+			targetName: undefined,
 			movedVerbHint: undefined,
 		});
 	});
@@ -95,6 +113,7 @@ describe("routeCommand PASSTHROUGH", () => {
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: ["auth", "token", "--help"],
 			accountLabel: undefined,
+			targetName: undefined,
 			movedVerbHint: undefined,
 		});
 	});
@@ -104,6 +123,7 @@ describe("routeCommand PASSTHROUGH", () => {
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: ["auth", "token"],
 			accountLabel: undefined,
+			targetName: undefined,
 			movedVerbHint: undefined,
 		});
 	});
@@ -115,6 +135,7 @@ describe("routeCommand PASSTHROUGH", () => {
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: ["status", "-a", "my-app"],
 			accountLabel: "work",
+			targetName: undefined,
 			movedVerbHint: undefined,
 		});
 	});
@@ -124,6 +145,7 @@ describe("routeCommand PASSTHROUGH", () => {
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: ["switch", "my-team"],
 			accountLabel: undefined,
+			targetName: undefined,
 			movedVerbHint: undefined,
 		});
 
@@ -133,6 +155,7 @@ describe("routeCommand PASSTHROUGH", () => {
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: ["-a", "native"],
 			accountLabel: "work",
+			targetName: undefined,
 			movedVerbHint: undefined,
 		});
 	});
@@ -144,7 +167,28 @@ describe("routeCommand PASSTHROUGH", () => {
 			route: CommandRoute.PASSTHROUGH,
 			nativeArgs: ["login"],
 			accountLabel: undefined,
+			targetName: undefined,
 			movedVerbHint: GateAuthVerb.LOGIN,
+		});
+	});
+
+	it("carries the extracted target name", () => {
+		const targeting = makeFakeProvider({
+			passthroughTarget: {
+				flag: "--project",
+				noun: "project",
+				resolveEnv: async () => ({}),
+			},
+		});
+
+		expect(
+			routeCommand(targeting, ["env", "ls", "--project", "hat-rec"]),
+		).toEqual({
+			route: CommandRoute.PASSTHROUGH,
+			nativeArgs: ["env", "ls"],
+			accountLabel: undefined,
+			targetName: "hat-rec",
+			movedVerbHint: undefined,
 		});
 	});
 });
@@ -167,6 +211,25 @@ describe("routeCommand INVALID", () => {
 			route: CommandRoute.GATE_TREE,
 			gateArgs: ["auth", "switch", "--help"],
 		});
+	});
+
+	it("rejects a target flag on auth verbs", () => {
+		const targeting = makeFakeProvider({
+			passthroughTarget: {
+				flag: "--project",
+				noun: "project",
+				resolveEnv: async () => ({}),
+			},
+		});
+
+		const routed = routeCommand(targeting, [
+			"--project",
+			"hat-rec",
+			"auth",
+			"switch",
+		]);
+
+		expect(routed.route).toBe(CommandRoute.INVALID);
 	});
 
 	it("rejects malformed gate flags", () => {
