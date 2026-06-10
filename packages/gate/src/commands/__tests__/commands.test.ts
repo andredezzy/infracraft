@@ -57,11 +57,11 @@ function fakeProvider(overrides: Partial<GateProvider> = {}): GateProvider {
 	};
 }
 
-function seed(label = "a", token = "t1"): void {
+function seed(label = "a", token = "t1", identity = "andre"): void {
 	store.add({
 		provider: Provider.VERCEL,
 		label,
-		identity: "andre",
+		identity,
 		session: { token },
 	});
 }
@@ -114,8 +114,8 @@ describe("runLogout", () => {
 
 describe("runWhoami", () => {
 	it("defaults to the active account", async () => {
-		seed("a", "active-tok");
-		seed("b", "other-tok");
+		seed("a", "active-tok", "andre");
+		seed("b", "other-tok", "bob");
 		native = { token: "active-tok" };
 
 		await runWhoami(fakeProvider(), store, undefined);
@@ -144,8 +144,8 @@ describe("runList", () => {
 	});
 
 	it("marks the active account", async () => {
-		seed("a", "t1");
-		seed("b", "t2");
+		seed("a", "t1", "andre");
+		seed("b", "t2", "bob");
 		native = { token: "t2" };
 
 		await runList(fakeProvider(), store);
@@ -348,31 +348,85 @@ describe("expired-but-refreshable native sessions", () => {
 	});
 });
 
-describe("active marker with healed tokens", () => {
-	it("marks every entry holding the native session, after self-healing", async () => {
-		seed("hc", "old-1");
-		seed("hat", "old-2");
-		seed("dz0", "t9");
-		store.remove(Provider.VERCEL, "dz0");
-
-		store.add({
-			provider: Provider.VERCEL,
-			label: "dz0",
-			identity: "dz0btc",
-			session: { token: "t9" },
-		});
-
+describe("active marker after a mandatory merge", () => {
+	it("merges duplicate identities during list and marks the survivor", async () => {
+		seed("hc", "old-1", "crew");
+		seed("hat", "old-2", "crew");
+		seed("dz0", "t9", "dz");
 		native = { token: "fresh-tok" };
+		vi.mocked(p.select).mockResolvedValueOnce("hc");
+		const provider = fakeProvider({ identity: vi.fn(async () => "crew") });
 
-		await runList(fakeProvider(), store);
+		await runList(provider, store);
+
+		expect(store.find(Provider.VERCEL, "hat")).toBeUndefined();
+		expect(store.find(Provider.VERCEL, "hc")?.session.token).toBe("fresh-tok");
 
 		const lines = vi
 			.mocked(p.log.message)
 			.mock.calls.map((call) => String(call[0]));
-
 		expect(lines.find((line) => line.includes("hc"))).toContain("●");
-		expect(lines.find((line) => line.includes("hat"))).toContain("●");
 		expect(lines.find((line) => line.includes("dz0"))).not.toContain("●");
 		expect(p.confirm).not.toHaveBeenCalled();
+	});
+});
+
+describe("mandatory duplicate merge", () => {
+	it("prompts per group and keeps only the chosen survivor", async () => {
+		seed("hc", "t1", "crew");
+		seed("hat", "t2", "crew");
+		seed("dz0", "t9", "dz");
+		vi.mocked(p.select).mockResolvedValueOnce("hat");
+
+		await maybeOfferAdoption(fakeProvider(), store);
+
+		expect(store.find(Provider.VERCEL, "hc")).toBeUndefined();
+		expect(store.find(Provider.VERCEL, "hat")?.session.token).toBe("t2");
+		expect(store.find(Provider.VERCEL, "dz0")).toBeDefined();
+	});
+
+	it("handles multiple duplicate groups with one prompt each", async () => {
+		seed("a1", "t1", "andre");
+		seed("a2", "t2", "andre");
+		seed("b1", "t3", "bob");
+		seed("b2", "t4", "bob");
+
+		vi.mocked(p.select).mockResolvedValueOnce("a1").mockResolvedValueOnce("b2");
+
+		await maybeOfferAdoption(fakeProvider(), store);
+
+		expect(store.list(Provider.VERCEL).map((account) => account.label)).toEqual(
+			["a1", "b2"],
+		);
+		expect(p.select).toHaveBeenCalledTimes(2);
+	});
+
+	it("repairs a duplicate introduced by the vergate migration in the same run", async () => {
+		const vergateDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "gate-cmd-vergate3-"),
+		);
+		process.env.GATE_VERGATE_ACCOUNTS_FILE = path.join(
+			vergateDir,
+			"accounts.json",
+		);
+
+		fs.writeFileSync(
+			process.env.GATE_VERGATE_ACCOUNTS_FILE,
+			JSON.stringify({
+				accounts: [
+					{ label: "old1", username: "andre", token: "t1" },
+					{ label: "old2", username: "andre", token: "t2" },
+				],
+			}),
+		);
+
+		vi.mocked(p.confirm).mockResolvedValueOnce(true);
+		vi.mocked(p.select).mockResolvedValueOnce("old2");
+
+		await maybeOfferAdoption(fakeProvider(), store);
+
+		expect(store.list(Provider.VERCEL).map((account) => account.label)).toEqual(
+			["old2"],
+		);
 	});
 });

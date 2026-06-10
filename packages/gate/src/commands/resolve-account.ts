@@ -12,6 +12,7 @@ import {
 import type { GateProvider, ProviderSession } from "../providers/provider";
 import { Provider } from "../providers/provider";
 import { promptLabelAndAdd } from "./adopt-session";
+import { resolveDuplicateIdentities } from "./merge-duplicates";
 
 /** One-time vergate adoption: offered before any interactive Vercel account
  * resolution while the store has no Vercel accounts. */
@@ -78,13 +79,15 @@ async function maybeOfferNativeImport(
 }
 
 /** Cold-start adoption chain: vergate bulk migration first (it may make the
- * native identity known), then native-session discovery. */
+ * native identity known), then native-session discovery, then the mandatory
+ * duplicate-identity merge (an adoption step may have introduced one). */
 export async function maybeOfferAdoption(
 	provider: GateProvider,
 	store: AccountStore,
 ): Promise<void> {
 	await maybeOfferVergateMigration(provider, store);
 	await maybeOfferNativeImport(provider, store);
+	await resolveDuplicateIdentities(provider, store);
 }
 
 /** Positional label → lookup; otherwise an interactive picker. Exits on cancel. */
