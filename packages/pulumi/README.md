@@ -25,7 +25,7 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 | 🤖 | **Agents** | `@infracraft/pulumi/agents` | Emit operating hints for AI coding agents working on the stack. |
 | #️⃣ | **Hash** | `@infracraft/pulumi/hash` | Deterministic directory/env-var/app hashing for deploy triggers. |
 | 📦 | **Sandbox** | `@infracraft/pulumi/sandbox` | Isolated `/tmp` working copies for CLI deploys. Opt in via `dependsOn`. |
-| 🔒 | **Git Guard** | `@infracraft/pulumi/git-guard` | Metadata-free `.git` stub for deploys. Keeps commit SHAs and author emails off third-party platforms. |
+| 🔒 | **Git Guard** | `@infracraft/pulumi/git-guard` | Swaps a sandboxed deploy's `.git` for a fresh stub. Opt in via `dependsOn`. |
 
 ## Install
 
@@ -370,7 +370,7 @@ new RailwayDeploy("api-deploy", {
 
 ## Sandbox & Git Guard
 
-Deploy isolation as `dependsOn` markers. Listing a `DeploySandbox` in a deploy's `dependsOn` runs that deploy's CLI from an isolated copy of the repo's tracked files under `/tmp/infracraft` (stale sandboxes are garbage-collected automatically). Adding a `GitGuard` swaps the copy's `.git` for a metadata-free stub (`git init` + `git add -A`, unborn HEAD), so no commit SHA or author email is sent to the platform.
+Deploy isolation as `dependsOn` markers. Listing a `DeploySandbox` in a deploy's `dependsOn` runs that deploy's CLI from an isolated copy of the repo's tracked files under `/tmp/infracraft` (stale sandboxes are garbage-collected automatically). Adding a `GitGuard` swaps the copy's `.git` for a fresh stub (`git init` + `git add -A`, unborn HEAD).
 
 ```typescript
 import { DeploySandbox } from "@infracraft/pulumi/sandbox"
@@ -391,7 +391,7 @@ new VercelDeploy("web-deploy", {
 |---|---|---|
 | none | Live repo tree | The real one; whatever the platform CLI picks up |
 | `DeploySandbox` | Isolated `/tmp/infracraft` copy | Real `.git` (copy-on-write copy) |
-| `DeploySandbox` + `GitGuard` | Isolated copy, `excludePaths` applied | Metadata-free stub: no commit SHA, no author |
+| `DeploySandbox` + `GitGuard` | Isolated copy, `excludePaths` applied | A fresh stub (`git init` + `git add -A`, unborn HEAD) |
 | `GitGuard` alone | — | Throws: the guard needs a sandbox to act on |
 
 ### Sandbox & Git Guard API surface
@@ -399,7 +399,7 @@ new VercelDeploy("web-deploy", {
 | Export | Kind | Notes |
 |---|---|---|
 | `DeploySandbox` | ComponentResource | Isolation marker + workspace lifecycle; GCs sandboxes older than 3h |
-| `GitGuard` | ComponentResource | Metadata-protection marker; requires a `DeploySandbox` alongside it |
+| `GitGuard` | ComponentResource | Stub-`.git` marker; requires a `DeploySandbox` alongside it |
 | `SandboxMode` | enum | `NONE`, `ORIGINAL`, `STUB`; derived from the markers by the deploy seam |
 | `buildSandboxScript(options)` | function | Builds the sandboxed shell a deploy command runs (used by the deploy resources) |
 | `buildSandboxFileFilter(excludePaths)` | function | Portable awk filter applied to `git ls-files` before the copy |

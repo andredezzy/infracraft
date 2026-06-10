@@ -12,7 +12,7 @@
 
 ---
 
-Platform CLIs (`vercel`, `railway`, `fly`) read whatever sits in your working tree, including `.git` with its commit SHAs and author emails. This package builds the POSIX shell scripts that run those CLIs from an isolated copy of the repo's tracked files under `/tmp/infracraft` instead, optionally with a metadata-free stub `.git`, so nothing about your history reaches the platform.
+Platform CLIs (`vercel`, `railway`, `fly`) read whatever sits in your working tree — untracked files, local config, and half-finished changes included. This package builds the POSIX shell scripts that run those CLIs from an isolated copy of the repo's tracked files under `/tmp/infracraft` instead, so a deploy sees a clean checkout of exactly what git tracks.
 
 It is the deploy-isolation engine behind [`@infracraft/pulumi`](https://www.npmjs.com/package/@infracraft/pulumi) (the `DeploySandbox` and `GitGuard` resources) and [`@infracraft/gate`](https://www.npmjs.com/package/@infracraft/gate) (sandboxed deploys by default). Use it directly to give any other CLI the same treatment.
 
@@ -60,7 +60,7 @@ The script copies the repo's tracked files (`git ls-files`) into a fresh `mktemp
 |---|---|---|
 | `NONE` | Live repo tree (no isolation) | The real one |
 | `ORIGINAL` | Isolated `/tmp/infracraft` copy of tracked files | The real one, copy-on-write copied into the sandbox |
-| `STUB` | Isolated copy with `excludePaths` applied | A fresh `git init` + `git add -A` stub with an unborn HEAD. No commit SHA, no author email, no branch name |
+| `STUB` | Isolated copy with `excludePaths` applied | A fresh `git init` + `git add -A` stub with an unborn HEAD |
 
 ## API surface
 

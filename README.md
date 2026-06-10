@@ -17,7 +17,7 @@ infracraft is a small family of packages for crafting infrastructure on app plat
 | Package | Version | What it does |
 |---|---|---|
 | [`@infracraft/pulumi`](packages/pulumi) | [![npm](https://img.shields.io/npm/v/@infracraft/pulumi?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/pulumi) | Native Pulumi providers for Railway, Neon, Vercel, and Fly.io with adopt-or-create semantics and deploy orchestration. |
-| [`@infracraft/gate`](packages/gate) | [![npm](https://img.shields.io/npm/v/@infracraft/gate?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/gate) | Multi-account switcher for Vercel, Railway, and Fly.io. Really switches the native CLI session and deploys metadata-free by default. |
+| [`@infracraft/gate`](packages/gate) | [![npm](https://img.shields.io/npm/v/@infracraft/gate?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/gate) | Multi-account switcher for Vercel, Railway, and Fly.io. Really switches the native CLI session and sandboxes deploys by default. |
 | [`@infracraft/sandbox`](packages/sandbox) | [![npm](https://img.shields.io/npm/v/@infracraft/sandbox?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/sandbox) | Isolated `/tmp` working copies for CLI deploys. The shell-script builders behind the sandboxed deploys in both packages above. |
 
 Each package's README is its full documentation; the sections below are orientation only.
@@ -40,7 +40,7 @@ const project = new RailwayProject("my-project", { name: "my-app" }, { provider 
 
 ## @infracraft/gate
 
-Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session, and wraps deploys in an isolated metadata-free sandbox by default.
+Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session, and runs deploys from an isolated sandbox copy of the repo's tracked files by default.
 
 ```bash
 bun add -g @infracraft/gate
@@ -54,7 +54,7 @@ gate fly auth list
 
 ## @infracraft/sandbox
 
-The shared deploy-isolation primitives: POSIX shell-script builders that copy a repo's tracked files into `/tmp`, optionally replace `.git` with a metadata-free stub, and run the platform CLI from there. Consumed by the two packages above; use it directly to give any CLI the same treatment.
+The shared deploy-isolation primitives: POSIX shell-script builders that copy a repo's tracked files into `/tmp` and run the platform CLI from there. Consumed by the two packages above; use it directly to give any CLI the same treatment.
 
 [Read the full docs](packages/sandbox)
 
@@ -62,7 +62,7 @@ The shared deploy-isolation primitives: POSIX shell-script builders that copy a 
 
 - **Native APIs, no bridges.** Every provider integration talks to the platform's own REST or GraphQL API. No Terraform providers underneath.
 - **Adopt-or-create.** Existing infrastructure is discovered by name and adopted into state instead of fought over.
-- **Metadata-free deploys.** Deploys run from an isolated copy with a stub `.git`, so commit SHAs and author emails stay off third-party platforms. Shared between pulumi and gate via the sandbox package.
+- **Sandboxed deploys.** Deploys run from an isolated `/tmp` copy of the repo's tracked files, so the platform CLI never reads the live working tree. Shared between pulumi and gate via the sandbox package.
 - **Real switching.** gate writes sessions into the native CLI auth files; there is no wrapper state to drift out of sync.
 
 ## Development

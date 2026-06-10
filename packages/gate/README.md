@@ -1,7 +1,7 @@
 <p align="center">
   <b>@infracraft/gate</b>
   <br />
-  <i>Switch Vercel, Railway, and Fly.io accounts. Deploy without leaking git metadata.</i>
+  <i>Switch Vercel, Railway, and Fly.io accounts. Really switches the native CLI session.</i>
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 
 ---
 
-Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session when you run `gate … switch`, and wraps deploys in an isolated metadata-free sandbox by default, so no commit SHA or author email leaves the machine unless you explicitly opt in.
+Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session when you run `gate … switch`, and runs deploys from an isolated sandbox copy of the repo's tracked files by default, so the platform CLI never reads your live working tree.
 
 ## Install
 
@@ -79,7 +79,7 @@ gate fly deploy [...]        # sandboxed deploy (passes flags through to fly dep
 
 ## Deploys
 
-Sandbox is on by default. Every `gate … deploy` / `gate railway up` runs from an isolated `/tmp` copy of the repo's tracked files (`git ls-files`) with a stub `.git` (a fresh `git init` + `git add -A` with an unborn HEAD). No commit SHA, author email, or branch name reaches the platform.
+Sandbox is on by default. Every `gate … deploy` / `gate railway up` runs from an isolated `/tmp` copy of the repo's tracked files (`git ls-files`) with a stub `.git` (a fresh `git init` + `git add -A` with an unborn HEAD), so the deploy sees a clean copy of exactly what git tracks — never untracked local files.
 
 ### Deploy flags
 
@@ -141,7 +141,7 @@ const result = await runDeploy({
   provider: vercelProvider,
   token: valid.session.token,
   passthroughArgs: ["--prod"],
-  mode: SandboxMode.STUB,   // STUB = metadata-free, ORIGINAL = real .git, NONE = no sandbox
+  mode: SandboxMode.STUB,   // STUB = fresh stub .git, ORIGINAL = real .git, NONE = no sandbox
 })
 
 console.log(result.url, result.exitCode)
