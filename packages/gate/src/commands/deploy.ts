@@ -71,7 +71,7 @@ async function runDeployCommand(
 	if (mode !== SandboxMode.NONE && !isInsideGitRepo()) {
 		p.log.info(
 			pc.gray(
-				"Not a git repository — skipping the sandbox, deploying natively.",
+				"Not a git repository. Skipping the sandbox and deploying natively.",
 			),
 		);
 

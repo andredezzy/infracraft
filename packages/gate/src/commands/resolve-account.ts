@@ -25,7 +25,7 @@ async function maybeOfferVergateMigration(
 	}
 
 	const confirmed = await p.confirm({
-		message: "Found vergate accounts — migrate them into gate?",
+		message: "Found vergate accounts. Migrate them into gate?",
 	});
 
 	if (confirmed === true) {
@@ -53,7 +53,7 @@ async function maybeOfferNativeImport(
 	const session = discovery.session as ProviderSession;
 
 	const confirmed = await p.confirm({
-		message: `The ${provider.name} CLI is logged in as ${identity} — import this account?`,
+		message: `The ${provider.name} CLI is logged in as ${identity}. Import this account?`,
 	});
 
 	if (p.isCancel(confirmed)) {
@@ -73,7 +73,7 @@ async function maybeOfferNativeImport(
 
 	p.log.message(
 		pc.gray(
-			`Won't ask about ${identity} again — \`gate ${provider.binary} ${importPath}\` works anytime.`,
+			`Won't ask about ${identity} again. \`gate ${provider.binary} ${importPath}\` works anytime.`,
 		),
 	);
 }

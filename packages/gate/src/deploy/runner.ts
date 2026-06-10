@@ -106,7 +106,7 @@ export async function runDeploy(
 	} catch (error) {
 		if ((error as NodeJS.ErrnoException).code === "ENOENT") {
 			throw new Error(
-				`${command.argv[0]} CLI not found — install it first (e.g. \`bun add -g ${command.argv[0]}\`).`,
+				`${command.argv[0]} CLI not found. Install it first (e.g. \`bun add -g ${command.argv[0]}\`).`,
 			);
 		}
 

@@ -12,7 +12,7 @@
 
 ---
 
-Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session when you run `gate … switch`, and wraps deploys in an isolated metadata-free sandbox by default — so no commit SHA or author email leaves the machine unless you explicitly opt in.
+Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session when you run `gate … switch`, and wraps deploys in an isolated metadata-free sandbox by default, so no commit SHA or author email leaves the machine unless you explicitly opt in.
 
 ## Install
 
@@ -72,7 +72,7 @@ gate fly deploy [...]        # sandboxed deploy (passes flags through to fly dep
 |---|---|
 | `login` | Add an account by opening the provider's own browser login flow |
 | `logout [label]` | Remove a stored account; prompts for selection if no label given |
-| `switch [label]` | Write that account's session into the native CLI auth file — THE real switch |
+| `switch [label]` | Write that account's session into the native CLI auth file. THE real switch |
 | `whoami [label]` | Show and validate the account; defaults to the currently active account |
 | `list` | List all stored accounts with an active marker |
 | `import` | Adopt the current native CLI session as a named account |
@@ -86,8 +86,8 @@ Sandbox is on by default. Every `gate … deploy` / `gate railway up` runs from 
 | Flag | Description |
 |---|---|
 | `--account <label>`, `-a <label>`, `--account=<label>` | Use a specific stored account for this deploy |
-| `--no-sandbox` | Deploy from the live working tree — native CLI behavior, no isolation |
-| `--git-metadata` | Isolated `/tmp` copy but with the real `.git` — platform sees actual commit data |
+| `--no-sandbox` | Deploy from the live working tree (native CLI behavior, no isolation) |
+| `--git-metadata` | Isolated `/tmp` copy but with the real `.git`. The platform sees actual commit data |
 
 Everything else passes through verbatim to the native CLI. For example:
 
@@ -101,7 +101,7 @@ The command exits with the native CLI's exit code. Outside a git repo the sandbo
 
 ## How switching works
 
-`gate … switch` merges the stored session into the native CLI's auth file and writes it atomically with `0600` permissions. The native CLI then runs as that account with no further gate involvement. The active account is always read directly from the native file — gate never stores which account is "active" separately.
+`gate … switch` merges the stored session into the native CLI's auth file and writes it atomically with `0600` permissions. The native CLI then runs as that account with no further gate involvement. The active account is always read directly from the native file; gate never stores which account is "active" separately.
 
 | Provider | Native auth file |
 |---|---|
