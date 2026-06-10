@@ -11,6 +11,7 @@ import {
 } from "../accounts/vergate-migration";
 import type { GateProvider, ProviderSession } from "../providers/provider";
 import { Provider } from "../providers/provider";
+import { InteractionMode } from "../registry/command-spec";
 import { promptLabelAndAdd } from "./adopt-session";
 import { resolveDuplicateIdentities } from "./merge-duplicates";
 
@@ -69,13 +70,15 @@ async function maybeOfferNativeImport(
 
 	store.declineIdentity(provider.id, identity);
 
-	const importPath = [...provider.layout.authMount, "import"].join(" ");
-
 	p.log.message(
 		pc.gray(
-			`Won't ask about ${identity} again. \`gate ${provider.binary} ${importPath}\` works anytime.`,
+			`Won't ask about ${identity} again. \`gate ${provider.binary} auth import\` works anytime.`,
 		),
 	);
+}
+
+export interface ResolveAccountOptions {
+	interaction: InteractionMode;
 }
 
 /** Cold-start adoption chain: vergate bulk migration first (it may make the
@@ -84,7 +87,12 @@ async function maybeOfferNativeImport(
 export async function maybeOfferAdoption(
 	provider: GateProvider,
 	store: AccountStore,
+	options?: ResolveAccountOptions,
 ): Promise<void> {
+	if (options?.interaction === InteractionMode.NON_INTERACTIVE) {
+		return;
+	}
+
 	await maybeOfferVergateMigration(provider, store);
 	await maybeOfferNativeImport(provider, store);
 	await resolveDuplicateIdentities(provider, store);
@@ -95,8 +103,9 @@ export async function resolveAccount(
 	provider: GateProvider,
 	store: AccountStore,
 	label: string | undefined,
+	options?: ResolveAccountOptions,
 ): Promise<GateAccount> {
-	await maybeOfferAdoption(provider, store);
+	await maybeOfferAdoption(provider, store, options);
 
 	if (label) {
 		const account = store.find(provider.id, label);
@@ -111,11 +120,14 @@ export async function resolveAccount(
 	const accounts = store.list(provider.id);
 
 	if (accounts.length === 0) {
-		const loginPath = [...provider.layout.authMount, "login"].join(" ");
-		const importPath = [...provider.layout.authMount, "import"].join(" ");
-
 		throw new Error(
-			`No ${provider.name} accounts saved. Run \`gate ${provider.binary} ${loginPath}\` to add one, or \`gate ${provider.binary} ${importPath}\` to adopt the current CLI session.`,
+			`No ${provider.name} accounts saved. Run \`gate ${provider.binary} auth login\` to add one, or \`gate ${provider.binary} auth import\` to adopt the current CLI session.`,
+		);
+	}
+
+	if (options?.interaction === InteractionMode.NON_INTERACTIVE) {
+		throw new Error(
+			`No active ${provider.name} account. Pass --account <label> or run \`gate ${provider.binary} auth switch\`.`,
 		);
 	}
 

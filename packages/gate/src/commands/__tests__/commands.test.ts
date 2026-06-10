@@ -30,6 +30,7 @@ import { runImport } from "../import";
 import { runList } from "../list";
 import { runLogin } from "../login";
 import { runLogout } from "../logout";
+import { InteractionMode } from "../../registry/command-spec";
 import { maybeOfferAdoption, resolveAccount } from "../resolve-account";
 import { runSwitch } from "../switch";
 import { runWhoami } from "../whoami";
@@ -281,10 +282,10 @@ describe("native session discovery offer", () => {
 		expect(p.text).not.toHaveBeenCalled();
 	});
 
-	it("the empty-store error mentions both login and import", async () => {
+	it("the empty-store error mentions both auth login and auth import", async () => {
 		await expect(
 			resolveAccount(fakeProvider(), store, undefined),
-		).rejects.toThrow(/gate fake login.*gate fake import/s);
+		).rejects.toThrow(/gate fake auth login.*gate fake auth import/s);
 	});
 });
 
@@ -472,5 +473,52 @@ describe("mandatory duplicate merge", () => {
 		expect(store.list(Provider.VERCEL).map((account) => account.label)).toEqual(
 			["old2"],
 		);
+	});
+});
+
+describe("non-interactive account resolution", () => {
+	it("skips every adoption offer when NON_INTERACTIVE", async () => {
+		native = { token: "native-tok" };
+
+		await maybeOfferAdoption(fakeProvider(), store, {
+			interaction: InteractionMode.NON_INTERACTIVE,
+		});
+
+		expect(p.confirm).not.toHaveBeenCalled();
+		expect(store.list(Provider.VERCEL)).toEqual([]);
+	});
+
+	it("throws instead of showing the picker when NON_INTERACTIVE", async () => {
+		seed("a", "t1", "andre");
+		seed("b", "t2", "bob");
+
+		await expect(
+			resolveAccount(fakeProvider(), store, undefined, {
+				interaction: InteractionMode.NON_INTERACTIVE,
+			}),
+		).rejects.toThrow(/No active Fake.*--account <label>.*gate fake auth switch/s);
+
+		expect(p.select).not.toHaveBeenCalled();
+	});
+
+	it("explicit labels still resolve without prompting when NON_INTERACTIVE", async () => {
+		seed("a", "t1", "andre");
+
+		const account = await resolveAccount(fakeProvider(), store, "a", {
+			interaction: InteractionMode.NON_INTERACTIVE,
+		});
+
+		expect(account.label).toBe("a");
+		expect(p.confirm).not.toHaveBeenCalled();
+
+		expect(p.select).not.toHaveBeenCalled();
+	});
+
+	it("NON_INTERACTIVE with an empty store still throws the onboarding hint", async () => {
+		await expect(
+			resolveAccount(fakeProvider(), store, undefined, {
+				interaction: InteractionMode.NON_INTERACTIVE,
+			}),
+		).rejects.toThrow(/gate fake auth login.*gate fake auth import/s);
 	});
 });
