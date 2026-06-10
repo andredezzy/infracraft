@@ -52,6 +52,33 @@ function readAuthData(): Record<string, unknown> | null {
 	}
 }
 
+interface VercelProjectResponse {
+	id: string;
+	accountId: string;
+}
+
+/** GET /v9/projects/{name} — null on 404; throws on other failures. The one
+ * project lookup shared by deployTarget.exists and passthroughTarget.resolveEnv. */
+async function fetchVercelProject(
+	token: string,
+	name: string,
+): Promise<VercelProjectResponse | null> {
+	const response = await fetch(
+		`https://api.vercel.com/v9/projects/${encodeURIComponent(name)}`,
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
+
+	if (response.status === 404) {
+		return null;
+	}
+
+	if (!response.ok) {
+		throw new Error(`Project lookup failed (HTTP ${response.status})`);
+	}
+
+	return (await response.json()) as VercelProjectResponse;
+}
+
 /** The explicit `--project <name>` / `--project=<name>` target, if any.
  * `--scope` defers entirely to the native CLI — team lookups are v1
  * out-of-scope, so the preflight must step aside rather than guess. */
@@ -225,20 +252,7 @@ export const vercelProvider: GateProvider = {
 		resolveName: resolveProjectName,
 
 		async exists(token: string, name: string): Promise<boolean> {
-			const response = await fetch(
-				`https://api.vercel.com/v9/projects/${encodeURIComponent(name)}`,
-				{ headers: { Authorization: `Bearer ${token}` } },
-			);
-
-			if (response.status === 404) {
-				return false;
-			}
-
-			if (!response.ok) {
-				throw new Error(`Project lookup failed (HTTP ${response.status})`);
-			}
-
-			return true;
+			return (await fetchVercelProject(token, name)) !== null;
 		},
 
 		async create(token: string, name: string): Promise<void> {
@@ -254,6 +268,29 @@ export const vercelProvider: GateProvider = {
 			if (!response.ok) {
 				throw new Error(`Project creation failed (HTTP ${response.status})`);
 			}
+		},
+	},
+
+	passthroughTarget: {
+		flag: "--project",
+		noun: "project",
+
+		async resolveEnv(
+			token: string,
+			name: string,
+		): Promise<Record<string, string>> {
+			const project = await fetchVercelProject(token, name);
+
+			if (!project) {
+				throw new Error(
+					`Project "${name}" was not found for this account. List projects with \`gate vercel project ls\`.`,
+				);
+			}
+
+			return {
+				VERCEL_PROJECT_ID: project.id,
+				VERCEL_ORG_ID: project.accountId,
+			};
 		},
 	},
 };

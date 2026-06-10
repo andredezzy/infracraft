@@ -43,6 +43,21 @@ export interface DeployTargetCapability {
 }
 
 /**
+ * Lets a provider make a gate-claimed passthrough flag select a named target
+ * by resolving it to env vars injected into the native spawn. Pure data ops —
+ * orchestration lives in the passthrough command.
+ */
+export interface PassthroughTargetCapability {
+	/** The claimed long flag: "--project". */
+	flag: string;
+	/** Display noun for messages: "project". */
+	noun: string;
+	/** Resolves the target name to spawn env vars; throws when not found
+	 * (resolution is load-bearing — callers must NOT degrade to proceeding). */
+	resolveEnv(token: string, name: string): Promise<Record<string, string>>;
+}
+
+/**
  * The strategy contract. One implementation per platform; everything else in
  * gate (registry, routing, runners, store) is provider-agnostic.
  */
@@ -86,4 +101,6 @@ export interface GateProvider {
 	deployUrlPattern: RegExp;
 	/** Optional missing-target preflight ops; providers without it skip the check. */
 	deployTarget?: DeployTargetCapability;
+	/** Optional named-target selection for passthrough invocations. */
+	passthroughTarget?: PassthroughTargetCapability;
 }

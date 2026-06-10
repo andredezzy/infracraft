@@ -365,3 +365,55 @@ describe("deployTarget", () => {
 		).rejects.toThrow("Project creation failed (HTTP 409)");
 	});
 });
+
+describe("passthroughTarget", () => {
+	it("declares the flag and noun", () => {
+		expect(vercelProvider.passthroughTarget?.flag).toBe("--project");
+		expect(vercelProvider.passthroughTarget?.noun).toBe("project");
+	});
+
+	it("resolveEnv maps the project to the CLI's link env vars", async () => {
+		const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response(JSON.stringify({ id: "prj_123", accountId: "team_456" }), {
+				status: 200,
+			}),
+		);
+
+		const env = await vercelProvider.passthroughTarget?.resolveEnv(
+			"tok",
+			"hat-rec",
+		);
+
+		expect(env).toEqual({
+			VERCEL_PROJECT_ID: "prj_123",
+			VERCEL_ORG_ID: "team_456",
+		});
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.vercel.com/v9/projects/hat-rec",
+			{ headers: { Authorization: "Bearer tok" } },
+		);
+	});
+
+	it("resolveEnv throws a not-found hint on 404", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response("{}", { status: 404 }),
+		);
+
+		await expect(
+			vercelProvider.passthroughTarget?.resolveEnv("tok", "ghost"),
+		).rejects.toThrow(
+			'Project "ghost" was not found for this account. List projects with `gate vercel project ls`.',
+		);
+	});
+
+	it("resolveEnv throws on other lookup failures", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response("{}", { status: 500 }),
+		);
+
+		await expect(
+			vercelProvider.passthroughTarget?.resolveEnv("tok", "x"),
+		).rejects.toThrow("Project lookup failed (HTTP 500)");
+	});
+});
