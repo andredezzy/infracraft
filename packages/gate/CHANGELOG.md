@@ -1,5 +1,13 @@
 # @infracraft/gate
 
+## 0.6.1
+
+### Patch Changes
+
+- 93b6d30: Docs: reword the sandbox and Git Guard READMEs around deploy isolation — a clean copy of the repo's tracked files instead of the live working tree. The gate deploy log line now reads "stub .git" to match.
+- Updated dependencies [93b6d30]
+  - @infracraft/sandbox@0.1.2
+
 ## 0.6.0
 
 ### Minor Changes
