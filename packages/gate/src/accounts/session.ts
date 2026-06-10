@@ -1,4 +1,5 @@
 import type { GateProvider, ProviderSession } from "../providers/provider";
+import { InteractionMode } from "../registry/command-spec";
 import type { AccountStore, GateAccount } from "./store";
 
 const EXPIRY_BUFFER_SECONDS = 60;
@@ -35,6 +36,10 @@ function isExpired(session: ProviderSession): boolean {
 	);
 }
 
+export interface EnsureValidSessionOptions {
+	interaction: InteractionMode;
+}
+
 /**
  * Returns the account with a session that is known-valid, trying the cheapest
  * path first: silent refresh on expiry → validate → silent refresh → recover
@@ -46,6 +51,7 @@ export async function ensureValidSession(
 	provider: GateProvider,
 	store: AccountStore,
 	account: GateAccount,
+	options?: EnsureValidSessionOptions,
 ): Promise<GateAccount> {
 	const wasActive =
 		detectActiveAccount(provider, store)?.label === account.label;
@@ -90,6 +96,12 @@ export async function ensureValidSession(
 		} catch {
 			// Could not confirm whose session this is — never adopt it; re-login instead.
 		}
+	}
+
+	if (options?.interaction === InteractionMode.NON_INTERACTIVE) {
+		throw new Error(
+			`Session expired. Run \`gate ${provider.binary} auth login\` in a terminal.`,
+		);
 	}
 
 	const fresh = await provider.login();

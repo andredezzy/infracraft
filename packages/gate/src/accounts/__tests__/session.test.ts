@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { makeFakeProvider } from "../../providers/__tests__/fake-provider";
 import type { GateProvider, ProviderSession } from "../../providers/provider";
 import { Provider } from "../../providers/provider";
+import { InteractionMode } from "../../registry/command-spec";
 import { detectActiveAccount, ensureValidSession } from "../session";
 import { AccountStore, type GateAccount } from "../store";
 
@@ -221,5 +222,51 @@ describe("ensureValidSession", () => {
 
 		expect(result.session.token).toBe("from-login");
 		expect(provider.login).toHaveBeenCalled();
+	});
+});
+
+describe("ensureValidSession non-interactive guard", () => {
+	it("throws instead of opening a browser when NON_INTERACTIVE", async () => {
+		const account = seed({ token: "dead" });
+
+		const provider = fakeProvider({
+			validate: vi.fn(async () => false),
+		});
+
+		await expect(
+			ensureValidSession(provider, store, account, {
+				interaction: InteractionMode.NON_INTERACTIVE,
+			}),
+		).rejects.toThrow(/gate fake auth login/);
+
+		expect(provider.login).not.toHaveBeenCalled();
+	});
+
+	it("still browser-logins as the last resort when INTERACTIVE", async () => {
+		const account = seed({ token: "dead" });
+
+		const provider = fakeProvider({
+			validate: vi.fn(async (token: string) => token === "from-login"),
+		});
+
+		const valid = await ensureValidSession(provider, store, account, {
+			interaction: InteractionMode.INTERACTIVE,
+		});
+
+		expect(valid.session.token).toBe("from-login");
+
+		expect(provider.login).toHaveBeenCalled();
+	});
+
+	it("defaults to INTERACTIVE when options are omitted (library back-compat)", async () => {
+		const account = seed({ token: "dead" });
+
+		const provider = fakeProvider({
+			validate: vi.fn(async (token: string) => token === "from-login"),
+		});
+
+		const valid = await ensureValidSession(provider, store, account);
+
+		expect(valid.session.token).toBe("from-login");
 	});
 });
