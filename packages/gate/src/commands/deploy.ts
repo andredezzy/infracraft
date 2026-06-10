@@ -137,7 +137,7 @@ export async function ensureDeployTarget(
 
 	await deployTarget.create(context.token, name);
 
-	p.log.success(`Created ${deployTarget.noun} ${name}`);
+	p.log.success(`Created ${deployTarget.noun} "${name}"`);
 
 	return DeployTargetPreflightOutcome.READY;
 }

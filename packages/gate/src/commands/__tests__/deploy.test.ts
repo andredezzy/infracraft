@@ -177,7 +177,7 @@ describe("ensureDeployTarget", () => {
 		});
 
 		expect(target.create).toHaveBeenCalledWith("tok", "hat-rec");
-		expect(p.log.success).toHaveBeenCalledWith("Created project hat-rec");
+		expect(p.log.success).toHaveBeenCalledWith('Created project "hat-rec"');
 		expect(outcome).toBe(DeployTargetPreflightOutcome.READY);
 	});
 

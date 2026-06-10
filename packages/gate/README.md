@@ -88,6 +88,7 @@ Sandbox is on by default. Every `gate … deploy` / `gate railway up` runs from 
 | `--account <label>`, `-a <label>`, `--account=<label>` | Use a specific stored account for this deploy |
 | `--no-sandbox` | Deploy from the live working tree (native CLI behavior, no isolation) |
 | `--git-metadata` | Isolated `/tmp` copy but with the real `.git`. The platform sees actual commit data |
+| `--create-project` | Create the project when it does not exist, without prompting (the interactive default asks first; this is the CI-friendly opt-in) |
 
 Everything else passes through verbatim to the native CLI. For example:
 
