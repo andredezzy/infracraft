@@ -6,7 +6,8 @@ export enum NativeSessionStatus {
 	NONE = "NONE",
 	/** Native token matches a stored account. */
 	MATCHES_STORED = "MATCHES_STORED",
-	/** Identity already stored, token differs — stay quiet. */
+	/** Identity already stored, token differs. No offer; the stored entries
+	 * self-heal by adopting the native session. */
 	TOKEN_VARIANT = "TOKEN_VARIANT",
 	/** Valid session gate doesn't know — the only offer case. */
 	UNKNOWN_IDENTITY = "UNKNOWN_IDENTITY",
@@ -109,7 +110,18 @@ export async function classifyNativeSession(
 		return { status: NativeSessionStatus.INVALID, session };
 	}
 
-	if (accounts.some((account) => account.identity === identity)) {
+	const sameIdentity = accounts.filter(
+		(account) => account.identity === identity,
+	);
+
+	if (sameIdentity.length > 0) {
+		// Self-heal: these entries carry stale tokens for the very account the
+		// native CLI holds live. Adopting the native session makes the active
+		// marker truthful and the next classification a zero-network token match.
+		for (const account of sameIdentity) {
+			store.updateSession(provider.id, account.label, session);
+		}
+
 		return {
 			status: NativeSessionStatus.TOKEN_VARIANT,
 			session,

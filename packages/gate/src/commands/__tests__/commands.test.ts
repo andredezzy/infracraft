@@ -347,3 +347,29 @@ describe("expired-but-refreshable native sessions", () => {
 		expect(native?.token).toBe("fresh");
 	});
 });
+
+describe("active marker with healed tokens", () => {
+	it("marks every entry holding the native session, after self-healing", async () => {
+		seed("hc", "old-1");
+		seed("hat", "old-2");
+		seed("dz0", "t9");
+		store.remove(Provider.VERCEL, "dz0");
+		store.add({
+			provider: Provider.VERCEL,
+			label: "dz0",
+			identity: "dz0btc",
+			session: { token: "t9" },
+		});
+		native = { token: "fresh-tok" };
+
+		await runList(fakeProvider(), store);
+
+		const lines = vi
+			.mocked(p.log.message)
+			.mock.calls.map((call) => String(call[0]));
+		expect(lines.find((line) => line.includes("hc"))).toContain("active");
+		expect(lines.find((line) => line.includes("hat"))).toContain("active");
+		expect(lines.find((line) => line.includes("dz0"))).not.toContain("active");
+		expect(p.confirm).not.toHaveBeenCalled();
+	});
+});

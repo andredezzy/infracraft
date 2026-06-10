@@ -4,7 +4,6 @@ import {
 	classifyNativeSession,
 	NativeSessionStatus,
 } from "../accounts/discovery";
-import { detectActiveAccount } from "../accounts/session";
 import type { AccountStore, GateAccount } from "../accounts/store";
 import {
 	migrateVergateAccounts,
@@ -117,12 +116,12 @@ export async function resolveAccount(
 		);
 	}
 
-	const active = detectActiveAccount(provider, store);
+	const nativeToken = provider.readNativeSession()?.token;
 
 	const selected = await p.select({
 		message: "Select account:",
 		options: accounts.map((account) => ({
-			label: `${account.label} ${pc.gray(`(${account.identity})`)}${account.label === active?.label ? pc.green(" ● active") : ""}`,
+			label: `${account.label} ${pc.gray(`(${account.identity})`)}${account.session.token === nativeToken ? pc.green(" ● active") : ""}`,
 			value: account.label,
 		})),
 	});

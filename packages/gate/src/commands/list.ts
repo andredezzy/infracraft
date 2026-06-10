@@ -2,7 +2,6 @@ import * as p from "@clack/prompts";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
-import { detectActiveAccount } from "../accounts/session";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import { maybeOfferAdoption } from "./resolve-account";
@@ -22,10 +21,11 @@ export async function runList(
 		return;
 	}
 
-	const active = detectActiveAccount(provider, store);
+	const nativeToken = provider.readNativeSession()?.token;
 
 	for (const account of accounts) {
-		const marker = account.label === active?.label ? pc.green(" ● active") : "";
+		const marker =
+			account.session.token === nativeToken ? pc.green(" ● active") : "";
 
 		p.log.message(
 			`${pc.bold(account.label)}  ${pc.gray(account.identity)}${marker}`,

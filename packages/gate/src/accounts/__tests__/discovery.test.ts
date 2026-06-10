@@ -189,3 +189,48 @@ describe("classifyNativeSession refresh fallback", () => {
 		expect(refresh).not.toHaveBeenCalled();
 	});
 });
+
+describe("TOKEN_VARIANT self-healing", () => {
+	it("adopts the native session into every stored entry with that identity", async () => {
+		seed("hc", "old-1", "andre");
+		seed("hat", "old-2", "andre");
+		seed("other", "t9", "someone-else");
+		native = { token: "fresh-tok" };
+		const provider = fakeProvider();
+
+		const discovery = await classifyNativeSession(provider, store);
+
+		expect(discovery.status).toBe(NativeSessionStatus.TOKEN_VARIANT);
+		expect(store.find(Provider.VERCEL, "hc")?.session.token).toBe("fresh-tok");
+		expect(store.find(Provider.VERCEL, "hat")?.session.token).toBe("fresh-tok");
+		expect(store.find(Provider.VERCEL, "other")?.session.token).toBe("t9");
+	});
+
+	it("heals with the refreshed session when the native token was expired", async () => {
+		seed("hc", "old-1", "andre");
+		native = { token: "expired", refreshToken: "r" };
+
+		const provider = fakeProvider({
+			validate: vi.fn(async (token: string) => token === "fresh"),
+			refresh: vi.fn(async () => ({ token: "fresh", refreshToken: "r2" })),
+		});
+
+		await classifyNativeSession(provider, store);
+
+		expect(store.find(Provider.VERCEL, "hc")?.session).toEqual({
+			token: "fresh",
+			refreshToken: "r2",
+		});
+	});
+
+	it("a second classification after healing is MATCHES_STORED", async () => {
+		seed("hc", "old-1", "andre");
+		native = { token: "fresh-tok" };
+		const provider = fakeProvider();
+
+		await classifyNativeSession(provider, store);
+
+		const second = await classifyNativeSession(provider, store);
+		expect(second.status).toBe(NativeSessionStatus.MATCHES_STORED);
+	});
+});
