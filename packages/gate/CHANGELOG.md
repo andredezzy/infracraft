@@ -1,5 +1,11 @@
 # @infracraft/gate
 
+## 0.5.0
+
+### Minor Changes
+
+- 7339f3e: Unique identities: a provider account can no longer appear twice in gate's store. Existing duplicates trigger a mandatory merge prompt (pick the surviving label); `login` and `import` now offer update-or-rename when the identity is already stored.
+
 ## 0.4.1
 
 ### Patch Changes
