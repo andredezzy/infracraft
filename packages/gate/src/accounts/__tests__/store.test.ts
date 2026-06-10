@@ -158,4 +158,18 @@ describe("AccountStore", () => {
 		expect(store.isIdentityDeclined(Provider.VERCEL, "andre")).toBe(false);
 		expect(store.list(Provider.VERCEL)).toEqual([personal]);
 	});
+
+	it("finds all accounts holding an identity, provider-scoped", () => {
+		store.add(personal);
+		store.add({ ...personal, label: "work" });
+		store.add({ ...personal, provider: Provider.RAILWAY, label: "rw" });
+
+		const matches = store.findByIdentity(Provider.VERCEL, "andre");
+
+		expect(matches.map((account) => account.label)).toEqual([
+			"personal",
+			"work",
+		]);
+		expect(store.findByIdentity(Provider.VERCEL, "ghost")).toEqual([]);
+	});
 });

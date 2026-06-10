@@ -51,6 +51,12 @@ export class AccountStore {
 		return this.list(provider).find((account) => account.label === label);
 	}
 
+	findByIdentity(provider: Provider, identity: string): GateAccount[] {
+		return this.list(provider).filter(
+			(account) => account.identity === identity,
+		);
+	}
+
 	add(account: GateAccount): void {
 		const data = this.load();
 
