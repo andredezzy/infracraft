@@ -29,6 +29,7 @@ import { runImport } from "../import";
 import { runList } from "../list";
 import { runLogin } from "../login";
 import { runLogout } from "../logout";
+import { maybeOfferAdoption, resolveAccount } from "../resolve-account";
 import { runSwitch } from "../switch";
 import { runWhoami } from "../whoami";
 
@@ -211,5 +212,85 @@ describe("vergate migration offer", () => {
 
 		expect(p.confirm).toHaveBeenCalled();
 		expect(store.find(Provider.VERCEL, "old")).toBeDefined();
+	});
+});
+
+describe("native session discovery offer", () => {
+	it("offers and imports an unknown native identity on yes", async () => {
+		native = { token: "native-tok" };
+		vi.mocked(p.confirm).mockResolvedValueOnce(true);
+
+		await maybeOfferAdoption(fakeProvider(), store);
+
+		const saved = store.find(Provider.VERCEL, "picked-label");
+		expect(saved?.identity).toBe("andre");
+		expect(saved?.session.token).toBe("native-tok");
+	});
+
+	it("remembers a decline and never asks again", async () => {
+		native = { token: "native-tok" };
+		vi.mocked(p.confirm).mockResolvedValueOnce(false);
+		const provider = fakeProvider();
+
+		await maybeOfferAdoption(provider, store);
+
+		expect(store.isIdentityDeclined(Provider.VERCEL, "andre")).toBe(true);
+		expect(store.list(Provider.VERCEL)).toEqual([]);
+
+		await maybeOfferAdoption(provider, store);
+
+		expect(p.confirm).toHaveBeenCalledTimes(1);
+	});
+
+	it("stays quiet for a token variant of a stored identity", async () => {
+		seed("a", "t1");
+		native = { token: "rotated" };
+
+		await maybeOfferAdoption(fakeProvider(), store);
+
+		expect(p.confirm).not.toHaveBeenCalled();
+	});
+
+	it("stays quiet when the native session is invalid", async () => {
+		native = { token: "dead" };
+
+		await maybeOfferAdoption(
+			fakeProvider({ validate: vi.fn(async () => false) }),
+			store,
+		);
+
+		expect(p.confirm).not.toHaveBeenCalled();
+	});
+
+	it("vergate migration runs first and pre-empts the native offer", async () => {
+		const vergateDir = fs.mkdtempSync(
+			path.join(os.tmpdir(), "gate-cmd-vergate2-"),
+		);
+		process.env.GATE_VERGATE_ACCOUNTS_FILE = path.join(
+			vergateDir,
+			"accounts.json",
+		);
+
+		fs.writeFileSync(
+			process.env.GATE_VERGATE_ACCOUNTS_FILE,
+			JSON.stringify({
+				accounts: [{ label: "old", username: "andre", token: "t" }],
+			}),
+		);
+
+		native = { token: "native-tok" };
+		vi.mocked(p.confirm).mockResolvedValue(true);
+
+		await maybeOfferAdoption(fakeProvider(), store);
+
+		expect(store.find(Provider.VERCEL, "old")).toBeDefined();
+		expect(p.confirm).toHaveBeenCalledTimes(1);
+		expect(p.text).not.toHaveBeenCalled();
+	});
+
+	it("the empty-store error mentions both login and import", async () => {
+		await expect(
+			resolveAccount(fakeProvider(), store, undefined),
+		).rejects.toThrow(/gate fake login.*gate fake import/s);
 	});
 });

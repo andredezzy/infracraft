@@ -5,14 +5,14 @@ import pc from "picocolors";
 import { detectActiveAccount } from "../accounts/session";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
-import { maybeOfferVergateMigration } from "./resolve-account";
+import { maybeOfferAdoption } from "./resolve-account";
 import { runAction } from "./run-action";
 
 export async function runList(
 	provider: GateProvider,
 	store: AccountStore,
 ): Promise<void> {
-	await maybeOfferVergateMigration(provider, store);
+	await maybeOfferAdoption(provider, store);
 
 	const accounts = store.list(provider.id);
 
