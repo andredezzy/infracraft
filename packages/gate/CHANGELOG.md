@@ -1,5 +1,15 @@
 # @infracraft/gate
 
+## 0.4.0
+
+### Minor Changes
+
+- d3c10c3: Self-healing sessions: when the native CLI holds a valid session for an identity gate already stores (a re-login or auto-refreshed token), the stored entries silently adopt the fresh session. The active marker now compares tokens per entry, so duplicate-identity entries all show as active when they hold the live session.
+
+### Patch Changes
+
+- ee1f49f: `gate --version` now reports the package version (it previously printed "No version specified").
+
 ## 0.3.0
 
 ### Minor Changes
