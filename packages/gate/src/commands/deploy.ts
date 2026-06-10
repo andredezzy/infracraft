@@ -197,7 +197,7 @@ async function runDeployCommand(
 	}
 
 	if (mode === SandboxMode.STUB) {
-		p.log.info(pc.gray("Sandboxed deploy: isolated copy, metadata-free .git"));
+		p.log.info(pc.gray("Sandboxed deploy: isolated copy, stub .git"));
 	} else if (mode === SandboxMode.ORIGINAL) {
 		p.log.info(pc.gray("Sandboxed deploy: isolated copy, real .git"));
 	} else {
