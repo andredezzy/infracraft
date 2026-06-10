@@ -6,12 +6,11 @@ import {
 	SandboxMode,
 } from "@infracraft/sandbox";
 
-import type { GateProvider, NativeCliCommand } from "../providers/provider";
+import type { NativeCliCommand } from "../providers/provider";
 
 export interface DeployRunOptions {
-	provider: GateProvider;
-	token: string;
-	passthroughArgs: string[];
+	command: NativeCliCommand;
+	urlPattern: RegExp;
 	mode: SandboxMode;
 	cwd?: string;
 	spawner?: DeploySpawner;
@@ -80,12 +79,11 @@ export function buildDeployScript(
 export async function runDeploy(
 	options: DeployRunOptions,
 ): Promise<DeployRunResult> {
-	const { provider, token, passthroughArgs, mode } = options;
+	const { command, urlPattern, mode } = options;
 	const cwd = options.cwd ?? process.cwd();
 	const spawner = options.spawner ?? defaultSpawner;
 	const startedAt = Date.now();
 
-	const command = provider.deployCli({ token, passthroughArgs });
 	const script = buildDeployScript(command, mode, path.basename(cwd));
 
 	if (script !== null) {
@@ -122,7 +120,7 @@ export async function runDeploy(
 	const scan = (line: string): void => {
 		process.stdout.write(`${line}\n`);
 
-		const match = line.match(provider.deployUrlPattern);
+		const match = line.match(urlPattern);
 
 		if (match) {
 			url = match[0];

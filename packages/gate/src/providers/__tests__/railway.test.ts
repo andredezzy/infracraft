@@ -151,4 +151,18 @@ describe("nativeCli", () => {
 		expect(railwayProvider.deployDefaultFlags).toEqual([]);
 		expect(railwayProvider.reservedNativeFlags).toEqual([]);
 	});
+
+	it("composes the deploy argv (regression vs deployCli)", () => {
+		const command = railwayProvider.nativeCli({
+			token: "tok",
+			args: [
+				railwayProvider.deployVerb,
+				...railwayProvider.deployDefaultFlags,
+				"--detach",
+			],
+		});
+
+		expect(command.argv).toEqual(["railway", "up", "--detach"]);
+		expect(command.env).toEqual({ RAILWAY_API_TOKEN: "tok" });
+	});
 });

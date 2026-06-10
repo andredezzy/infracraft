@@ -10,6 +10,9 @@ import type {
 	DeployTargetCapability,
 	GateProvider,
 } from "../providers/provider";
+import type { CommandContext } from "../registry/command-spec";
+import { InteractionMode } from "../registry/command-spec";
+import { GateFlagRegion, splitGateFlags } from "../routing/split-gate-flags";
 import { resolveAccount } from "./resolve-account";
 import { runAction } from "./run-action";
 
@@ -18,29 +21,31 @@ export interface SplitDeployArgs {
 	mode: SandboxMode;
 	createTarget: boolean;
 	passthroughArgs: string[];
+	malformed: string | undefined;
 }
 
-/** gate owns --account/-a, --no-sandbox, --git-metadata, --create-project;
- * everything else is forwarded verbatim to the native CLI. Raw-args parsing
- * (not citty arg defs) so unknown native flags never error. */
-export function splitDeployArgs(rawArgs: string[]): SplitDeployArgs {
-	let accountLabel: string | undefined;
+/** gate owns --account/-a (via splitGateFlags; reserved shorthands stay
+ * native), --no-sandbox, --git-metadata, --create-project; everything else is
+ * forwarded verbatim to the native CLI. Nothing after `--` is interpreted. */
+export function splitDeployArgs(
+	provider: GateProvider,
+	rawArgs: string[],
+): SplitDeployArgs {
 	let mode = SandboxMode.STUB;
 	let createTarget = false;
-	const passthroughArgs: string[] = [];
+	const remainder: string[] = [];
+	let parsing = true;
 
-	for (let index = 0; index < rawArgs.length; index += 1) {
-		const arg = rawArgs[index] as string;
-
-		if (arg.startsWith("--account=")) {
-			accountLabel = arg.slice("--account=".length);
+	for (const arg of rawArgs) {
+		if (!parsing) {
+			remainder.push(arg);
 
 			continue;
 		}
 
-		if (arg === "--account" || arg === "-a") {
-			accountLabel = rawArgs[index + 1];
-			index += 1;
+		if (arg === "--") {
+			parsing = false;
+			remainder.push(arg);
 		} else if (arg === "--no-sandbox") {
 			mode = SandboxMode.NONE;
 		} else if (arg === "--git-metadata") {
@@ -48,11 +53,23 @@ export function splitDeployArgs(rawArgs: string[]): SplitDeployArgs {
 		} else if (arg === "--create-project") {
 			createTarget = true;
 		} else {
-			passthroughArgs.push(arg);
+			remainder.push(arg);
 		}
 	}
 
-	return { accountLabel, mode, createTarget, passthroughArgs };
+	const split = splitGateFlags(
+		provider,
+		remainder,
+		GateFlagRegion.NATIVE_REGION_ONLY,
+	);
+
+	return {
+		accountLabel: split.accountLabel,
+		mode,
+		createTarget,
+		passthroughArgs: split.nativeArgs,
+		malformed: split.malformed,
+	};
 }
 
 export enum DeployTargetPreflightOutcome {
@@ -68,8 +85,8 @@ export interface DeployTargetPreflightContext {
 	passthroughArgs: string[];
 	/** --create-project: create a missing target without prompting. */
 	createTarget: boolean;
-	/** TTY sessions may prompt; non-interactive runs fail fast. */
-	interactive: boolean;
+	/** INTERACTIVE sessions may prompt; NON_INTERACTIVE runs fail fast. */
+	interaction: InteractionMode;
 }
 
 /** Checks the explicit deploy target exists before spawning the native CLI,
@@ -111,7 +128,7 @@ export async function ensureDeployTarget(
 	const missing = `${noun.charAt(0).toUpperCase()}${noun.slice(1)} "${name}" was not found in scope ${context.identity}.`;
 
 	if (!context.createTarget) {
-		if (!context.interactive) {
+		if (context.interaction === InteractionMode.NON_INTERACTIVE) {
 			p.log.error(
 				`${missing} Pass --create-project to create it, or create it first in the dashboard.`,
 			);
@@ -153,14 +170,18 @@ function isInsideGitRepo(): boolean {
 	return result.exitCode === 0;
 }
 
-async function runDeployCommand(
-	provider: GateProvider,
-	store: AccountStore,
+export async function runDeployCommand(
+	context: CommandContext,
 	rawArgs: string[],
 ): Promise<void> {
-	const split = splitDeployArgs(rawArgs);
+	const { provider, store, interaction } = context;
+	const split = splitDeployArgs(provider, rawArgs);
 	const { accountLabel, createTarget, passthroughArgs } = split;
 	let mode = split.mode;
+
+	if (split.malformed) {
+		throw new Error(split.malformed);
+	}
 
 	if (mode !== SandboxMode.NONE && !isInsideGitRepo()) {
 		p.log.info(
@@ -173,11 +194,13 @@ async function runDeployCommand(
 	}
 
 	const account = accountLabel
-		? await resolveAccount(provider, store, accountLabel)
+		? await resolveAccount(provider, store, accountLabel, { interaction })
 		: (detectActiveAccount(provider, store) ??
-			(await resolveAccount(provider, store, undefined)));
+			(await resolveAccount(provider, store, undefined, { interaction })));
 
-	const valid = await ensureValidSession(provider, store, account);
+	const valid = await ensureValidSession(provider, store, account, {
+		interaction,
+	});
 
 	p.log.success(
 		`Account: ${pc.bold(valid.label)} ${pc.gray(`(${valid.identity})`)}`,
@@ -189,7 +212,7 @@ async function runDeployCommand(
 		identity: valid.identity,
 		passthroughArgs,
 		createTarget,
-		interactive: process.stdout.isTTY === true,
+		interaction,
 	});
 
 	if (outcome === DeployTargetPreflightOutcome.ABORTED) {
@@ -204,10 +227,18 @@ async function runDeployCommand(
 		p.log.warn("Sandbox disabled: deploying from the live working tree");
 	}
 
-	const result = await runDeploy({
-		provider,
+	const command = provider.nativeCli({
 		token: valid.session.token,
-		passthroughArgs,
+		args: [
+			provider.deployVerb,
+			...provider.deployDefaultFlags,
+			...passthroughArgs,
+		],
+	});
+
+	const result = await runDeploy({
+		command,
+		urlPattern: provider.deployUrlPattern,
 		mode,
 	});
 
@@ -217,7 +248,7 @@ async function runDeployCommand(
 
 	if (result.exitCode !== 0) {
 		p.log.error(
-			`${provider.binary} ${provider.layout.deployVerb} failed (exit code ${result.exitCode})`,
+			`${provider.binary} ${provider.deployVerb} failed (exit code ${result.exitCode})`,
 		);
 
 		process.exitCode = result.exitCode;
@@ -231,14 +262,19 @@ async function runDeployCommand(
 export function makeDeployCommand(provider: GateProvider, store: AccountStore) {
 	return defineCommand({
 		meta: {
-			name: provider.layout.deployVerb,
-			description: `Sandboxed \`${provider.binary} ${provider.layout.deployVerb}\` with account selection`,
+			name: provider.deployVerb,
+			description: `Sandboxed \`${provider.binary} ${provider.deployVerb}\` with account selection`,
 		},
 		async run({ rawArgs }) {
-			p.intro(`gate ${provider.binary} ${provider.layout.deployVerb}`);
+			p.intro(`gate ${provider.binary} ${provider.deployVerb}`);
+
+			const interaction =
+				process.stdout.isTTY === true
+					? InteractionMode.INTERACTIVE
+					: InteractionMode.NON_INTERACTIVE;
 
 			await runAction(() =>
-				runDeployCommand(provider, store, rawArgs as string[]),
+				runDeployCommand({ provider, store, interaction }, rawArgs as string[]),
 			);
 		},
 	});

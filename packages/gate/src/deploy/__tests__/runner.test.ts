@@ -1,7 +1,7 @@
 import { SandboxMode } from "@infracraft/sandbox";
 import { describe, expect, it } from "vitest";
 
-import type { GateProvider } from "../../providers/provider";
+import type { NativeCliCommand } from "../../providers/provider";
 import {
 	buildDeployScript,
 	type DeploySpawner,
@@ -9,20 +9,14 @@ import {
 	shellEscape,
 } from "../runner";
 
-const provider = {
-	binary: "vercel",
-	deployUrlPattern: /https:\/\/[^\s]+\.vercel\.app[^\s]*/,
-	deployCli: ({
-		token,
-		passthroughArgs,
-	}: {
-		token: string;
-		passthroughArgs: string[];
-	}) => ({
-		argv: ["vercel", "deploy", "--token", token, ...passthroughArgs],
+const URL_PATTERN = /https:\/\/[^\s]+\.vercel\.app[^\s]*/;
+
+function deployCommand(passthroughArgs: string[] = []): NativeCliCommand {
+	return {
+		argv: ["vercel", "deploy", "--token", "tok", ...passthroughArgs],
 		env: { EXTRA: "1" },
-	}),
-} as unknown as GateProvider;
+	};
+}
 
 function linesToStream(lines: string[]): ReadableStream<Uint8Array> {
 	const encoder = new TextEncoder();
@@ -89,9 +83,8 @@ describe("runDeploy", () => {
 		});
 
 		const result = await runDeploy({
-			provider,
-			token: "tok",
-			passthroughArgs: [],
+			command: deployCommand(),
+			urlPattern: URL_PATTERN,
 			mode: SandboxMode.NONE,
 			spawner,
 		});
@@ -107,9 +100,8 @@ describe("runDeploy", () => {
 		});
 
 		const result = await runDeploy({
-			provider,
-			token: "tok",
-			passthroughArgs: [],
+			command: deployCommand(),
+			urlPattern: URL_PATTERN,
 			mode: SandboxMode.NONE,
 			spawner,
 		});
@@ -130,9 +122,8 @@ describe("runDeploy", () => {
 		};
 
 		await runDeploy({
-			provider,
-			token: "tok",
-			passthroughArgs: ["--prod"],
+			command: deployCommand(["--prod"]),
+			urlPattern: URL_PATTERN,
 			mode: SandboxMode.NONE,
 			spawner,
 		});
@@ -153,9 +144,8 @@ describe("runDeploy", () => {
 		};
 
 		await runDeploy({
-			provider,
-			token: "tok",
-			passthroughArgs: [],
+			command: deployCommand(),
+			urlPattern: URL_PATTERN,
 			mode: SandboxMode.STUB,
 			spawner,
 		});
@@ -175,9 +165,8 @@ describe("runDeploy", () => {
 		});
 
 		const result = await runDeploy({
-			provider,
-			token: "tok",
-			passthroughArgs: [],
+			command: deployCommand(),
+			urlPattern: URL_PATTERN,
 			mode: SandboxMode.NONE,
 			spawner,
 		});
@@ -195,9 +184,8 @@ describe("runDeploy", () => {
 
 		await expect(
 			runDeploy({
-				provider,
-				token: "tok",
-				passthroughArgs: [],
+				command: deployCommand(),
+				urlPattern: URL_PATTERN,
 				mode: SandboxMode.NONE,
 				spawner,
 			}),

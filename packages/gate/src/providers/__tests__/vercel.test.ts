@@ -255,6 +255,26 @@ describe("nativeCli", () => {
 		expect(vercelProvider.deployDefaultFlags).toEqual(["--yes"]);
 		expect(vercelProvider.reservedNativeFlags).toEqual([]);
 	});
+
+	it("composes the deploy argv (regression vs deployCli, modulo --token position)", () => {
+		const command = vercelProvider.nativeCli({
+			token: "tok",
+			args: [
+				vercelProvider.deployVerb,
+				...vercelProvider.deployDefaultFlags,
+				"--prod",
+			],
+		});
+
+		expect(command.argv).toEqual([
+			"vercel",
+			"--token",
+			"tok",
+			"deploy",
+			"--yes",
+			"--prod",
+		]);
+	});
 });
 
 describe("deployTarget", () => {

@@ -17,8 +17,9 @@ vi.mock("@clack/prompts", () => ({
 }));
 
 import * as p from "@clack/prompts";
-
+import { makeFakeProvider } from "../../providers/__tests__/fake-provider";
 import type { DeployTargetCapability } from "../../providers/provider";
+import { InteractionMode } from "../../registry/command-spec";
 import type { DeployTargetPreflightContext } from "../deploy";
 import {
 	DeployTargetPreflightOutcome,
@@ -27,8 +28,15 @@ import {
 } from "../deploy";
 
 describe("splitDeployArgs", () => {
+	const provider = makeFakeProvider();
+
 	it("extracts gate-owned flags and passes the rest through", () => {
-		const result = splitDeployArgs(["--prod", "--account", "work", "--force"]);
+		const result = splitDeployArgs(provider, [
+			"--prod",
+			"--account",
+			"work",
+			"--force",
+		]);
 
 		expect(result.accountLabel).toBe("work");
 		expect(result.mode).toBe(SandboxMode.STUB);
@@ -36,13 +44,19 @@ describe("splitDeployArgs", () => {
 	});
 
 	it("supports -a, --no-sandbox, and --git-metadata", () => {
-		expect(splitDeployArgs(["-a", "work"]).accountLabel).toBe("work");
-		expect(splitDeployArgs(["--no-sandbox"]).mode).toBe(SandboxMode.NONE);
-		expect(splitDeployArgs(["--git-metadata"]).mode).toBe(SandboxMode.ORIGINAL);
+		expect(splitDeployArgs(provider, ["-a", "work"]).accountLabel).toBe("work");
+
+		expect(splitDeployArgs(provider, ["--no-sandbox"]).mode).toBe(
+			SandboxMode.NONE,
+		);
+
+		expect(splitDeployArgs(provider, ["--git-metadata"]).mode).toBe(
+			SandboxMode.ORIGINAL,
+		);
 	});
 
 	it("defaults to STUB with no account label", () => {
-		const result = splitDeployArgs(["--prod"]);
+		const result = splitDeployArgs(provider, ["--prod"]);
 
 		expect(result.accountLabel).toBeUndefined();
 		expect(result.mode).toBe(SandboxMode.STUB);
@@ -50,37 +64,37 @@ describe("splitDeployArgs", () => {
 	});
 
 	it("--no-sandbox after --git-metadata wins (last flag rules)", () => {
-		expect(splitDeployArgs(["--git-metadata", "--no-sandbox"]).mode).toBe(
-			SandboxMode.NONE,
-		);
+		expect(
+			splitDeployArgs(provider, ["--git-metadata", "--no-sandbox"]).mode,
+		).toBe(SandboxMode.NONE);
 	});
 
 	it("supports the --account=label equals form", () => {
-		const result = splitDeployArgs(["--account=work", "--prod"]);
+		const result = splitDeployArgs(provider, ["--account=work", "--prod"]);
 
 		expect(result.accountLabel).toBe("work");
 		expect(result.passthroughArgs).toEqual(["--prod"]);
 	});
 
 	it("--git-metadata after --no-sandbox wins too", () => {
-		expect(splitDeployArgs(["--no-sandbox", "--git-metadata"]).mode).toBe(
-			SandboxMode.ORIGINAL,
-		);
+		expect(
+			splitDeployArgs(provider, ["--no-sandbox", "--git-metadata"]).mode,
+		).toBe(SandboxMode.ORIGINAL);
 	});
 
 	it("extracts --create-project and keeps it out of the passthrough", () => {
-		const result = splitDeployArgs(["--create-project", "--prod"]);
+		const result = splitDeployArgs(provider, ["--create-project", "--prod"]);
 
 		expect(result.createTarget).toBe(true);
 		expect(result.passthroughArgs).toEqual(["--prod"]);
 	});
 
 	it("defaults createTarget to false", () => {
-		expect(splitDeployArgs(["--prod"]).createTarget).toBe(false);
+		expect(splitDeployArgs(provider, ["--prod"]).createTarget).toBe(false);
 	});
 
 	it("--create-project coexists with the other gate-owned flags", () => {
-		const result = splitDeployArgs([
+		const result = splitDeployArgs(provider, [
 			"--account",
 			"work",
 			"--create-project",
@@ -92,6 +106,42 @@ describe("splitDeployArgs", () => {
 		expect(result.createTarget).toBe(true);
 		expect(result.mode).toBe(SandboxMode.NONE);
 		expect(result.passthroughArgs).toEqual(["--prod"]);
+	});
+
+	it("never extracts a reserved -a from deploy args (fly)", () => {
+		const flyLike = makeFakeProvider({ reservedNativeFlags: ["-a"] });
+
+		const result = splitDeployArgs(flyLike, ["-a", "my-app", "--image", "x"]);
+
+		expect(result.accountLabel).toBeUndefined();
+		expect(result.passthroughArgs).toEqual(["-a", "my-app", "--image", "x"]);
+	});
+
+	it("still extracts --account on a reserved-flag provider", () => {
+		const flyLike = makeFakeProvider({ reservedNativeFlags: ["-a"] });
+
+		const result = splitDeployArgs(flyLike, [
+			"-a",
+			"my-app",
+			"--account",
+			"work",
+		]);
+
+		expect(result.accountLabel).toBe("work");
+		expect(result.passthroughArgs).toEqual(["-a", "my-app"]);
+	});
+
+	it("surfaces malformed gate flags", () => {
+		const result = splitDeployArgs(provider, ["--account"]);
+
+		expect(result.malformed).toContain("--account requires a value");
+	});
+
+	it("stops extracting deploy flags after --", () => {
+		const result = splitDeployArgs(provider, ["--prod", "--", "--no-sandbox"]);
+
+		expect(result.mode).toBe(SandboxMode.STUB);
+		expect(result.passthroughArgs).toEqual(["--prod", "--", "--no-sandbox"]);
 	});
 });
 
@@ -116,7 +166,7 @@ function preflightContext(
 		identity: "andre",
 		passthroughArgs: [],
 		createTarget: false,
-		interactive: true,
+		interaction: InteractionMode.INTERACTIVE,
 		...overrides,
 	};
 }
@@ -211,7 +261,10 @@ describe("ensureDeployTarget", () => {
 		const target = fakeTarget();
 
 		const outcome = await ensureDeployTarget(
-			preflightContext({ deployTarget: target, interactive: false }),
+			preflightContext({
+				deployTarget: target,
+				interaction: InteractionMode.NON_INTERACTIVE,
+			}),
 		);
 
 		expect(outcome).toBe(DeployTargetPreflightOutcome.ABORTED);

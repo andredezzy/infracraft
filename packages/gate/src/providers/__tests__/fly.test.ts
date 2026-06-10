@@ -137,4 +137,19 @@ describe("nativeCli", () => {
 		expect(flyProvider.deployDefaultFlags).toEqual([]);
 		expect(flyProvider.reservedNativeFlags).toEqual(["-a"]);
 	});
+
+	it("composes the deploy argv (regression vs deployCli)", () => {
+		const command = flyProvider.nativeCli({
+			token: "tok",
+			args: [
+				flyProvider.deployVerb,
+				...flyProvider.deployDefaultFlags,
+				"--app",
+				"my-app",
+			],
+		});
+
+		expect(command.argv).toEqual(["fly", "deploy", "--app", "my-app"]);
+		expect(command.env).toEqual({ FLY_API_TOKEN: "tok" });
+	});
 });
