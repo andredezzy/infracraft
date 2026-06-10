@@ -170,6 +170,7 @@ describe("AccountStore", () => {
 			"personal",
 			"work",
 		]);
+
 		expect(store.findByIdentity(Provider.VERCEL, "ghost")).toEqual([]);
 	});
 });
