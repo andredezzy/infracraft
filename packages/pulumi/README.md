@@ -1,5 +1,5 @@
 <p align="center">
-  <b>infracraft</b>
+  <b>@infracraft/pulumi</b>
   <br />
   <i>Pulumi providers for platforms that don't have one.</i>
 </p>
@@ -24,8 +24,8 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 | 🎯 | **Fly.io** | `@infracraft/pulumi/fly` | App, Secret, Volume, Certificate, IP, and Deploy resources via the Machines REST API and Fly GraphQL API. |
 | 🤖 | **Agents** | `@infracraft/pulumi/agents` | Emit operating hints for AI coding agents working on the stack. |
 | #️⃣ | **Hash** | `@infracraft/pulumi/hash` | Deterministic directory/env-var/app hashing for deploy triggers. |
-| 📦 | **Sandbox** | `@infracraft/pulumi/sandbox` | Isolated `/tmp` working copies for CLI deploys — opt in via `dependsOn`. |
-| 🔒 | **Git Guard** | `@infracraft/pulumi/git-guard` | Metadata-free `.git` stub for deploys — keeps commit SHAs and author emails off third-party platforms. |
+| 📦 | **Sandbox** | `@infracraft/pulumi/sandbox` | Isolated `/tmp` working copies for CLI deploys. Opt in via `dependsOn`. |
+| 🔒 | **Git Guard** | `@infracraft/pulumi/git-guard` | Metadata-free `.git` stub for deploys. Keeps commit SHAs and author emails off third-party platforms. |
 
 ## Install
 
@@ -242,29 +242,29 @@ import {
 } from "@infracraft/pulumi/fly"
 import { hash } from "@infracraft/pulumi/hash"
 
-// Provider — auth context (token + optional default org)
+// Provider: auth context (token + optional default org)
 const provider = new FlyProvider("fly", {
   token: config.requireSecret("flyToken"),
   organization: "personal",
 })
 
-// App — adopt-or-create; `.id` is the app name
+// App: adopt-or-create; `.id` is the app name
 const app = new FlyApp("api", { name: "rby-api" }, { provider })
 
-// Secrets — managed via the Machines REST secrets API.
+// Secrets: managed via the Machines REST secrets API.
 // `.version` changes only when the secret set changes.
 const secrets = new FlySecret("api-secrets", {
   secrets: { JWT_SECRET: jwt, DATABASE_URL: dbUrl },
 }, { provider, app })
 
-// Volume — persistent storage (grow-only)
+// Volume: persistent storage (grow-only)
 new FlyVolume("api-data", {
   name: "data",
   region: "iad",
   sizeGb: 10,
 }, { provider, app })
 
-// Certificate — ACME cert for a custom hostname
+// Certificate: ACME cert for a custom hostname
 new FlyCertificate("api-cert", {
   hostname: "api.example.com",
 }, { provider, app })
@@ -272,7 +272,7 @@ new FlyCertificate("api-cert", {
 // Dedicated/shared IP (Fly GraphQL API)
 new FlyIp("api-ip", { type: FlyIpType.SHARED_V4 }, { provider, app })
 
-// Deploy — `fly deploy --remote-only` with consumer-controlled triggers.
+// Deploy: `fly deploy --remote-only` with consumer-controlled triggers.
 // The generated fly.toml content is included in the triggers automatically.
 new FlyDeploy("api-deploy", {
   config: {
@@ -315,14 +315,14 @@ new FlyDeploy("api-deploy", {
 
 ## Agents
 
-Emit operating reminders for AI coding agents (Claude Code, Copilot, etc.) working on the stack. Auto-detects an agent via `CLAUDECODE` / `AI_AGENT` env vars — a no-op for humans unless `enabled` is forced.
+Emit operating reminders for AI coding agents (Claude Code, Copilot, etc.) working on the stack. Auto-detects an agent via `CLAUDECODE` / `AI_AGENT` env vars; a no-op for humans unless `enabled` is forced.
 
 ```typescript
 import * as agents from "@infracraft/pulumi/agents"
 
 agents.hint({
   project: [
-    "Production branch is `main` — never destroy it.",
+    "Production branch is `main`; never destroy it.",
     "All Railway services share one project; only environments are per-feature.",
   ],
   // channel: "stderr" (default) | "pulumi-log"
@@ -340,7 +340,7 @@ Hints are emitted inside a `<infracraft-hint>` block with infracraft defaults (a
 
 ## Hash
 
-Produce a stable digest to use as a deploy trigger element. Accepts a source directory path (synchronous, returns `string`), a key-value env var map (returns `Output<string>`), or — via `hashApp` — an app directory plus its transitive workspace dependencies.
+Produce a stable digest to use as a deploy trigger element. Accepts a source directory path (synchronous, returns `string`), a key-value env var map (returns `Output<string>`), or, via `hashApp`, an app directory plus its transitive workspace dependencies.
 
 ```typescript
 import { hash, hashApp } from "@infracraft/pulumi/hash"
@@ -348,7 +348,7 @@ import { hash, hashApp } from "@infracraft/pulumi/hash"
 // Hash a source directory
 const sourceHash = hash("apps/api")
 
-// Hash an app + every workspace package it depends on (transitively) —
+// Hash an app + every workspace package it depends on (transitively);
 // a change to a shared packages/* the app uses retriggers its deploy
 const appHash = hashApp(monorepoRoot, "apps/api")
 
@@ -370,7 +370,7 @@ new RailwayDeploy("api-deploy", {
 
 ## Sandbox & Git Guard
 
-Deploy isolation as `dependsOn` markers. Listing a `DeploySandbox` in a deploy's `dependsOn` runs that deploy's CLI from an isolated copy of the repo's tracked files under `/tmp/infracraft` (stale sandboxes are garbage-collected automatically). Adding a `GitGuard` swaps the copy's `.git` for a metadata-free stub (`git init` + `git add -A`, unborn HEAD) — so no commit SHA or author email is sent to the platform.
+Deploy isolation as `dependsOn` markers. Listing a `DeploySandbox` in a deploy's `dependsOn` runs that deploy's CLI from an isolated copy of the repo's tracked files under `/tmp/infracraft` (stale sandboxes are garbage-collected automatically). Adding a `GitGuard` swaps the copy's `.git` for a metadata-free stub (`git init` + `git add -A`, unborn HEAD), so no commit SHA or author email is sent to the platform.
 
 ```typescript
 import { DeploySandbox } from "@infracraft/pulumi/sandbox"
@@ -389,9 +389,9 @@ new VercelDeploy("web-deploy", {
 
 | `dependsOn` markers | Working copy | `.git` sent to the platform |
 |---|---|---|
-| none | Live repo tree | The real one — whatever the platform CLI picks up |
+| none | Live repo tree | The real one; whatever the platform CLI picks up |
 | `DeploySandbox` | Isolated `/tmp/infracraft` copy | Real `.git` (copy-on-write copy) |
-| `DeploySandbox` + `GitGuard` | Isolated copy, `excludePaths` applied | Metadata-free stub — no commit SHA, no author |
+| `DeploySandbox` + `GitGuard` | Isolated copy, `excludePaths` applied | Metadata-free stub: no commit SHA, no author |
 | `GitGuard` alone | — | Throws: the guard needs a sandbox to act on |
 
 ### Sandbox & Git Guard API surface
@@ -400,18 +400,18 @@ new VercelDeploy("web-deploy", {
 |---|---|---|
 | `DeploySandbox` | ComponentResource | Isolation marker + workspace lifecycle; GCs sandboxes older than 3h |
 | `GitGuard` | ComponentResource | Metadata-protection marker; requires a `DeploySandbox` alongside it |
-| `SandboxMode` | enum | `NONE`, `ORIGINAL`, `STUB` — derived from the markers by the deploy seam |
+| `SandboxMode` | enum | `NONE`, `ORIGINAL`, `STUB`; derived from the markers by the deploy seam |
 | `buildSandboxScript(options)` | function | Builds the sandboxed shell a deploy command runs (used by the deploy resources) |
 | `buildSandboxFileFilter(excludePaths)` | function | Portable awk filter applied to `git ls-files` before the copy |
 | `isDeploySandbox(value)` / `isGitGuard(value)` | functions | Bundle-safe marker checks |
 
 ## Design
 
-**Context-based**: Resources inherit auth, project, and environment from their options — no manual ID passing.
+**Context-based**: Resources inherit auth, project, and environment from their options; no manual ID passing.
 
 **Adopt-or-create**: Existing infrastructure is discovered by name and adopted into Pulumi state. Run `pulumi up` against a pre-existing project and it just works.
 
-**Consumer-controlled protection**: Use `protect: true` on shared/production resources to prevent accidental deletion. Deploy resources accept a `triggers` array — you decide what causes a redeploy.
+**Consumer-controlled protection**: Use `protect: true` on shared/production resources to prevent accidental deletion. Deploy resources accept a `triggers` array; you decide what causes a redeploy.
 
 **Consumer-controlled triggers**: Hash source directories, env values, or anything else. Pass results into `triggers` arrays.
 
@@ -420,9 +420,9 @@ new VercelDeploy("web-deploy", {
 | Provider | Existing options | Gap |
 |---|---|---|
 | Railway | Nothing. Zero Pulumi providers exist. | **We are the Railway Pulumi provider.** |
-| Neon | Bridged TF provider — fails on pre-existing resources | Adopt-or-create without manual `import` blocks |
-| Vercel | `@pulumiverse/vercel` — no adopt-or-create, no CLI deploys | Adopt-or-create projects + consumer-controlled deploy triggers |
-| Fly.io | `@ediri/pulumi-fly` — bridges a Terraform provider Fly archived March 2024; no secrets support | Hand-rolled `dynamic` resources matching every other provider — secrets, adopt-or-create, consumer-controlled deploys; no unmaintained upstream |
+| Neon | Bridged TF provider; fails on pre-existing resources | Adopt-or-create without manual `import` blocks |
+| Vercel | `@pulumiverse/vercel`; no adopt-or-create, no CLI deploys | Adopt-or-create projects + consumer-controlled deploy triggers |
+| Fly.io | `@ediri/pulumi-fly`; bridges a Terraform provider Fly archived March 2024, no secrets support | Hand-rolled `dynamic` resources matching every other provider: secrets, adopt-or-create, consumer-controlled deploys; no unmaintained upstream |
 
 ## License
 

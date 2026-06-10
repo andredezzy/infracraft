@@ -3,7 +3,7 @@
 	"version": "0.5.0",
 	"type": "module",
 	"license": "MIT",
-	"description": "Multi-account switcher for Vercel, Railway, and Fly.io — real native-CLI switching plus metadata-free sandboxed deploys.",
+	"description": "Multi-account switcher for Vercel, Railway, and Fly.io. Real native-CLI switching plus metadata-free sandboxed deploys.",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/andredezzy/infracraft",

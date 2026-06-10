@@ -1,5 +1,5 @@
 <p align="center">
-  <b>gate</b>
+  <b>@infracraft/gate</b>
   <br />
   <i>Switch Vercel, Railway, and Fly.io accounts. Deploy without leaking git metadata.</i>
 </p>

@@ -3,7 +3,7 @@
 	"version": "0.1.0",
 	"type": "module",
 	"license": "MIT",
-	"description": "Isolated /tmp working copies for CLI deploys — sandbox shell-script builders shared by @infracraft/pulumi and @infracraft/gate.",
+	"description": "Isolated /tmp working copies for CLI deploys. Sandbox shell-script builders shared by @infracraft/pulumi and @infracraft/gate.",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/andredezzy/infracraft",
