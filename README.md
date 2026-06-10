@@ -17,7 +17,7 @@ infracraft is a small family of packages for crafting infrastructure on app plat
 | Package | Version | What it does |
 |---|---|---|
 | [`@infracraft/pulumi`](packages/pulumi) | [![npm](https://img.shields.io/npm/v/@infracraft/pulumi?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/pulumi) | Native Pulumi providers for Railway, Neon, Vercel, and Fly.io with adopt-or-create semantics and deploy orchestration. |
-| [`@infracraft/gate`](packages/gate) | [![npm](https://img.shields.io/npm/v/@infracraft/gate?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/gate) | Multi-account switcher for Vercel, Railway, and Fly.io. Really switches the native CLI session and sandboxes deploys by default. |
+| [`@infracraft/gate`](packages/gate) | [![npm](https://img.shields.io/npm/v/@infracraft/gate?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/gate) | Run any Vercel, Railway, or Fly.io CLI command as any stored account — universal native passthrough with per-invocation credential injection, real native-session switching, and sandboxed deploys. |
 | [`@infracraft/sandbox`](packages/sandbox) | [![npm](https://img.shields.io/npm/v/@infracraft/sandbox?style=flat&colorA=18181b&colorB=18181b)](https://www.npmjs.com/package/@infracraft/sandbox) | Isolated `/tmp` working copies for CLI deploys. The shell-script builders behind the sandboxed deploys in both packages above. |
 
 Each package's README is its full documentation; the sections below are orientation only.
@@ -40,13 +40,14 @@ const project = new RailwayProject("my-project", { name: "my-app" }, { provider 
 
 ## @infracraft/gate
 
-Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session, and runs deploys from an isolated sandbox copy of the repo's tracked files by default.
+Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider and runs ANY native command as any of them — credentials are injected per-invocation, the native session is only rewritten when you explicitly `auth switch`, and deploys run from an isolated sandbox copy by default.
 
 ```bash
 bun add -g @infracraft/gate
 
-gate vercel switch work
-gate railway up --detach
+gate vercel auth switch work       # really switch the native CLI session
+gate vercel env ls --account dz0   # any native command, any account
+gate railway up --detach           # sandboxed deploy
 gate fly auth list
 ```
 
@@ -64,6 +65,7 @@ The shared deploy-isolation primitives: POSIX shell-script builders that copy a 
 - **Adopt-or-create.** Existing infrastructure is discovered by name and adopted into state instead of fought over.
 - **Sandboxed deploys.** Deploys run from an isolated `/tmp` copy of the repo's tracked files, so the platform CLI never reads the live working tree. Shared between pulumi and gate via the sandbox package.
 - **Real switching.** gate writes sessions into the native CLI auth files; there is no wrapper state to drift out of sync.
+- **Universal passthrough.** Every native CLI command runs through gate with per-invocation credential injection — `gate <provider> <anything>` — without touching the native session.
 
 ## Development
 

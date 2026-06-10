@@ -1,7 +1,7 @@
 <p align="center">
   <b>@infracraft/gate</b>
   <br />
-  <i>Switch Vercel, Railway, and Fly.io accounts. Really switches the native CLI session.</i>
+  <i>Run any Vercel, Railway, or Fly.io CLI command as any account. Really switches the native CLI session.</i>
 </p>
 
 <p align="center">
@@ -12,7 +12,7 @@
 
 ---
 
-Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider, really switches the native CLI session when you run `gate … switch`, and runs deploys from an isolated sandbox copy of the repo's tracked files by default, so the platform CLI never reads your live working tree.
+Native CLIs (`vercel`, `railway`, `fly`) hold one account at a time. gate stores as many accounts as you need per provider and lets every native command run as any of them: `gate <provider> <anything>` passes through to the native CLI with that account's credentials injected per-invocation. `gate … auth switch` really switches the native CLI session, and deploys run from an isolated sandbox copy of the repo's tracked files by default.
 
 ## Install
 
@@ -30,52 +30,50 @@ brew install flyctl         # Fly.io
 
 ## Commands
 
-### Vercel
+One uniform tree for every provider (`vercel`, `railway`, `fly`):
 
 ```
-gate vercel login            # add account via Vercel's browser login
-gate vercel logout [label]   # remove stored account
-gate vercel switch [label]   # write account session into the native vercel CLI
-gate vercel whoami [label]   # show + validate account (defaults to active)
-gate vercel list             # stored accounts with active marker
-gate vercel import           # adopt current native vercel session
-gate vercel deploy [...]     # sandboxed deploy (passes flags through to vercel deploy)
+gate <provider> auth <verb>        # gate account management (table below)
+gate <provider> deploy [...]       # sandboxed deploy (railway: `gate railway up`)
+gate <provider> <anything else>    # passthrough: the native CLI runs with the
+                                   # selected account's credentials injected
+gate <provider> -- <args...>       # escape hatch: verbatim native args
 ```
 
-### Railway
-
-```
-gate railway login           # add account via Railway's browser login
-gate railway logout [label]  # remove stored account
-gate railway switch [label]  # write account session into the native railway CLI
-gate railway whoami [label]  # show + validate account (defaults to active)
-gate railway list            # stored accounts with active marker
-gate railway import          # adopt current native railway session
-gate railway up [...]        # sandboxed deploy (passes flags through to railway up)
-```
-
-### Fly.io
-
-```
-gate fly auth login          # add account via flyctl's browser login
-gate fly auth logout [label] # remove stored account
-gate fly auth switch [label] # write account session into the native fly CLI
-gate fly auth whoami [label] # show + validate account (defaults to active)
-gate fly auth list           # stored accounts with active marker
-gate fly auth import         # adopt current native fly session
-gate fly deploy [...]        # sandboxed deploy (passes flags through to fly deploy)
-```
-
-### Auth verb reference
+### Account management (`auth`)
 
 | Verb | Description |
 |---|---|
-| `login` | Add an account by opening the provider's own browser login flow |
-| `logout [label]` | Remove a stored account; prompts for selection if no label given |
-| `switch [label]` | Write that account's session into the native CLI auth file. THE real switch |
-| `whoami [label]` | Show and validate the account; defaults to the currently active account |
-| `list` | List all stored accounts with an active marker |
-| `import` | Adopt the current native CLI session as a named account |
+| `auth login` | Add an account by opening the provider's own browser login flow |
+| `auth logout [label]` | Remove a stored account; prompts for selection if no label given |
+| `auth switch [label]` | Write that account's session into the native CLI auth file. THE real switch |
+| `auth whoami [label]` | Show and validate the account; defaults to the currently active account |
+| `auth list` | List all stored accounts with an active marker |
+| `auth import` | Adopt the current native CLI session as a named account |
+
+### Passthrough
+
+Anything that isn't `auth` or the deploy verb runs natively, with credentials injected per-invocation (Vercel: the global `--token` flag; Railway/Fly: env vars). The native session is never touched — only `auth switch` rewrites it.
+
+```bash
+gate vercel env ls                    # native `vercel env ls` as the active account
+gate vercel switch my-team            # vercel's own team switch (native)
+gate railway logs --account work      # one-shot account selection
+gate fly -a work status -a my-app     # gate account "work"; fly app "my-app"
+gate vercel env ls --json | jq        # stdout is byte-for-byte native
+```
+
+Interactive runs print one dim account badge to stderr (`● work (worker@email)`), so you always see who ran the command — pipes and `--json` output stay clean. If you pass your own `--token` (Vercel), gate steps aside and says so. The command exits with the native CLI's exit code.
+
+### Gate flags
+
+| Flag | Where it's recognized |
+|---|---|
+| `--account <label>`, `--account=<label>` | Anywhere in the command |
+| `-a <label>` | Anywhere — except on Fly, where `-a` natively means the app name: there it's only read between the provider name and the first native token (`gate fly -a work status -a my-app`), and never inside deploy args |
+| `--` (first token) | Escape hatch — everything after is verbatim native; gate flags must come before it |
+
+Anything after any `--` is never interpreted by gate.
 
 ## Deploys
 
@@ -85,7 +83,7 @@ Sandbox is on by default. Every `gate … deploy` / `gate railway up` runs from 
 
 | Flag | Description |
 |---|---|
-| `--account <label>`, `-a <label>`, `--account=<label>` | Use a specific stored account for this deploy |
+| `--account <label>`, `-a <label>`, `--account=<label>` | Use a specific stored account for this deploy (on Fly, use the long form — `-a` belongs to fly) |
 | `--no-sandbox` | Deploy from the live working tree (native CLI behavior, no isolation) |
 | `--git-metadata` | Isolated `/tmp` copy but with the real `.git`. The platform sees actual commit data |
 | `--create-project` | Create the project when it does not exist, without prompting (the interactive default asks first; this is the CI-friendly opt-in) |
@@ -104,6 +102,8 @@ The command exits with the native CLI's exit code. Outside a git repo the sandbo
 
 `gate … switch` merges the stored session into the native CLI's auth file and writes it atomically with `0600` permissions. The native CLI then runs as that account with no further gate involvement. The active account is always read directly from the native file; gate never stores which account is "active" separately.
 
+**Switching vs passthrough:** `auth switch` persistently rewrites the native auth file — the native CLI then runs as that account even without gate. Passthrough injects credentials per-invocation and leaves the native session untouched. Both coexist; the stderr badge always shows which account ran the command.
+
 | Provider | Native auth file |
 |---|---|
 | Vercel | `~/Library/Application Support/com.vercel.cli/auth.json` (macOS) · `~/.local/share/com.vercel.cli/auth.json` (Linux) |
@@ -111,6 +111,22 @@ The command exits with the native CLI's exit code. Outside a git repo the sandbo
 | Fly.io | `~/.fly/config.yml` |
 
 Writes are merge-not-clobber: other keys in the native file are preserved. Vercel tokens are OAuth-based and auto-refresh; the refreshed token writes through to the native file whenever the active account is used.
+
+## Non-interactive use (CI)
+
+Off-TTY, gate never prompts. An unresolvable account fails fast with `No active <provider> account. Pass --account <label> or run "gate <provider> auth switch".`, and an expired session fails with a hint instead of opening a browser. `--create-project` remains the promptless opt-in for deploy target creation.
+
+## Migrating to 0.7
+
+| Before (0.6.x) | After (0.7.0) |
+|---|---|
+| `gate vercel login` (and the other 5 verbs; railway too) | `gate <provider> auth <verb>` — the old spelling now runs the NATIVE command, with a stderr tip |
+| `gate vercel switch` | `gate vercel auth switch` (top-level `switch` is vercel's native team switch) |
+| `gate fly auth token` (errored) | passes through to the native `fly auth token` |
+| `gate fly deploy -a my-app` (gate ate `-a`) | `-a my-app` goes to fly; use `--account` for the gate account |
+| Library: `ProviderCommandLayout`, `deployCli`, `DeployCliContext` | removed — `deployVerb` is a direct provider field; injection lives in `nativeCli()` |
+
+Running native `login`/`logout` through the passthrough modifies the native session outside gate; gate's discovery offers to import the new session on the next run.
 
 ## Migrating from vergate
 
@@ -121,12 +137,10 @@ The first interactive Vercel command (switch, list, whoami, or deploy without an
 ```typescript
 import {
   AccountStore,
-  PROVIDERS,
   vercelProvider,
-  railwayProvider,
-  flyProvider,
   ensureValidSession,
   runDeploy,
+  runPassthrough,
   SandboxMode,
 } from "@infracraft/gate"
 
@@ -136,18 +150,29 @@ const accounts = store.list(vercelProvider.id)
 // Validate + optionally refresh the stored session
 const valid = await ensureValidSession(vercelProvider, store, accounts[0])
 
-// Run a sandboxed deploy
-const result = await runDeploy({
+// Run any native command with injected credentials
+await runPassthrough({
   provider: vercelProvider,
   token: valid.session.token,
-  passthroughArgs: ["--prod"],
+  nativeArgs: ["env", "ls"],
+})
+
+// Run a sandboxed deploy (compose the argv through the provider)
+const command = vercelProvider.nativeCli({
+  token: valid.session.token,
+  args: [vercelProvider.deployVerb, ...vercelProvider.deployDefaultFlags, "--prod"],
+})
+
+const result = await runDeploy({
+  command,
+  urlPattern: vercelProvider.deployUrlPattern,
   mode: SandboxMode.STUB,   // STUB = fresh stub .git, ORIGINAL = real .git, NONE = no sandbox
 })
 
 console.log(result.url, result.exitCode)
 ```
 
-Key exports: `AccountStore`, `PROVIDERS`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `detectActiveAccount`, `runDeploy`, `SandboxMode`, `GateProvider`, `GateAccount`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `SpawnedDeploy`.
+Key exports: `AccountStore`, `PROVIDERS`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateProvider`, `GateAccount`, `NativeCliContext`, `NativeCliCommand`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `PassthroughRunOptions`, `PassthroughSpawner`.
 
 ## License
 
