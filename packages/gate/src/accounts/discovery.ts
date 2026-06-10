@@ -25,11 +25,43 @@ export interface NativeSessionDiscovery {
 }
 
 /**
- * Classifies the native CLI's current session against gate's store. Pure and
- * never throws: any network or token failure is INVALID. Cost model: the two
+ * Attempts a silent refresh of a native session. On success the result is
+ * written back to the native auth file IMMEDIATELY: OAuth refresh rotates the
+ * refresh token, so an unpersisted result would leave the native CLI holding
+ * a burned refresh token. Returns null when refresh is unsupported, the
+ * session has no refresh token, or the exchange fails.
+ */
+export async function refreshNativeSession(
+	provider: GateProvider,
+	session: ProviderSession,
+): Promise<ProviderSession | null> {
+	if (!provider.refresh || !session.refreshToken) {
+		return null;
+	}
+
+	let refreshed: ProviderSession | null;
+
+	try {
+		refreshed = await provider.refresh(session);
+	} catch {
+		refreshed = null;
+	}
+
+	if (refreshed) {
+		provider.writeNativeSession(refreshed);
+	}
+
+	return refreshed;
+}
+
+/**
+ * Classifies the native CLI's current session against gate's store. Never
+ * throws: any network or token failure is INVALID. Cost model: the two
  * common cases (no session, token matches a stored account) are decided
  * locally with zero network calls; only a foreign token costs a validate and
- * an identity lookup.
+ * an identity lookup. One deliberate side effect: an expired session that
+ * silently refreshes is written back to the native auth file (see
+ * {@link refreshNativeSession}).
  */
 export async function classifyNativeSession(
 	provider: GateProvider,
@@ -47,6 +79,7 @@ export async function classifyNativeSession(
 		return { status: NativeSessionStatus.MATCHES_STORED, session: native };
 	}
 
+	let session = native;
 	let valid: boolean;
 
 	try {
@@ -56,21 +89,30 @@ export async function classifyNativeSession(
 	}
 
 	if (!valid) {
+		const refreshed = await refreshNativeSession(provider, native);
+
+		if (refreshed) {
+			session = refreshed;
+			valid = true;
+		}
+	}
+
+	if (!valid) {
 		return { status: NativeSessionStatus.INVALID, session: native };
 	}
 
 	let identity: string;
 
 	try {
-		identity = await provider.identity(native.token);
+		identity = await provider.identity(session.token);
 	} catch {
-		return { status: NativeSessionStatus.INVALID, session: native };
+		return { status: NativeSessionStatus.INVALID, session };
 	}
 
 	if (accounts.some((account) => account.identity === identity)) {
 		return {
 			status: NativeSessionStatus.TOKEN_VARIANT,
-			session: native,
+			session,
 			identity,
 		};
 	}
@@ -78,14 +120,14 @@ export async function classifyNativeSession(
 	if (store.isIdentityDeclined(provider.id, identity)) {
 		return {
 			status: NativeSessionStatus.DECLINED,
-			session: native,
+			session,
 			identity,
 		};
 	}
 
 	return {
 		status: NativeSessionStatus.UNKNOWN_IDENTITY,
-		session: native,
+		session,
 		identity,
 	};
 }

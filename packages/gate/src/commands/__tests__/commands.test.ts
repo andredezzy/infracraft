@@ -295,3 +295,52 @@ describe("native session discovery offer", () => {
 		).rejects.toThrow(/gate fake login.*gate fake import/s);
 	});
 });
+
+describe("expired-but-refreshable native sessions", () => {
+	it("runImport refreshes, persists to the native file, and stores fresh tokens", async () => {
+		native = { token: "expired", refreshToken: "r" };
+
+		const provider = fakeProvider({
+			validate: vi.fn(async (token: string) => token === "fresh"),
+			refresh: vi.fn(async () => ({ token: "fresh", refreshToken: "r2" })),
+		});
+
+		await runImport(provider, store);
+
+		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
+			"fresh",
+		);
+		expect(native?.token).toBe("fresh");
+	});
+
+	it("runImport still rejects a session that cannot be refreshed", async () => {
+		native = { token: "expired", refreshToken: "r" };
+
+		const provider = fakeProvider({
+			validate: vi.fn(async () => false),
+			refresh: vi.fn(async () => null),
+		});
+
+		await expect(runImport(provider, store)).rejects.toThrow(
+			/invalid or expired/,
+		);
+		expect(native?.token).toBe("expired");
+	});
+
+	it("the discovery offer fires for a refreshed session and stores fresh tokens", async () => {
+		native = { token: "expired", refreshToken: "r" };
+		vi.mocked(p.confirm).mockResolvedValueOnce(true);
+
+		const provider = fakeProvider({
+			validate: vi.fn(async (token: string) => token === "fresh"),
+			refresh: vi.fn(async () => ({ token: "fresh", refreshToken: "r2" })),
+		});
+
+		await maybeOfferAdoption(provider, store);
+
+		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
+			"fresh",
+		);
+		expect(native?.token).toBe("fresh");
+	});
+});

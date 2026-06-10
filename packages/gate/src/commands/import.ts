@@ -2,6 +2,7 @@ import * as p from "@clack/prompts";
 import { defineCommand } from "citty";
 import pc from "picocolors";
 
+import { refreshNativeSession } from "../accounts/discovery";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import { promptLabelAndAdd } from "./adopt-session";
@@ -11,7 +12,7 @@ export async function runImport(
 	provider: GateProvider,
 	store: AccountStore,
 ): Promise<void> {
-	const session = provider.readNativeSession();
+	let session = provider.readNativeSession();
 
 	if (!session) {
 		throw new Error(
@@ -20,9 +21,15 @@ export async function runImport(
 	}
 
 	if (!(await provider.validate(session.token))) {
-		throw new Error(
-			`The current ${provider.name} CLI session is invalid or expired.`,
-		);
+		const refreshed = await refreshNativeSession(provider, session);
+
+		if (!refreshed) {
+			throw new Error(
+				`The current ${provider.name} CLI session is invalid or expired.`,
+			);
+		}
+
+		session = refreshed;
 	}
 
 	const identity = await provider.identity(session.token);

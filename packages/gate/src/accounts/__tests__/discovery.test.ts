@@ -134,3 +134,58 @@ describe("classifyNativeSession", () => {
 		expect(discovery.session).toEqual({ token: "foreign" });
 	});
 });
+
+describe("classifyNativeSession refresh fallback", () => {
+	it("refreshes an expired native session, persists it, and classifies fresh", async () => {
+		seed("a", "t1", "someone-else");
+		native = { token: "expired", refreshToken: "r" };
+
+		const provider = fakeProvider({
+			validate: vi.fn(async (token: string) => token === "fresh"),
+			refresh: vi.fn(async () => ({ token: "fresh", refreshToken: "r2" })),
+		});
+
+		const discovery = await classifyNativeSession(provider, store);
+
+		expect(discovery.status).toBe(NativeSessionStatus.UNKNOWN_IDENTITY);
+		expect(discovery.session).toEqual({ token: "fresh", refreshToken: "r2" });
+
+		expect(provider.writeNativeSession).toHaveBeenCalledWith({
+			token: "fresh",
+			refreshToken: "r2",
+		});
+
+		expect(provider.identity).toHaveBeenCalledWith("fresh");
+	});
+
+	it("INVALID when the refresh also fails, without touching the native file", async () => {
+		native = { token: "expired", refreshToken: "r" };
+
+		const provider = fakeProvider({
+			validate: vi.fn(async () => false),
+			refresh: vi.fn(async () => null),
+		});
+
+		expect((await classifyNativeSession(provider, store)).status).toBe(
+			NativeSessionStatus.INVALID,
+		);
+
+		expect(provider.writeNativeSession).not.toHaveBeenCalled();
+	});
+
+	it("does not attempt a refresh without a refresh token", async () => {
+		native = { token: "expired" };
+		const refresh = vi.fn(async () => ({ token: "fresh" }));
+
+		const provider = fakeProvider({
+			validate: vi.fn(async () => false),
+			refresh,
+		});
+
+		expect((await classifyNativeSession(provider, store)).status).toBe(
+			NativeSessionStatus.INVALID,
+		);
+
+		expect(refresh).not.toHaveBeenCalled();
+	});
+});
