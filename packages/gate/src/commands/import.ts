@@ -5,13 +5,16 @@ import pc from "picocolors";
 import { refreshNativeSession } from "../accounts/discovery";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
-import { promptLabelAndAdd } from "./adopt-session";
+import { adoptSession } from "./adopt-session";
+import { resolveDuplicateIdentities } from "./merge-duplicates";
 import { runAction } from "./run-action";
 
 export async function runImport(
 	provider: GateProvider,
 	store: AccountStore,
 ): Promise<void> {
+	await resolveDuplicateIdentities(provider, store);
+
 	let session = provider.readNativeSession();
 
 	if (!session) {
@@ -34,23 +37,9 @@ export async function runImport(
 
 	const identity = await provider.identity(session.token);
 
-	const existing = store
-		.list(provider.id)
-		.find((account) => account.identity === identity);
-
-	if (existing) {
-		store.updateSession(provider.id, existing.label, session);
-
-		p.log.success(
-			`Updated tokens for "${pc.green(existing.label)}" (${identity}).`,
-		);
-
-		return;
-	}
-
 	p.log.success(`Found session for ${pc.green(identity)}.`);
 
-	await promptLabelAndAdd(provider, store, identity, session);
+	await adoptSession(provider, store, identity, session);
 }
 
 export function makeImportCommand(provider: GateProvider, store: AccountStore) {

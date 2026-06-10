@@ -173,9 +173,10 @@ describe("runImport", () => {
 		);
 	});
 
-	it("updates tokens when the identity is already stored", async () => {
+	it("updates tokens when the identity is already stored (via the update prompt)", async () => {
 		seed();
 		native = { token: "native-tok" };
+		vi.mocked(p.select).mockResolvedValueOnce("UPDATE");
 
 		await runImport(fakeProvider(), store);
 
@@ -365,9 +366,56 @@ describe("active marker after a mandatory merge", () => {
 		const lines = vi
 			.mocked(p.log.message)
 			.mock.calls.map((call) => String(call[0]));
+
 		expect(lines.find((line) => line.includes("hc"))).toContain("●");
 		expect(lines.find((line) => line.includes("dz0"))).not.toContain("●");
 		expect(p.confirm).not.toHaveBeenCalled();
+	});
+});
+
+describe("adoptSession update-or-rename", () => {
+	it("login with a stored identity updates the entry on UPDATE", async () => {
+		seed("hc", "old", "andre");
+		vi.mocked(p.select).mockResolvedValueOnce("UPDATE");
+
+		await runLogin(fakeProvider(), store);
+
+		expect(store.find(Provider.VERCEL, "hc")?.session.token).toBe("fresh");
+		expect(store.list(Provider.VERCEL)).toHaveLength(1);
+		expect(p.text).not.toHaveBeenCalled();
+	});
+
+	it("login with a stored identity renames the entry on RENAME", async () => {
+		seed("hc", "old", "andre");
+		vi.mocked(p.select).mockResolvedValueOnce("RENAME");
+
+		await runLogin(fakeProvider(), store);
+
+		expect(store.find(Provider.VERCEL, "hc")).toBeUndefined();
+		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
+			"fresh",
+		);
+		expect(store.list(Provider.VERCEL)).toHaveLength(1);
+	});
+
+	it("login with an unknown identity still goes through the label prompt", async () => {
+		await runLogin(fakeProvider(), store);
+
+		expect(store.find(Provider.VERCEL, "picked-label")?.identity).toBe("andre");
+		expect(p.select).not.toHaveBeenCalled();
+	});
+
+	it("import with a stored identity renames on RENAME", async () => {
+		seed("hc", "old", "andre");
+		native = { token: "native-tok" };
+		vi.mocked(p.select).mockResolvedValueOnce("RENAME");
+
+		await runImport(fakeProvider(), store);
+
+		expect(store.find(Provider.VERCEL, "picked-label")?.session.token).toBe(
+			"native-tok",
+		);
+		expect(store.list(Provider.VERCEL)).toHaveLength(1);
 	});
 });
 
@@ -398,6 +446,7 @@ describe("mandatory duplicate merge", () => {
 		expect(store.list(Provider.VERCEL).map((account) => account.label)).toEqual(
 			["a1", "b2"],
 		);
+
 		expect(p.select).toHaveBeenCalledTimes(2);
 	});
 
@@ -405,6 +454,7 @@ describe("mandatory duplicate merge", () => {
 		const vergateDir = fs.mkdtempSync(
 			path.join(os.tmpdir(), "gate-cmd-vergate3-"),
 		);
+
 		process.env.GATE_VERGATE_ACCOUNTS_FILE = path.join(
 			vergateDir,
 			"accounts.json",

@@ -4,12 +4,16 @@ import pc from "picocolors";
 
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
+import { adoptSession } from "./adopt-session";
+import { resolveDuplicateIdentities } from "./merge-duplicates";
 import { runAction } from "./run-action";
 
 export async function runLogin(
 	provider: GateProvider,
 	store: AccountStore,
 ): Promise<void> {
+	await resolveDuplicateIdentities(provider, store);
+
 	p.log.info(`Opening browser for ${provider.name} login...`);
 
 	const session = await provider.login();
@@ -17,32 +21,7 @@ export async function runLogin(
 
 	p.log.success(`Logged in as ${pc.green(identity)}`);
 
-	const label = await p.text({
-		message: "Label for this account:",
-		validate: (value) => {
-			if (!value?.trim()) {
-				return "Label cannot be empty";
-			}
-
-			if (store.find(provider.id, value.trim())) {
-				return "An account with this label already exists";
-			}
-		},
-	});
-
-	if (p.isCancel(label)) {
-		p.cancel("Cancelled.");
-		process.exit(0);
-	}
-
-	store.add({
-		provider: provider.id,
-		label: (label as string).trim(),
-		identity,
-		session,
-	});
-
-	p.log.success(`Account "${(label as string).trim()}" added.`);
+	await adoptSession(provider, store, identity, session);
 }
 
 export function makeLoginCommand(provider: GateProvider, store: AccountStore) {
