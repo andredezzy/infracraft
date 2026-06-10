@@ -13,15 +13,17 @@ import { runAction } from "./run-action";
 export interface SplitDeployArgs {
 	accountLabel: string | undefined;
 	mode: SandboxMode;
+	createTarget: boolean;
 	passthroughArgs: string[];
 }
 
-/** gate owns --account/-a, --no-sandbox, --git-metadata; everything else is
- * forwarded verbatim to the native CLI. Raw-args parsing (not citty arg defs)
- * so unknown native flags never error. */
+/** gate owns --account/-a, --no-sandbox, --git-metadata, --create-project;
+ * everything else is forwarded verbatim to the native CLI. Raw-args parsing
+ * (not citty arg defs) so unknown native flags never error. */
 export function splitDeployArgs(rawArgs: string[]): SplitDeployArgs {
 	let accountLabel: string | undefined;
 	let mode = SandboxMode.STUB;
+	let createTarget = false;
 	const passthroughArgs: string[] = [];
 
 	for (let index = 0; index < rawArgs.length; index += 1) {
@@ -40,12 +42,14 @@ export function splitDeployArgs(rawArgs: string[]): SplitDeployArgs {
 			mode = SandboxMode.NONE;
 		} else if (arg === "--git-metadata") {
 			mode = SandboxMode.ORIGINAL;
+		} else if (arg === "--create-project") {
+			createTarget = true;
 		} else {
 			passthroughArgs.push(arg);
 		}
 	}
 
-	return { accountLabel, mode, passthroughArgs };
+	return { accountLabel, mode, createTarget, passthroughArgs };
 }
 
 /** Sandbox modes copy `git ls-files`; without a repo there is nothing to copy

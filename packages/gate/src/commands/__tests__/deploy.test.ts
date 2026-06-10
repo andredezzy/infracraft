@@ -44,4 +44,30 @@ describe("splitDeployArgs", () => {
 			SandboxMode.ORIGINAL,
 		);
 	});
+
+	it("extracts --create-project and keeps it out of the passthrough", () => {
+		const result = splitDeployArgs(["--create-project", "--prod"]);
+
+		expect(result.createTarget).toBe(true);
+		expect(result.passthroughArgs).toEqual(["--prod"]);
+	});
+
+	it("defaults createTarget to false", () => {
+		expect(splitDeployArgs(["--prod"]).createTarget).toBe(false);
+	});
+
+	it("--create-project coexists with the other gate-owned flags", () => {
+		const result = splitDeployArgs([
+			"--account",
+			"work",
+			"--create-project",
+			"--no-sandbox",
+			"--prod",
+		]);
+
+		expect(result.accountLabel).toBe("work");
+		expect(result.createTarget).toBe(true);
+		expect(result.mode).toBe(SandboxMode.NONE);
+		expect(result.passthroughArgs).toEqual(["--prod"]);
+	});
 });
