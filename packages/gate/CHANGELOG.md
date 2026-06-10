@@ -1,5 +1,15 @@
 # @infracraft/gate
 
+## 0.3.0
+
+### Minor Changes
+
+- 74109c4: Refresh-aware discovery: an expired-but-refreshable native session (Vercel) is now silently refreshed during discovery and `import` instead of classifying as invalid, so a stale `auth.json` no longer hides the import offer. The refreshed tokens are written back to the native auth file immediately (OAuth refresh rotates the refresh token), which also revives the native CLI session.
+
+### Patch Changes
+
+- 3db05b3: Reword user-facing CLI messages and README to drop em dashes.
+
 ## 0.2.0
 
 ### Minor Changes
