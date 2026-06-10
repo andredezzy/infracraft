@@ -114,4 +114,47 @@ describe("AccountStore", () => {
 			delete process.env.GATE_CONFIG_DIR;
 		}
 	});
+
+	it("starts with no declined identities", () => {
+		expect(store.isIdentityDeclined(Provider.VERCEL, "andre")).toBe(false);
+	});
+
+	it("remembers a declined identity per provider, idempotently", () => {
+		store.declineIdentity(Provider.VERCEL, "andre");
+		store.declineIdentity(Provider.VERCEL, "andre");
+
+		expect(store.isIdentityDeclined(Provider.VERCEL, "andre")).toBe(true);
+		expect(store.isIdentityDeclined(Provider.RAILWAY, "andre")).toBe(false);
+
+		const written = JSON.parse(
+			fs.readFileSync(path.join(dir, "accounts.json"), "utf-8"),
+		);
+		expect(written.declinedIdentities.VERCEL).toEqual(["andre"]);
+	});
+
+	it("adding an account clears its identity's decline", () => {
+		store.declineIdentity(Provider.VERCEL, "andre");
+		store.add(personal);
+
+		expect(store.isIdentityDeclined(Provider.VERCEL, "andre")).toBe(false);
+	});
+
+	it("declines survive an account removal", () => {
+		store.add(personal);
+		store.declineIdentity(Provider.VERCEL, "stranger");
+
+		store.remove(Provider.VERCEL, "personal");
+
+		expect(store.isIdentityDeclined(Provider.VERCEL, "stranger")).toBe(true);
+	});
+
+	it("loads a legacy file without the declinedIdentities field", () => {
+		fs.writeFileSync(
+			path.join(dir, "accounts.json"),
+			JSON.stringify({ accounts: [personal] }),
+		);
+
+		expect(store.isIdentityDeclined(Provider.VERCEL, "andre")).toBe(false);
+		expect(store.list(Provider.VERCEL)).toEqual([personal]);
+	});
 });

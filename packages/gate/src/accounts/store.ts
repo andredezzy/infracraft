@@ -15,6 +15,7 @@ export interface GateAccount {
 
 interface StoreData {
 	accounts: GateAccount[];
+	declinedIdentities?: Partial<Record<Provider, string[]>>;
 }
 
 /** `GATE_CONFIG_DIR` overrides (tests); otherwise platform-conventional. */
@@ -66,6 +67,18 @@ export class AccountStore {
 		}
 
 		data.accounts.push(account);
+
+		const declined = data.declinedIdentities?.[account.provider];
+
+		if (declined) {
+			data.declinedIdentities = {
+				...data.declinedIdentities,
+				[account.provider]: declined.filter(
+					(identity) => identity !== account.identity,
+				),
+			};
+		}
+
 		this.save(data);
 	}
 
@@ -80,7 +93,7 @@ export class AccountStore {
 			throw new Error(`Account "${label}" not found for ${provider}.`);
 		}
 
-		this.save({ accounts: remaining });
+		this.save({ ...data, accounts: remaining });
 	}
 
 	updateSession(
@@ -100,6 +113,27 @@ export class AccountStore {
 		}
 
 		account.session = session;
+		this.save(data);
+	}
+
+	isIdentityDeclined(provider: Provider, identity: string): boolean {
+		return Boolean(
+			this.load().declinedIdentities?.[provider]?.includes(identity),
+		);
+	}
+
+	declineIdentity(provider: Provider, identity: string): void {
+		const data = this.load();
+		const declined = data.declinedIdentities ?? {};
+		const identities = declined[provider] ?? [];
+
+		if (!identities.includes(identity)) {
+			identities.push(identity);
+		}
+
+		declined[provider] = identities;
+		data.declinedIdentities = declined;
+
 		this.save(data);
 	}
 
