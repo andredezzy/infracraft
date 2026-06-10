@@ -38,6 +38,7 @@ beforeEach(() => {
 	store = new AccountStore(
 		fs.mkdtempSync(path.join(os.tmpdir(), "gate-discovery-")),
 	);
+
 	native = null;
 });
 

@@ -266,6 +266,7 @@ describe("native session discovery offer", () => {
 		const vergateDir = fs.mkdtempSync(
 			path.join(os.tmpdir(), "gate-cmd-vergate2-"),
 		);
+
 		process.env.GATE_VERGATE_ACCOUNTS_FILE = path.join(
 			vergateDir,
 			"accounts.json",

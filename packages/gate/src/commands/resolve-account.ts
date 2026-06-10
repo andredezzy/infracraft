@@ -39,7 +39,7 @@ async function maybeOfferVergateMigration(
 
 /** Offers to import a valid native CLI session gate doesn't know. Declines
  * are remembered per identity; Ctrl-C aborts without remembering. */
-export async function maybeOfferNativeImport(
+async function maybeOfferNativeImport(
 	provider: GateProvider,
 	store: AccountStore,
 ): Promise<void> {
