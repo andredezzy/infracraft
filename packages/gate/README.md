@@ -1,7 +1,7 @@
 <p align="center">
   <b>@infracraft/gate</b>
   <br />
-  <i>Run any Vercel, Railway, or Fly.io CLI command as any account. Really switches the native CLI session.</i>
+  <i>Run any Vercel, Railway, or Fly.io CLI command as any account. Per-invocation credential injection, real native-session switching, and sandboxed deploys.</i>
 </p>
 
 <p align="center">
@@ -72,7 +72,7 @@ Interactive runs print one dim account badge to stderr (`● work (worker@email)
 |---|---|
 | `--account <label>`, `--account=<label>` | Anywhere in the command |
 | `-a <label>` | Anywhere — except on Fly, where `-a` natively means the app name: there it's only read between the provider name and the first native token (`gate fly -a work status -a my-app`), and never inside deploy args |
-| `--project <name>`, `--project=<name>` | Vercel passthrough only — gate resolves the project via the API and injects `VERCEL_PROJECT_ID`/`VERCEL_ORG_ID`, so it works on every command (`env`, `logs`, …). Deploy is unaffected (`--project` stays native there). Native flag reachable via `--` |
+| `--project <name>`, `--project=<name>` | Vercel passthrough only — gate resolves the project via the API and injects `VERCEL_PROJECT_ID`/`VERCEL_ORG_ID`, so it works on every command (`env`, `logs`, …). A missing project aborts the command — it never silently falls back to the linked project. Deploy is unaffected (`--project` stays native there). Native flag reachable via `--` |
 | `--` (first token) | Escape hatch — everything after is verbatim native; gate flags must come before it |
 
 Anything after any `--` is never interpreted by gate.
@@ -174,7 +174,7 @@ const result = await runDeploy({
 console.log(result.url, result.exitCode)
 ```
 
-Key exports: `AccountStore`, `PROVIDERS`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateFlagRegion`, `CommandContext`, `RoutedCommand`, `GateTreeRoute`, `PassthroughRoute`, `InvalidRoute`, `GateProvider`, `GateAccount`, `NativeCliContext`, `NativeCliCommand`, `PassthroughTargetCapability`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `SpawnedDeploy`, `PassthroughRunOptions`, `PassthroughRunResult`, `PassthroughSpawner`, `SpawnedPassthrough`.
+Key exports: `AccountStore`, `PROVIDERS`, `Provider`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `EnsureValidSessionOptions`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SplitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateFlagRegion`, `CommandContext`, `RoutedCommand`, `GateTreeRoute`, `PassthroughRoute`, `InvalidRoute`, `GateProvider`, `GateAccount`, `ProviderSession`, `NativeCliContext`, `NativeCliCommand`, `PassthroughTargetCapability`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `SpawnedDeploy`, `PassthroughRunOptions`, `PassthroughRunResult`, `PassthroughSpawner`, `SpawnedPassthrough`.
 
 ## License
 

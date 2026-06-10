@@ -97,7 +97,7 @@ new RailwayDeploy("api-deploy", {
 | `RailwayVariable` | — | Batch upsert; uses `skipDeploys` to avoid snapshot errors |
 | `RailwayVolume` | `.id` | Persistent volume; `mountPath` must be absolute |
 | `RailwayProjectToken` | `.token` (secret) | Environment-scoped deploy token; feed into `RailwayDeploy` |
-| `RailwayDeploy` | — | Runs `railway up --detach`, then monitors the deployment via the Railway API |
+| `RailwayDeploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API |
 
 **Enums:** `RailwayBuilder` (`RAILPACK`, `NIXPACKS`, `DOCKERFILE`, `HEROKU`, `PAKETO`), `RailwayRestartPolicy` (`ON_FAILURE`, `ALWAYS`, `NEVER`)
 
@@ -182,7 +182,7 @@ const project = new VercelProject("web", {
   rootDirectory: "apps/web",
 }, { provider })
 
-// project.url resolves to the custom domain or <name>.vercel.app
+// project.url is a full https:// URL — custom domain or <name>.vercel.app
 export const url = project.url
 
 const vars = new VercelVariable("web-vars", {
@@ -217,9 +217,9 @@ new VercelResourceConnection("kv-conn", {
 | Class | Key outputs | Notes |
 |---|---|---|
 | `VercelProvider` | — | `token` + `teamId` |
-| `VercelProject` | `.id`, `.url` | `.url` prefers custom domain over `*.vercel.app` |
+| `VercelProject` | `.id`, `.url` | `.url` is a full `https://` URL; prefers the custom production domain over `<name>.vercel.app` |
 | `VercelVariable` | `.contentHash` | Use as a deploy trigger to redeploy on env var changes |
-| `VercelDeploy` | — | Runs `vercel deploy --prod --yes` |
+| `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes` |
 | `VercelIntegration` | `.configurationId` (`icfg_…`) | Resolves an installed marketplace integration by slug |
 | `VercelMarketplaceResource` | `.id`, `.externalResourceId`, `.status` | Provisions a marketplace store |
 | `VercelResourceConnection` | — | Wires a store to a project; injects env vars into target environments |
@@ -298,12 +298,13 @@ new FlyDeploy("api-deploy", {
 
 | Class | Key outputs | Notes |
 |---|---|---|
+| `FlyProvider` | — | Pass as `provider` option to every Fly resource |
 | `FlyApp` | `.id` (app name) | Adopt-or-create |
 | `FlySecret` | `.version` | Feed into `FlyDeploy` triggers to redeploy on secret changes |
 | `FlyVolume` | `.id` (`vol_…`) | `sizeGb` can only grow |
 | `FlyCertificate` | `.id` (hostname), `.configured`, `.dnsRequirements` | `.dnsRequirements` contains ACME validation records |
 | `FlyIp` | `.id` (IP address) | `type`: `FlyIpType.V4`, `V6`, `SHARED_V4`, `PRIVATE_V6` |
-| `FlyDeploy` | — | Writes fly.toml at deploy time; triggers on config + source hash |
+| `FlyDeploy` | `.deploymentUrl` | Writes fly.toml at deploy time; triggers on config + source hash |
 
 **Enums:** `FlyIpType`, `FlyDeployStrategy` (`ROLLING`, `IMMEDIATE`, `CANARY`, `BLUEGREEN`), `FlyRestartPolicy` (`ALWAYS`, `ON_FAILURE`, `NEVER`), `FlyAutoStopMachines` (`OFF`, `STOP`, `SUSPEND`), `FlyConcurrencyType` (`CONNECTIONS`, `REQUESTS`), `FlyServiceProtocol` (`TCP`, `UDP`), `FlyPortHandler` (`HTTP`, `TLS`, `PG_TLS`, `PROXY_PROTO`, `EDGE_HTTP`), `FlyCpuKind` (`SHARED`, `PERFORMANCE`), `FlyCheckType` (`HTTP`, `TCP`)
 

@@ -24,7 +24,7 @@ npm i @infracraft/sandbox
 bun add @infracraft/sandbox
 ```
 
-Zero runtime dependencies. The generated scripts need `git`, `rsync`, and `awk` on the machine that runs them, all present on stock macOS and Linux.
+Zero runtime dependencies. The generated scripts need `git` and `rsync` on the machine that runs them (`awk` too when `excludePaths` are used) — all present on stock macOS and Linux.
 
 ## Usage
 
@@ -59,7 +59,7 @@ The script copies the repo's tracked files (`git ls-files`) into a fresh `mktemp
 | Mode | Working copy | `.git` the platform sees |
 |---|---|---|
 | `NONE` | Live repo tree (no isolation) | The real one |
-| `ORIGINAL` | Isolated `/tmp/infracraft` copy of tracked files | The real one, copy-on-write copied into the sandbox |
+| `ORIGINAL` | Isolated `/tmp/infracraft` copy of tracked files | The real one, CoW-copied into the sandbox (plain-copy fallback on non-CoW filesystems) |
 | `STUB` | Isolated copy with `excludePaths` applied | A fresh `git init` + `git add -A` stub with an unborn HEAD |
 
 ## API surface
