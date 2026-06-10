@@ -4,14 +4,18 @@ import pc from "picocolors";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import type { CommandSpec } from "../registry/command-spec";
-import { maybeOfferAdoption } from "./resolve-account";
+import {
+	maybeOfferAdoption,
+	type ResolveAccountOptions,
+} from "./resolve-account";
 import { runAction } from "./run-action";
 
 export async function runList(
 	provider: GateProvider,
 	store: AccountStore,
+	options?: ResolveAccountOptions,
 ): Promise<void> {
-	await maybeOfferAdoption(provider, store);
+	await maybeOfferAdoption(provider, store, options);
 
 	const accounts = store.list(provider.id);
 
@@ -41,7 +45,10 @@ export const listCommandSpec: CommandSpec = {
 		p.intro(`gate ${context.provider.binary} auth list`);
 
 		await runAction(async () => {
-			await runList(context.provider, context.store);
+			await runList(context.provider, context.store, {
+				interaction: context.interaction,
+			});
+
 			p.outro("Done!");
 		});
 	},

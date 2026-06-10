@@ -172,7 +172,7 @@ const result = await runDeploy({
 console.log(result.url, result.exitCode)
 ```
 
-Key exports: `AccountStore`, `PROVIDERS`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateProvider`, `GateAccount`, `NativeCliContext`, `NativeCliCommand`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `PassthroughRunOptions`, `PassthroughSpawner`.
+Key exports: `AccountStore`, `PROVIDERS`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateFlagRegion`, `CommandContext`, `RoutedCommand`, `GateTreeRoute`, `PassthroughRoute`, `InvalidRoute`, `GateProvider`, `GateAccount`, `NativeCliContext`, `NativeCliCommand`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `SpawnedDeploy`, `PassthroughRunOptions`, `PassthroughRunResult`, `PassthroughSpawner`, `SpawnedPassthrough`.
 
 ## License
 

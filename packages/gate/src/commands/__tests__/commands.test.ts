@@ -523,4 +523,39 @@ describe("non-interactive account resolution", () => {
 			}),
 		).rejects.toThrow(/gate fake auth login.*gate fake auth import/s);
 	});
+
+	it("runSwitch off-TTY throws instead of showing the picker", async () => {
+		seed("a", "t1", "andre");
+		seed("b", "t2", "bob");
+
+		await expect(
+			runSwitch(fakeProvider(), store, undefined, {
+				interaction: InteractionMode.NON_INTERACTIVE,
+			}),
+		).rejects.toThrow(/--account <label>|auth switch/);
+
+		expect(p.select).not.toHaveBeenCalled();
+	});
+
+	it("runList off-TTY skips adoption offers", async () => {
+		native = { token: "native-tok" };
+
+		await runList(fakeProvider(), store, {
+			interaction: InteractionMode.NON_INTERACTIVE,
+		});
+
+		expect(p.confirm).not.toHaveBeenCalled();
+	});
+
+	it("runLogin off-TTY fails fast instead of opening a browser", async () => {
+		const provider = fakeProvider();
+
+		await expect(
+			runLogin(provider, store, {
+				interaction: InteractionMode.NON_INTERACTIVE,
+			}),
+		).rejects.toThrow(/interactive terminal/);
+
+		expect(provider.login).not.toHaveBeenCalled();
+	});
 });

@@ -5,16 +5,17 @@ import { ensureValidSession } from "../accounts/session";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import type { CommandSpec } from "../registry/command-spec";
-import { resolveAccount } from "./resolve-account";
+import { type ResolveAccountOptions, resolveAccount } from "./resolve-account";
 import { runAction } from "./run-action";
 
 export async function runSwitch(
 	provider: GateProvider,
 	store: AccountStore,
 	label: string | undefined,
+	options?: ResolveAccountOptions,
 ): Promise<void> {
-	const account = await resolveAccount(provider, store, label);
-	const valid = await ensureValidSession(provider, store, account);
+	const account = await resolveAccount(provider, store, label, options);
+	const valid = await ensureValidSession(provider, store, account, options);
 
 	provider.writeNativeSession(valid.session);
 
@@ -30,7 +31,10 @@ export const switchCommandSpec: CommandSpec = {
 		p.intro(`gate ${context.provider.binary} auth switch`);
 
 		await runAction(async () => {
-			await runSwitch(context.provider, context.store, args[0]);
+			await runSwitch(context.provider, context.store, args[0], {
+				interaction: context.interaction,
+			});
+
 			p.outro("Done!");
 		});
 	},

@@ -4,15 +4,23 @@ import pc from "picocolors";
 import { refreshNativeSession } from "../accounts/discovery";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
-import type { CommandSpec } from "../registry/command-spec";
+import { type CommandSpec, InteractionMode } from "../registry/command-spec";
 import { adoptSession } from "./adopt-session";
 import { resolveDuplicateIdentities } from "./merge-duplicates";
+import type { ResolveAccountOptions } from "./resolve-account";
 import { runAction } from "./run-action";
 
 export async function runImport(
 	provider: GateProvider,
 	store: AccountStore,
+	options?: ResolveAccountOptions,
 ): Promise<void> {
+	if (options?.interaction === InteractionMode.NON_INTERACTIVE) {
+		throw new Error(
+			`gate ${provider.binary} auth import requires an interactive terminal.`,
+		);
+	}
+
 	await resolveDuplicateIdentities(provider, store);
 
 	let session = provider.readNativeSession();
@@ -49,7 +57,10 @@ export const importCommandSpec: CommandSpec = {
 		p.intro(`gate ${context.provider.binary} auth import`);
 
 		await runAction(async () => {
-			await runImport(context.provider, context.store);
+			await runImport(context.provider, context.store, {
+				interaction: context.interaction,
+			});
+
 			p.outro("Done!");
 		});
 	},

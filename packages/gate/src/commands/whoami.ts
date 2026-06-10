@@ -5,18 +5,19 @@ import { detectActiveAccount } from "../accounts/session";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
 import type { CommandSpec } from "../registry/command-spec";
-import { resolveAccount } from "./resolve-account";
+import { type ResolveAccountOptions, resolveAccount } from "./resolve-account";
 import { runAction } from "./run-action";
 
 export async function runWhoami(
 	provider: GateProvider,
 	store: AccountStore,
 	label: string | undefined,
+	options?: ResolveAccountOptions,
 ): Promise<void> {
 	const account = label
-		? await resolveAccount(provider, store, label)
+		? await resolveAccount(provider, store, label, options)
 		: (detectActiveAccount(provider, store) ??
-			(await resolveAccount(provider, store, undefined)));
+			(await resolveAccount(provider, store, undefined, options)));
 
 	const valid = await provider.validate(account.session.token);
 
@@ -35,7 +36,10 @@ export const whoamiCommandSpec: CommandSpec = {
 		p.intro(`gate ${context.provider.binary} auth whoami`);
 
 		await runAction(async () => {
-			await runWhoami(context.provider, context.store, args[0]);
+			await runWhoami(context.provider, context.store, args[0], {
+				interaction: context.interaction,
+			});
+
 			p.outro("Done!");
 		});
 	},
