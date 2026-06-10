@@ -202,3 +202,118 @@ describe("deployCli", () => {
 		expect(command.env).toEqual({});
 	});
 });
+
+describe("deployTarget", () => {
+	it("declares the project noun", () => {
+		expect(vercelProvider.deployTarget?.noun).toBe("project");
+	});
+
+	it("resolveName reads --project and --project= forms", () => {
+		const target = vercelProvider.deployTarget;
+
+		expect(target?.resolveName(["--prod", "--project", "hat-rec"])).toBe(
+			"hat-rec",
+		);
+
+		expect(target?.resolveName(["--project=hat-rec", "--prod"])).toBe(
+			"hat-rec",
+		);
+	});
+
+	it("resolveName is undefined without --project", () => {
+		expect(
+			vercelProvider.deployTarget?.resolveName(["--prod"]),
+		).toBeUndefined();
+	});
+
+	it("resolveName is undefined for a valueless --project", () => {
+		const target = vercelProvider.deployTarget;
+
+		expect(target?.resolveName(["--prod", "--project"])).toBeUndefined();
+		expect(target?.resolveName(["--project="])).toBeUndefined();
+	});
+
+	it("resolveName defers to the native CLI when --scope is present", () => {
+		const target = vercelProvider.deployTarget;
+
+		expect(
+			target?.resolveName(["--project", "x", "--scope", "team"]),
+		).toBeUndefined();
+
+		expect(
+			target?.resolveName(["--scope=team", "--project", "x"]),
+		).toBeUndefined();
+	});
+
+	it("exists hits /v9/projects/{name} with the bearer token", async () => {
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+
+		expect(await vercelProvider.deployTarget?.exists("tok", "hat-rec")).toBe(
+			true,
+		);
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.vercel.com/v9/projects/hat-rec",
+			{ headers: { Authorization: "Bearer tok" } },
+		);
+	});
+
+	it("exists URL-encodes the project name", async () => {
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+
+		await vercelProvider.deployTarget?.exists("tok", "my project");
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.vercel.com/v9/projects/my%20project",
+			{ headers: { Authorization: "Bearer tok" } },
+		);
+	});
+
+	it("exists is false on 404 and throws on other failures", async () => {
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response("{}", { status: 404 }),
+		);
+
+		expect(await vercelProvider.deployTarget?.exists("tok", "x")).toBe(false);
+
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response("{}", { status: 500 }),
+		);
+
+		await expect(
+			vercelProvider.deployTarget?.exists("tok", "x"),
+		).rejects.toThrow("Project lookup failed (HTTP 500)");
+	});
+
+	it("create posts the project name and throws on failure", async () => {
+		const fetchMock = vi
+			.spyOn(globalThis, "fetch")
+			.mockResolvedValue(new Response("{}", { status: 200 }));
+
+		await vercelProvider.deployTarget?.create("tok", "hat-rec");
+
+		expect(fetchMock).toHaveBeenCalledWith(
+			"https://api.vercel.com/v9/projects",
+			{
+				method: "POST",
+				headers: {
+					Authorization: "Bearer tok",
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ name: "hat-rec" }),
+			},
+		);
+
+		vi.spyOn(globalThis, "fetch").mockResolvedValue(
+			new Response("{}", { status: 409 }),
+		);
+
+		await expect(
+			vercelProvider.deployTarget?.create("tok", "hat-rec"),
+		).rejects.toThrow("Project creation failed (HTTP 409)");
+	});
+});

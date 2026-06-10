@@ -52,6 +52,30 @@ function readAuthData(): Record<string, unknown> | null {
 	}
 }
 
+/** The explicit `--project <name>` / `--project=<name>` target, if any.
+ * `--scope` defers entirely to the native CLI — team lookups are v1
+ * out-of-scope, so the preflight must step aside rather than guess. */
+function resolveProjectName(passthroughArgs: string[]): string | undefined {
+	let name: string | undefined;
+
+	for (let index = 0; index < passthroughArgs.length; index += 1) {
+		const arg = passthroughArgs[index] as string;
+
+		if (arg === "--scope" || arg.startsWith("--scope=")) {
+			return undefined;
+		}
+
+		if (arg.startsWith("--project=")) {
+			name = arg.slice("--project=".length);
+		} else if (arg === "--project") {
+			name = passthroughArgs[index + 1];
+			index += 1;
+		}
+	}
+
+	return name || undefined;
+}
+
 export const vercelProvider: GateProvider = {
 	id: Provider.VERCEL,
 	name: "Vercel",
@@ -180,5 +204,42 @@ export const vercelProvider: GateProvider = {
 			],
 			env: {},
 		};
+	},
+
+	deployTarget: {
+		noun: "project",
+		resolveName: resolveProjectName,
+
+		async exists(token: string, name: string): Promise<boolean> {
+			const response = await fetch(
+				`https://api.vercel.com/v9/projects/${encodeURIComponent(name)}`,
+				{ headers: { Authorization: `Bearer ${token}` } },
+			);
+
+			if (response.status === 404) {
+				return false;
+			}
+
+			if (!response.ok) {
+				throw new Error(`Project lookup failed (HTTP ${response.status})`);
+			}
+
+			return true;
+		},
+
+		async create(token: string, name: string): Promise<void> {
+			const response = await fetch("https://api.vercel.com/v9/projects", {
+				method: "POST",
+				headers: {
+					Authorization: `Bearer ${token}`,
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({ name }),
+			});
+
+			if (!response.ok) {
+				throw new Error(`Project creation failed (HTTP ${response.status})`);
+			}
+		},
 	},
 };

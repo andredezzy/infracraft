@@ -30,6 +30,24 @@ export interface NativeCliCommand {
 }
 
 /**
+ * Lets a provider expose its deploy target ("project", "app") for the
+ * missing-target preflight in the deploy command. Pure data ops — prompts
+ * live in the command layer.
+ */
+export interface DeployTargetCapability {
+	/** Display noun: "project" (Vercel, Railway) | "app" (Fly). */
+	noun: string;
+	/** Extracts the explicit target name from the passthrough args.
+	 * `undefined` means "nothing to preflight" — deploy proceeds untouched. */
+	resolveName(passthroughArgs: string[]): string | undefined;
+	/** False only on a definitive 404; other HTTP failures throw so the
+	 * caller can decide (network errors propagate untouched). */
+	exists(token: string, name: string): Promise<boolean>;
+	/** Throws on any non-ok response. */
+	create(token: string, name: string): Promise<void>;
+}
+
+/**
  * The strategy contract. One implementation per platform; everything else in
  * gate (command factories, store, deploy runner) is provider-agnostic.
  */
@@ -62,4 +80,6 @@ export interface GateProvider {
 	deployCli(context: DeployCliContext): NativeCliCommand;
 	/** Extracts the deployment URL from streamed stdout. */
 	deployUrlPattern: RegExp;
+	/** Optional missing-target preflight ops; providers without it skip the check. */
+	deployTarget?: DeployTargetCapability;
 }
