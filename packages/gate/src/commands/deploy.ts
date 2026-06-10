@@ -159,7 +159,7 @@ async function runDeployCommand(
 	rawArgs: string[],
 ): Promise<void> {
 	const split = splitDeployArgs(rawArgs);
-	const { accountLabel, passthroughArgs } = split;
+	const { accountLabel, createTarget, passthroughArgs } = split;
 	let mode = split.mode;
 
 	if (mode !== SandboxMode.NONE && !isInsideGitRepo()) {
@@ -182,6 +182,19 @@ async function runDeployCommand(
 	p.log.success(
 		`Account: ${pc.bold(valid.label)} ${pc.gray(`(${valid.identity})`)}`,
 	);
+
+	const outcome = await ensureDeployTarget({
+		deployTarget: provider.deployTarget,
+		token: valid.session.token,
+		identity: valid.identity,
+		passthroughArgs,
+		createTarget,
+		interactive: process.stdout.isTTY === true,
+	});
+
+	if (outcome === DeployTargetPreflightOutcome.ABORTED) {
+		return;
+	}
 
 	if (mode === SandboxMode.STUB) {
 		p.log.info(pc.gray("Sandboxed deploy: isolated copy, metadata-free .git"));
