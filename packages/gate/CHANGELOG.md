@@ -1,5 +1,11 @@
 # @infracraft/gate
 
+## 0.6.0
+
+### Minor Changes
+
+- 2f3678e: Deploy-target preflight: `gate vercel deploy --project <name>` now verifies the project exists before spawning the native CLI. A missing project triggers a create prompt — or is auto-created with the new gate-owned `--create-project` flag — and the deploy continues in the same run; non-interactive misses fail fast with an actionable hint instead of relaying the native error.
+
 ## 0.5.1
 
 ### Patch Changes
