@@ -1,5 +1,11 @@
 # @infracraft/gate
 
+## 0.2.0
+
+### Minor Changes
+
+- d8d8805: Native-session discovery: interactive commands now notice when the native CLI is logged into an account gate doesn't know and offer to import it. Declining is remembered per identity (`gate <provider> import` always works manually and un-declines). The empty-store error now mentions `import` alongside `login`.
+
 ## 0.1.0
 
 ### Minor Changes
