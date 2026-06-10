@@ -5,6 +5,7 @@ import pc from "picocolors";
 import { refreshNativeSession } from "../accounts/discovery";
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
+import type { CommandSpec } from "../registry/command-spec";
 import { adoptSession } from "./adopt-session";
 import { resolveDuplicateIdentities } from "./merge-duplicates";
 import { runAction } from "./run-action";
@@ -41,6 +42,19 @@ export async function runImport(
 
 	await adoptSession(provider, store, identity, session);
 }
+
+export const importCommandSpec: CommandSpec = {
+	description: "Adopt the current native CLI session as a named account",
+	usage: "",
+	async run(context) {
+		p.intro(`gate ${context.provider.binary} auth import`);
+
+		await runAction(async () => {
+			await runImport(context.provider, context.store);
+			p.outro("Done!");
+		});
+	},
+};
 
 export function makeImportCommand(provider: GateProvider, store: AccountStore) {
 	return defineCommand({

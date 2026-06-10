@@ -4,6 +4,7 @@ import pc from "picocolors";
 
 import type { AccountStore } from "../accounts/store";
 import type { GateProvider } from "../providers/provider";
+import type { CommandSpec } from "../registry/command-spec";
 import { maybeOfferAdoption } from "./resolve-account";
 import { runAction } from "./run-action";
 
@@ -33,6 +34,19 @@ export async function runList(
 		);
 	}
 }
+
+export const listCommandSpec: CommandSpec = {
+	description: "List stored accounts with the active marker",
+	usage: "",
+	async run(context) {
+		p.intro(`gate ${context.provider.binary} auth list`);
+
+		await runAction(async () => {
+			await runList(context.provider, context.store);
+			p.outro("Done!");
+		});
+	},
+};
 
 export function makeListCommand(provider: GateProvider, store: AccountStore) {
 	return defineCommand({

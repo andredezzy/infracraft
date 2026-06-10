@@ -10,7 +10,7 @@ import type {
 	DeployTargetCapability,
 	GateProvider,
 } from "../providers/provider";
-import type { CommandContext } from "../registry/command-spec";
+import type { CommandContext, CommandSpec } from "../registry/command-spec";
 import { InteractionMode } from "../registry/command-spec";
 import { GateFlagRegion, splitGateFlags } from "../routing/split-gate-flags";
 import { resolveAccount } from "./resolve-account";
@@ -258,6 +258,16 @@ export async function runDeployCommand(
 
 	p.outro(`Done in ${(result.durationMs / 1000).toFixed(1)}s`);
 }
+
+export const deployCommandSpec: CommandSpec = {
+	description: "Sandboxed native deploy with account selection",
+	usage: "[gate flags] [native args...]",
+	async run(context, args) {
+		p.intro(`gate ${context.provider.binary} ${context.provider.deployVerb}`);
+
+		await runAction(() => runDeployCommand(context, args));
+	},
+};
 
 export function makeDeployCommand(provider: GateProvider, store: AccountStore) {
 	return defineCommand({
