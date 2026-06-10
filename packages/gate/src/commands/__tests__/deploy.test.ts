@@ -1,7 +1,30 @@
 import { SandboxMode } from "@infracraft/sandbox";
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { splitDeployArgs } from "../deploy";
+vi.mock("@clack/prompts", () => ({
+	intro: vi.fn(),
+	outro: vi.fn(),
+	cancel: vi.fn(),
+	isCancel: vi.fn(() => false),
+	confirm: vi.fn(async () => true),
+	log: {
+		info: vi.fn(),
+		success: vi.fn(),
+		warn: vi.fn(),
+		error: vi.fn(),
+		message: vi.fn(),
+	},
+}));
+
+import * as p from "@clack/prompts";
+
+import type { DeployTargetCapability } from "../../providers/provider";
+import type { DeployTargetPreflightContext } from "../deploy";
+import {
+	DeployTargetPreflightOutcome,
+	ensureDeployTarget,
+	splitDeployArgs,
+} from "../deploy";
 
 describe("splitDeployArgs", () => {
 	it("extracts gate-owned flags and passes the rest through", () => {
@@ -69,5 +92,155 @@ describe("splitDeployArgs", () => {
 		expect(result.createTarget).toBe(true);
 		expect(result.mode).toBe(SandboxMode.NONE);
 		expect(result.passthroughArgs).toEqual(["--prod"]);
+	});
+});
+
+function fakeTarget(
+	overrides: Partial<DeployTargetCapability> = {},
+): DeployTargetCapability {
+	return {
+		noun: "project",
+		resolveName: () => "hat-rec",
+		exists: vi.fn(async () => false),
+		create: vi.fn(async () => {}),
+		...overrides,
+	};
+}
+
+function preflightContext(
+	overrides: Partial<DeployTargetPreflightContext> = {},
+): DeployTargetPreflightContext {
+	return {
+		deployTarget: fakeTarget(),
+		token: "tok",
+		identity: "andre",
+		passthroughArgs: [],
+		createTarget: false,
+		interactive: true,
+		...overrides,
+	};
+}
+
+describe("ensureDeployTarget", () => {
+	beforeEach(() => {
+		vi.clearAllMocks();
+
+		vi.mocked(p.confirm).mockResolvedValue(true);
+		vi.mocked(p.isCancel).mockReturnValue(false);
+	});
+
+	afterEach(() => {
+		process.exitCode = undefined;
+	});
+
+	it("is READY without a capability", async () => {
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: undefined }),
+		);
+
+		expect(outcome).toBe(DeployTargetPreflightOutcome.READY);
+		expect(p.confirm).not.toHaveBeenCalled();
+	});
+
+	it("is READY when no target name resolves, without touching the API", async () => {
+		const target = fakeTarget({ resolveName: () => undefined });
+
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: target }),
+		);
+
+		expect(outcome).toBe(DeployTargetPreflightOutcome.READY);
+		expect(target.exists).not.toHaveBeenCalled();
+	});
+
+	it("is READY without a prompt when the target exists", async () => {
+		const target = fakeTarget({ exists: vi.fn(async () => true) });
+
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: target }),
+		);
+
+		expect(outcome).toBe(DeployTargetPreflightOutcome.READY);
+		expect(p.confirm).not.toHaveBeenCalled();
+		expect(target.create).not.toHaveBeenCalled();
+	});
+
+	it("creates after a confirmed prompt and continues", async () => {
+		const target = fakeTarget();
+
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: target }),
+		);
+
+		expect(p.confirm).toHaveBeenCalledWith({
+			message: 'Project "hat-rec" was not found in scope andre. Create it?',
+		});
+
+		expect(target.create).toHaveBeenCalledWith("tok", "hat-rec");
+		expect(p.log.success).toHaveBeenCalledWith("Created project hat-rec");
+		expect(outcome).toBe(DeployTargetPreflightOutcome.READY);
+	});
+
+	it("aborts without creating when the prompt is declined", async () => {
+		vi.mocked(p.confirm).mockResolvedValue(false);
+
+		const target = fakeTarget();
+
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: target }),
+		);
+
+		expect(outcome).toBe(DeployTargetPreflightOutcome.ABORTED);
+		expect(target.create).not.toHaveBeenCalled();
+		expect(p.cancel).toHaveBeenCalledWith("Cancelled.");
+	});
+
+	it("--create-project creates without prompting", async () => {
+		const target = fakeTarget();
+
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: target, createTarget: true }),
+		);
+
+		expect(p.confirm).not.toHaveBeenCalled();
+		expect(target.create).toHaveBeenCalledWith("tok", "hat-rec");
+		expect(outcome).toBe(DeployTargetPreflightOutcome.READY);
+	});
+
+	it("non-interactive misses fail fast with a hint", async () => {
+		const target = fakeTarget();
+
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: target, interactive: false }),
+		);
+
+		expect(outcome).toBe(DeployTargetPreflightOutcome.ABORTED);
+		expect(p.confirm).not.toHaveBeenCalled();
+
+		expect(p.log.error).toHaveBeenCalledWith(
+			'Project "hat-rec" was not found in scope andre. Pass --create-project to create it, or create it first in the dashboard.',
+		);
+
+		expect(process.exitCode).toBe(1);
+	});
+
+	it("degrades to a warning when the existence check fails", async () => {
+		const target = fakeTarget({
+			exists: vi.fn(async () => {
+				throw new Error("offline");
+			}),
+		});
+
+		const outcome = await ensureDeployTarget(
+			preflightContext({ deployTarget: target }),
+		);
+
+		expect(outcome).toBe(DeployTargetPreflightOutcome.READY);
+
+		expect(p.log.warn).toHaveBeenCalledWith(
+			'Could not verify project "hat-rec" exists (offline). Continuing with deploy.',
+		);
+
+		expect(p.confirm).not.toHaveBeenCalled();
 	});
 });
