@@ -35,6 +35,7 @@ export type {
 	GateProvider,
 	NativeCliCommand,
 	NativeCliContext,
+	PassthroughTargetCapability,
 	ProviderSession,
 } from "./providers/provider";
 export { Provider } from "./providers/provider";

@@ -57,6 +57,7 @@ Anything that isn't `auth` or the deploy verb runs natively, with credentials in
 
 ```bash
 gate vercel env ls                    # native `vercel env ls` as the active account
+gate vercel env ls --project hat-rec  # any project, no .vercel link needed
 gate vercel switch my-team            # vercel's own team switch (native)
 gate railway logs --account work      # one-shot account selection
 gate fly -a work status -a my-app     # gate account "work"; fly app "my-app"
@@ -71,6 +72,7 @@ Interactive runs print one dim account badge to stderr (`● work (worker@email)
 |---|---|
 | `--account <label>`, `--account=<label>` | Anywhere in the command |
 | `-a <label>` | Anywhere — except on Fly, where `-a` natively means the app name: there it's only read between the provider name and the first native token (`gate fly -a work status -a my-app`), and never inside deploy args |
+| `--project <name>`, `--project=<name>` | Vercel passthrough only — gate resolves the project via the API and injects `VERCEL_PROJECT_ID`/`VERCEL_ORG_ID`, so it works on every command (`env`, `logs`, …). Deploy is unaffected (`--project` stays native there). Native flag reachable via `--` |
 | `--` (first token) | Escape hatch — everything after is verbatim native; gate flags must come before it |
 
 Anything after any `--` is never interpreted by gate.
@@ -172,7 +174,7 @@ const result = await runDeploy({
 console.log(result.url, result.exitCode)
 ```
 
-Key exports: `AccountStore`, `PROVIDERS`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateFlagRegion`, `CommandContext`, `RoutedCommand`, `GateTreeRoute`, `PassthroughRoute`, `InvalidRoute`, `GateProvider`, `GateAccount`, `NativeCliContext`, `NativeCliCommand`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `SpawnedDeploy`, `PassthroughRunOptions`, `PassthroughRunResult`, `PassthroughSpawner`, `SpawnedPassthrough`.
+Key exports: `AccountStore`, `PROVIDERS`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateFlagRegion`, `CommandContext`, `RoutedCommand`, `GateTreeRoute`, `PassthroughRoute`, `InvalidRoute`, `GateProvider`, `GateAccount`, `NativeCliContext`, `NativeCliCommand`, `PassthroughTargetCapability`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `SpawnedDeploy`, `PassthroughRunOptions`, `PassthroughRunResult`, `PassthroughSpawner`, `SpawnedPassthrough`.
 
 ## License
 
