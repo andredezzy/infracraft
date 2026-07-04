@@ -30,7 +30,48 @@ interface RailwayDomainOutputs extends RailwayDomainInputs {
 
 	/** Fully qualified domain name (e.g. `"api-production-abc.up.railway.app"`). */
 	fqdn: string;
+
+	/**
+	 * The value to CNAME `customDomain` to. Only present for custom domains — a
+	 * service's auto-generated `*.up.railway.app` domain needs no DNS record of its
+	 * own. `undefined` if Railway hasn't returned a traffic-routing CNAME record yet.
+	 */
+	cnameTarget?: string;
 }
+
+/** A single DNS record Railway expects for a custom domain (CNAME target, ACME challenge, ...). */
+interface DomainDnsRecord {
+	recordType: string;
+	purpose: string;
+	requiredValue: string;
+}
+
+/** Shape returned for a custom domain, including its required DNS records. */
+interface CustomDomainEntry {
+	id: string;
+	domain: string;
+	status?: { dnsRecords: DomainDnsRecord[] };
+}
+
+/**
+ * Picks the CNAME record Railway expects for routing traffic to a custom domain out
+ * of its full DNS record list (which also includes e.g. an ACME challenge TXT record).
+ */
+function extractCnameTarget(
+	dnsRecords: DomainDnsRecord[] | undefined,
+): string | undefined {
+	return dnsRecords?.find(
+		(record) =>
+			record.recordType === "DNS_RECORD_TYPE_CNAME" &&
+			record.purpose === "DNS_RECORD_PURPOSE_TRAFFIC_ROUTE",
+	)?.requiredValue;
+}
+
+const DOMAIN_STATUS_FIELDS = `
+  status {
+    dnsRecords { recordType purpose requiredValue }
+  }
+`;
 
 const SERVICE_DOMAINS_QUERY = `
   query($projectId: String!, $serviceId: String!, $environmentId: String!) {
@@ -40,7 +81,7 @@ const SERVICE_DOMAINS_QUERY = `
       environmentId: $environmentId
     ) {
       serviceDomains { id domain }
-      customDomains { id domain }
+      customDomains { id domain ${DOMAIN_STATUS_FIELDS} }
     }
   }
 `;
@@ -53,7 +94,7 @@ const SERVICE_DOMAIN_CREATE = `
 
 const CUSTOM_DOMAIN_CREATE = `
   mutation($input: CustomDomainCreateInput!) {
-    customDomainCreate(input: $input) { id domain }
+    customDomainCreate(input: $input) { id domain ${DOMAIN_STATUS_FIELDS} }
   }
 `;
 
@@ -75,12 +116,12 @@ async function findExistingDomains(
 	environmentId: string,
 ): Promise<{
 	serviceDomains: Array<{ id: string; domain: string }>;
-	customDomains: Array<{ id: string; domain: string }>;
+	customDomains: CustomDomainEntry[];
 }> {
 	const result = await client.query<{
 		domains: {
 			serviceDomains: Array<{ id: string; domain: string }>;
-			customDomains: Array<{ id: string; domain: string }>;
+			customDomains: CustomDomainEntry[];
 		};
 	}>(SERVICE_DOMAINS_QUERY, { projectId, serviceId, environmentId });
 
@@ -92,8 +133,12 @@ async function findExistingDomains(
  *
  * Uses adopt-or-create: queries existing domains before creating new ones.
  * Uses the FQDN as the Pulumi resource ID.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class RailwayDomainResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class RailwayDomainResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(
 		inputs: RailwayDomainInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -116,12 +161,17 @@ class RailwayDomainResourceProvider implements pulumi.dynamic.ResourceProvider {
 
 				return {
 					id: found.domain,
-					outs: { ...inputs, domainId: found.id, fqdn: found.domain },
+					outs: {
+						...inputs,
+						domainId: found.id,
+						fqdn: found.domain,
+						cnameTarget: extractCnameTarget(found.status?.dnsRecords),
+					},
 				};
 			}
 
 			const result = await client.query<{
-				customDomainCreate: { id: string; domain: string };
+				customDomainCreate: CustomDomainEntry;
 			}>(CUSTOM_DOMAIN_CREATE, {
 				input: {
 					projectId: inputs.projectId,
@@ -137,6 +187,9 @@ class RailwayDomainResourceProvider implements pulumi.dynamic.ResourceProvider {
 					...inputs,
 					domainId: result.customDomainCreate.id,
 					fqdn: result.customDomainCreate.domain,
+					cnameTarget: extractCnameTarget(
+						result.customDomainCreate.status?.dnsRecords,
+					),
 				},
 			};
 		}
@@ -197,7 +250,12 @@ class RailwayDomainResourceProvider implements pulumi.dynamic.ResourceProvider {
 
 			return {
 				id: found.domain,
-				props: { ...props, domainId: found.id, fqdn: found.domain },
+				props: {
+					...props,
+					domainId: found.id,
+					fqdn: found.domain,
+					cnameTarget: extractCnameTarget(found.status?.dnsRecords),
+				},
 			};
 		}
 
@@ -259,6 +317,7 @@ class RailwayDomainResourceProvider implements pulumi.dynamic.ResourceProvider {
 /** Internal dynamic resource — not part of the public API. */
 class RailwayDomainResource extends pulumi.dynamic.Resource {
 	public declare readonly fqdn: pulumi.Output<string>;
+	public declare readonly cnameTarget: pulumi.Output<string | undefined>;
 
 	constructor(
 		name: string,
@@ -274,7 +333,7 @@ class RailwayDomainResource extends pulumi.dynamic.Resource {
 		super(
 			new RailwayDomainResourceProvider(),
 			name,
-			{ ...args, domainId: undefined, fqdn: undefined },
+			{ ...args, domainId: undefined, fqdn: undefined, cnameTarget: undefined },
 			opts,
 		);
 	}
@@ -307,18 +366,33 @@ export interface RailwayDomainArgs {
 /**
  * Manages a Railway domain (service or custom) with adopt-or-create semantics.
  *
+ * A service can carry more than one custom domain — declare one `RailwayDomain` per
+ * domain; each instance adopts, creates, and deletes only its own domain.
+ *
  * @example
  * ```typescript
- * const domain = new RailwayDomain("api-domain", {}, {
+ * const apiDomain = new RailwayDomain("api-domain", { customDomain: "api.example.com" }, {
+ *   provider, project, environment, service,
+ * });
+ * const wwwDomain = new RailwayDomain("www-domain", { customDomain: "www.example.com" }, {
  *   provider, project, environment, service,
  * });
  *
- * const url = pulumi.interpolate`https://${domain.fqdn}`;
+ * // Point each domain's DNS CNAME at its own target.
+ * const apiCnameTarget = apiDomain.cnameTarget;
+ * const wwwCnameTarget = wwwDomain.cnameTarget;
  * ```
  */
 export class RailwayDomain extends pulumi.ComponentResource {
 	/** Fully qualified domain name. */
 	public readonly fqdn: pulumi.Output<string>;
+
+	/**
+	 * The value to CNAME `customDomain` to. Only set for custom domains — `undefined`
+	 * for a service's auto-generated `*.up.railway.app` domain, or if Railway hasn't
+	 * returned a traffic-routing CNAME record for it yet.
+	 */
+	public readonly cnameTarget: pulumi.Output<string | undefined>;
 
 	constructor(
 		name: string,
@@ -342,7 +416,8 @@ export class RailwayDomain extends pulumi.ComponentResource {
 		);
 
 		this.fqdn = resource.fqdn;
+		this.cnameTarget = resource.cnameTarget;
 
-		this.registerOutputs({ fqdn: this.fqdn });
+		this.registerOutputs({ fqdn: this.fqdn, cnameTarget: this.cnameTarget });
 	}
 }
