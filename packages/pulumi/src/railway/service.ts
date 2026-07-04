@@ -220,8 +220,10 @@ async function applyInstanceConfig(
  * Uses adopt-or-create on `create()`: queries services by project ID and name
  * before creating a new one. Service instance configuration (builder, commands,
  * healthcheck) is applied via `serviceInstanceUpdate` after create or update.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class RailwayServiceResourceProvider
+export class RailwayServiceResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -249,6 +251,7 @@ class RailwayServiceResourceProvider
 		} else {
 			const createInput: Record<string, unknown> = {
 				projectId: inputs.projectId,
+				environmentId: inputs.environmentId,
 				name: inputs.name,
 			};
 

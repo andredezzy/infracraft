@@ -1,5 +1,7 @@
 export type { VercelDeployArgs } from "./deploy";
 export { VercelDeploy } from "./deploy";
+export type { VercelDomainArgs } from "./domain";
+export { VERCEL_CNAME_TARGET, VercelDomain } from "./domain";
 export type { VercelIntegrationArgs } from "./integration";
 export { VercelIntegration } from "./integration";
 export type { VercelMarketplaceResourceArgs } from "./marketplace-resource";
