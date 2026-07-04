@@ -1,5 +1,15 @@
 # @infracraft/pulumi
 
+## 1.18.0
+
+### Minor Changes
+
+- dcb7e4b: Add VercelDomain — attach a custom domain to a Vercel project (adopt-or-create)
+
+### Patch Changes
+
+- dcb7e4b: RailwayService: scope serviceCreate to the target environment (environmentId was omitted, first deploy landed in the default environment)
+
 ## 1.17.4
 
 ### Patch Changes
