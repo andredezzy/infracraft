@@ -1,5 +1,11 @@
 # @infracraft/pulumi
 
+## 1.19.0
+
+### Minor Changes
+
+- 6809748: RailwayDomain: expose `cnameTarget` (the DNS record to point a custom domain's CNAME at, extracted from Railway's traffic-routing DNS record) — verified multi-domain-safe, since adoption/deletion already scope by exact domain name and domainId respectively.
+
 ## 1.18.0
 
 ### Minor Changes
