@@ -1,5 +1,11 @@
 # @infracraft/pulumi
 
+## 1.29.2
+
+### Patch Changes
+
+- e053e03: Guard the deploymentUrl derivation against undefined command stdout (command errored before emitting output) — a real failure was being masked by a TypeError on trim.
+
 ## 1.29.1
 
 ### Patch Changes
