@@ -84,4 +84,54 @@ describe("RailwayProjectTokenResourceProvider", () => {
 			}),
 		).rejects.toThrow(/Could not resolve token id/);
 	});
+
+	describe("diff (rotation)", () => {
+		const olds = {
+			token: "provider-tok",
+			projectId: "proj-1",
+			environmentId: "env-staging",
+			name: "pulumi-staging",
+			value: "minted-tok",
+			tokenId: "tok-id-1",
+		};
+
+		it("reports a tokenVersion bump as a create-before-delete replace", async () => {
+			const provider = new RailwayProjectTokenResourceProvider();
+
+			const diff = await provider.diff("env-staging/pulumi-staging", olds, {
+				...olds,
+				tokenVersion: 1,
+			});
+
+			expect(diff.changes).toBe(true);
+			expect(diff.replaces).toEqual(["tokenVersion"]);
+			// The new token must exist before the old one is revoked — no
+			// tokenless window during rotation.
+			expect(diff.deleteBeforeReplace).toBe(false);
+		});
+
+		it("keeps delete-before-replace for identity changes", async () => {
+			const provider = new RailwayProjectTokenResourceProvider();
+
+			const diff = await provider.diff("env-staging/pulumi-staging", olds, {
+				...olds,
+				name: "pulumi-staging-renamed",
+			});
+
+			expect(diff.replaces).toEqual(["name"]);
+			expect(diff.deleteBeforeReplace).toBe(true);
+		});
+
+		it("reports no change when tokenVersion is stable", async () => {
+			const provider = new RailwayProjectTokenResourceProvider();
+
+			const diff = await provider.diff(
+				"env-staging/pulumi-staging",
+				{ ...olds, tokenVersion: 1 },
+				{ ...olds, tokenVersion: 1 },
+			);
+
+			expect(diff.changes).toBe(false);
+		});
+	});
 });

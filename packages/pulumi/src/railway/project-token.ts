@@ -17,6 +17,14 @@ interface RailwayProjectTokenInputs {
 
 	/** Distinct token name, e.g. `"pulumi-staging"`. Must be unique per environment. */
 	name: string;
+
+	/**
+	 * Rotation handle: bumping this number replaces the token on the next `up` —
+	 * the new token is minted BEFORE the old one is revoked (create-before-delete,
+	 * unlike identity changes), so there is never a tokenless window. Leave unset
+	 * until the first rotation is needed.
+	 */
+	tokenVersion?: number;
 }
 
 /** Persisted state for the Railway project token. */
@@ -168,24 +176,32 @@ export class RailwayProjectTokenResourceProvider
 		olds: RailwayProjectTokenOutputs,
 		news: RailwayProjectTokenInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
-		const replaces: string[] = [];
+		const identityReplaces: string[] = [];
 
 		if (olds.projectId !== news.projectId) {
-			replaces.push("projectId");
+			identityReplaces.push("projectId");
 		}
 
 		if (olds.environmentId !== news.environmentId) {
-			replaces.push("environmentId");
+			identityReplaces.push("environmentId");
 		}
 
 		if (olds.name !== news.name) {
-			replaces.push("name");
+			identityReplaces.push("name");
 		}
 
+		const rotates = olds.tokenVersion !== news.tokenVersion;
+
 		return {
-			changes: replaces.length > 0,
-			replaces,
-			deleteBeforeReplace: true,
+			changes: identityReplaces.length > 0 || rotates,
+			replaces: rotates
+				? [...identityReplaces, "tokenVersion"]
+				: identityReplaces,
+			// Identity changes revoke the old token first (names must stay unique);
+			// a pure rotation mints the new token BEFORE revoking the old so there
+			// is never a tokenless window — `create()` already cleans up stale
+			// same-name tokens, so the transient name collision is handled.
+			deleteBeforeReplace: identityReplaces.length > 0,
 		};
 	}
 }
@@ -202,6 +218,7 @@ class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
 			projectId: pulumi.Input<string>;
 			environmentId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
+			tokenVersion?: pulumi.Input<number>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
@@ -248,6 +265,13 @@ export interface RailwayProjectTokenArgs {
 	 * a project never collide on token ownership.
 	 */
 	name: pulumi.Input<string>;
+
+	/**
+	 * Rotation handle: bump to mint a fresh token on the next `up` (the old one
+	 * is revoked only after the new one exists). Consumers of `token` cascade
+	 * automatically.
+	 */
+	tokenVersion?: pulumi.Input<number>;
 }
 
 /**
@@ -295,6 +319,7 @@ export class RailwayProjectToken extends pulumi.ComponentResource {
 				projectId: project.id,
 				environmentId: environment.id,
 				name: args.name,
+				tokenVersion: args.tokenVersion,
 			},
 			{ parent: this },
 		);
