@@ -97,4 +97,58 @@ describe("NeonRoleResourceProvider", () => {
 			expect(result.outs.password).toBe("generated-pw");
 		});
 	});
+
+	describe("update (password rotation)", () => {
+		const olds = {
+			apiKey: "key",
+			projectId: "proj",
+			branchId: "br-staging",
+			name: "neondb_owner",
+			resetPassword: false,
+			password: "old-pw",
+		};
+
+		it("rotates the password in place when passwordVersion changes", async () => {
+			mockPost.mockResolvedValueOnce({ role: { password: "rotated-pw" } });
+
+			const provider = new NeonRoleResourceProvider();
+
+			const result = await provider.update("br-staging/neondb_owner", olds, {
+				...olds,
+				passwordVersion: 1,
+			});
+
+			expect(mockPost).toHaveBeenCalledWith(
+				"/projects/proj/branches/br-staging/roles/neondb_owner/reset_password",
+				{},
+			);
+
+			expect(result.outs?.password).toBe("rotated-pw");
+		});
+
+		it("keeps the password when passwordVersion is unchanged", async () => {
+			const provider = new NeonRoleResourceProvider();
+
+			const result = await provider.update(
+				"br-staging/neondb_owner",
+				{ ...olds, passwordVersion: 1 },
+				{ ...olds, passwordVersion: 1 },
+			);
+
+			expect(mockPost).not.toHaveBeenCalled();
+			expect(result.outs?.password).toBe("old-pw");
+		});
+
+		it("reports a rotation as an update, never a replace", async () => {
+			const provider = new NeonRoleResourceProvider();
+
+			const diff = await provider.diff("br-staging/neondb_owner", olds, {
+				...olds,
+				passwordVersion: 1,
+			});
+
+			expect(diff.changes).toBe(true);
+			expect(diff.replaces).toEqual([]);
+		});
+	});
 });

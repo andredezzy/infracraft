@@ -25,6 +25,14 @@ export interface NeonRoleInputs {
 	 * freshly created (a new role already gets its own password).
 	 */
 	resetPassword: boolean;
+
+	/**
+	 * Rotation handle: bumping this number resets the role's password IN PLACE on
+	 * the next `up` (an update, never a replace — replacing would try to delete
+	 * the role, which Neon refuses for default roles and which would drop real
+	 * grants for others). Leave unset until the first rotation is needed.
+	 */
+	passwordVersion?: number;
 }
 
 /** Persisted state for the Neon role. */
@@ -197,6 +205,36 @@ export class NeonRoleResourceProvider
 		}
 	}
 
+	/**
+	 * Rotates the password in place when `passwordVersion` changes. This is the
+	 * only updatable input (everything else replaces), so an update firing means
+	 * a rotation was requested.
+	 */
+	async update(
+		id: string,
+		olds: NeonRoleOutputs,
+		news: NeonRoleInputs,
+	): Promise<pulumi.dynamic.UpdateResult> {
+		let password = olds.password;
+
+		if (olds.passwordVersion !== news.passwordVersion) {
+			pulumi.log.info(
+				`Rotating password for Neon role "${news.name}" (passwordVersion ${olds.passwordVersion ?? "unset"} → ${news.passwordVersion ?? "unset"})`,
+			);
+
+			const client = new NeonClient(news.apiKey);
+
+			password = await resetRolePassword(
+				client,
+				news.projectId,
+				news.branchId,
+				news.name,
+			);
+		}
+
+		return { outs: { ...news, password } };
+	}
+
 	async diff(
 		_id: string,
 		olds: NeonRoleOutputs,
@@ -216,8 +254,10 @@ export class NeonRoleResourceProvider
 			replaces.push("name");
 		}
 
+		const rotates = olds.passwordVersion !== news.passwordVersion;
+
 		return {
-			changes: replaces.length > 0,
+			changes: replaces.length > 0 || rotates,
 			replaces,
 			deleteBeforeReplace: true,
 		};
@@ -236,6 +276,7 @@ class NeonRoleResource extends pulumi.dynamic.Resource {
 			branchId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			resetPassword: pulumi.Input<boolean>;
+			passwordVersion?: pulumi.Input<number>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
@@ -278,6 +319,13 @@ export interface NeonRoleArgs {
 	 * `false` (adopt and reveal the existing password). The reset runs once, at creation.
 	 */
 	resetPassword?: pulumi.Input<boolean>;
+
+	/**
+	 * Rotation handle: bump to rotate the role's password in place on the next
+	 * `up`. Everything that consumes `password` (connection strings, service env
+	 * vars, dependent redeploys) cascades automatically.
+	 */
+	passwordVersion?: pulumi.Input<number>;
 }
 
 /**
@@ -308,6 +356,7 @@ export class NeonRole extends pulumi.ComponentResource {
 				branchId: branch.id,
 				name: args.name,
 				resetPassword: args.resetPassword ?? false,
+				passwordVersion: args.passwordVersion,
 			},
 			{ parent: this },
 		);
