@@ -74,3 +74,64 @@ describe("NeonClient", () => {
 		expect(error.path).toBe("/projects/missing");
 	});
 });
+
+describe("NeonClient 423 operation-lock waiting", () => {
+	beforeEach(() => {
+		vi.useFakeTimers();
+	});
+
+	afterEach(() => {
+		vi.useRealTimers();
+		vi.restoreAllMocks();
+	});
+
+	it("waits out a project-operations lock and then succeeds", async () => {
+		const fetchMock = vi
+			.fn()
+			.mockResolvedValueOnce(
+				new Response("project already has running conflicting operations", {
+					status: 423,
+				}),
+			)
+			.mockResolvedValueOnce(
+				new Response(JSON.stringify({ branch: { id: "br-1" } }), {
+					status: 200,
+				}),
+			);
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const client = new NeonClient("key");
+
+		const pending = client.get<{ branch: { id: string } }>(
+			"/projects/p/branches/br-1",
+		);
+
+		await vi.advanceTimersByTimeAsync(5_000);
+
+		await expect(pending).resolves.toEqual({ branch: { id: "br-1" } });
+		expect(fetchMock).toHaveBeenCalledTimes(2);
+	});
+
+	it("fails loudly when the lock never clears", async () => {
+		const fetchMock = vi.fn().mockResolvedValue(
+			new Response("project already has running conflicting operations", {
+				status: 423,
+			}),
+		);
+
+		vi.stubGlobal("fetch", fetchMock);
+
+		const client = new NeonClient("key");
+
+		const pending = client
+			.get("/projects/p/branches/br-1")
+			.catch((error: Error) => error);
+
+		await vi.advanceTimersByTimeAsync(5_000 * 30);
+
+		const error = await pending;
+		expect(error).toBeInstanceOf(Error);
+		expect((error as Error).message).toContain("Neon API error (423)");
+	});
+});

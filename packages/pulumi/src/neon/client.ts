@@ -1,7 +1,28 @@
+import * as pulumi from "@pulumi/pulumi";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { resilientFetch } from "../http/resilient-fetch";
 
 const NEON_API_URL = "https://console.neon.tech/api/v2";
+
+/**
+ * Neon runs project mutations as ASYNC operations and answers 423 ("project
+ * already has running conflicting operations, scheduling of new ones is
+ * prohibited") while earlier ones settle — its docs prescribe waiting for
+ * completion before the next request. A destroy immediately followed by an
+ * `up` on the same project hits this deterministically (live: branch/endpoint
+ * deletion still settling 30s later). Waiting until the lock clears is the
+ * documented protocol, bounded so a genuinely wedged project still fails.
+ */
+const OPERATION_LOCK_WAIT = {
+	/** Delay between lock probes. */
+	intervalMs: 5_000,
+	/** Upper bound on probes (~2 minutes total). */
+	maxAttempts: 24,
+} as const;
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
 
 /**
  * REST client for the Neon API.
@@ -79,14 +100,31 @@ export class NeonClient {
 		path: string,
 		body?: unknown,
 	): Promise<T> {
-		const response = await resilientFetch(`${NEON_API_URL}${path}`, {
-			method,
-			headers: {
-				"Content-Type": "application/json",
-				Authorization: `Bearer ${this.apiKey}`,
-			},
-			body: body ? JSON.stringify(body) : undefined,
-		});
+		let response: Response;
+
+		for (let attempt = 1; ; attempt++) {
+			response = await resilientFetch(`${NEON_API_URL}${path}`, {
+				method,
+				headers: {
+					"Content-Type": "application/json",
+					Authorization: `Bearer ${this.apiKey}`,
+				},
+				body: body ? JSON.stringify(body) : undefined,
+			});
+
+			if (
+				response.status !== 423 ||
+				attempt >= OPERATION_LOCK_WAIT.maxAttempts
+			) {
+				break;
+			}
+
+			pulumi.log.info(
+				`[infracraft] Neon project operations still settling (423) — waiting ${OPERATION_LOCK_WAIT.intervalMs / 1000}s (attempt ${attempt}/${OPERATION_LOCK_WAIT.maxAttempts})`,
+			);
+
+			await sleep(OPERATION_LOCK_WAIT.intervalMs);
+		}
 
 		if (response.status === 404) {
 			throw new ApiNotFoundError("neon", path);
