@@ -1,5 +1,11 @@
 # @infracraft/pulumi
 
+## 1.25.0
+
+### Minor Changes
+
+- e9aebb2: RailwayProjectToken gains a `tokenVersion` rotation handle: bump it and the next `up` mints a fresh token BEFORE revoking the old one (create-before-delete for rotations; identity changes keep delete-first). No more target-replace URN archaeology — the parent ComponentResource has no diffable state of its own, so targeting it was a silent no-op.
+
 ## 1.24.0
 
 ### Minor Changes
