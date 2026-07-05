@@ -90,6 +90,7 @@ describe("RailwayDeploy", () => {
 		expect(create).toContain(
 			'RAILWAY_TOKEN="$IC_TOK" railway up --detach --json',
 		);
+
 		// The token travels via stdin and must NEVER appear in the script text:
 		// pulumi-command embeds the executed command in its failure error, and Pulumi
 		// does not scrub secrets from provider diagnostics.

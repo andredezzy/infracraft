@@ -8,9 +8,11 @@ function escapeAwkRegex(path: string): string {
 
 /**
  * Builds the shell filter applied to the `git ls-files` list before
- * `rsync --files-from`. For `apps/<x>` it drops the app's files but keeps
- * `apps/<x>/package.json` (the monorepo workspace graph needs it during build);
- * any other entry drops the path and its subtree. Returns `cat` (passthrough)
+ * `rsync --files-from`. Every excluded entry drops the path and its subtree
+ * but keeps the entry's own `package.json`: an excluded directory may be a
+ * workspace member, and the package manager fails the whole install when the
+ * root manifest names a workspace whose manifest is missing from the copy
+ * (a kept manifest for a non-member is inert). Returns `cat` (passthrough)
  * when nothing is excluded. Uses awk so it is portable across macOS and Linux.
  */
 export function buildSandboxFileFilter(excludePaths: string[] = []): string {
@@ -21,11 +23,7 @@ export function buildSandboxFileFilter(excludePaths: string[] = []): string {
 	const clauses = excludePaths.map((entry) => {
 		const escaped = escapeAwkRegex(entry);
 
-		if (entry.startsWith("apps/")) {
-			return `!(/^${escaped}\\// && !/^${escaped}\\/package\\.json$/)`;
-		}
-
-		return `!/^${escaped}(\\/|$)/`;
+		return `!(/^${escaped}(\\/|$)/ && !/^${escaped}\\/package\\.json$/)`;
 	});
 
 	return `awk '${clauses.join(" && ")}'`;

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import * as fs from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -25,16 +26,47 @@ describe("buildSandboxFileFilter", () => {
 		expect(buildSandboxFileFilter([])).toBe("cat");
 	});
 
-	it("drops a non-apps path and its subtree", () => {
+	it("drops an excluded subtree but keeps its own package.json", () => {
 		const filter = buildSandboxFileFilter(["docs"]);
 		expect(filter).toContain("awk");
-		expect(filter).toContain("!/^docs(\\/|$)/");
+		expect(filter).toContain("/^docs(\\/|$)/");
+		expect(filter).toContain("!/^docs\\/package\\.json$/");
 	});
 
 	it("drops an app's code but keeps its package.json", () => {
 		const filter = buildSandboxFileFilter(["apps/mesh"]);
-		expect(filter).toContain("/^apps\\/mesh\\//");
+		expect(filter).toContain("/^apps\\/mesh(\\/|$)/");
 		expect(filter).toContain("!/^apps\\/mesh\\/package\\.json$/");
+	});
+
+	it("keeps the manifest of an excluded workspace member (e.g. infrastructure/)", () => {
+		// Regression: a blanket exclusion of a directory that is ALSO a workspace
+		// member starved `bun install` of that member's manifest and failed the
+		// whole sandboxed build with `Workspace not found`. Runs the real awk
+		// program against a sample file list.
+		const filter = buildSandboxFileFilter(["infrastructure", "apps/lab"]);
+
+		const lines = [
+			"infrastructure/package.json",
+			"infrastructure/index.ts",
+			"infrastructure/stacks/mesh.ts",
+			"apps/lab/package.json",
+			"apps/lab/src/page.tsx",
+			"apps/mesh/src/index.ts",
+			"package.json",
+		].join("\n");
+
+		const kept = execSync(`printf '%s\\n' "${lines}" | ${filter}`)
+			.toString()
+			.trim()
+			.split("\n");
+
+		expect(kept).toEqual([
+			"infrastructure/package.json",
+			"apps/lab/package.json",
+			"apps/mesh/src/index.ts",
+			"package.json",
+		]);
 	});
 
 	it("ANDs every exclude clause into one awk program", () => {
