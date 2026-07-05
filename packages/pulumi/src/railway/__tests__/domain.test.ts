@@ -99,6 +99,132 @@ describe("RailwayDomainResourceProvider", () => {
 			expect(result.outs.cnameTarget).toBeUndefined();
 		});
 
+		it("exposes verificationTxtName/verificationTxtValue when adopting", async () => {
+			mockQuery.mockResolvedValueOnce({
+				domains: {
+					serviceDomains: [],
+					customDomains: [
+						{
+							id: "dom-uuid",
+							domain: "api.example.com",
+							status: {
+								dnsRecords: [trafficRouteCname("edge.railway-target.app")],
+								verificationDnsHost: "_railway-verify.api",
+								verificationToken:
+									"railway-verify=abc123def456aaf682947c2fb6057206831ceaa1e5906508813",
+							},
+						},
+					],
+				},
+			});
+
+			const result = await new RailwayDomainResourceProvider().create(inputs());
+
+			expect(result.outs.verificationTxtName).toBe("_railway-verify.api");
+
+			expect(result.outs.verificationTxtValue).toBe(
+				"railway-verify=abc123def456aaf682947c2fb6057206831ceaa1e5906508813",
+			);
+		});
+
+		it("exposes verificationTxtName/verificationTxtValue when creating fresh", async () => {
+			mockQuery
+				.mockResolvedValueOnce({
+					domains: { serviceDomains: [], customDomains: [] },
+				})
+				.mockResolvedValueOnce({
+					customDomainCreate: {
+						id: "dom-new-uuid",
+						domain: "api.example.com",
+						status: {
+							dnsRecords: [trafficRouteCname("edge.railway-target.app")],
+							verificationDnsHost: "_railway-verify.api",
+							verificationToken:
+								"railway-verify=abc123def456aaf682947c2fb6057206831ceaa1e5906508813",
+						},
+					},
+				});
+
+			const result = await new RailwayDomainResourceProvider().create(inputs());
+
+			expect(result.outs.verificationTxtName).toBe("_railway-verify.api");
+
+			expect(result.outs.verificationTxtValue).toBe(
+				"railway-verify=abc123def456aaf682947c2fb6057206831ceaa1e5906508813",
+			);
+		});
+
+		it("leaves verificationTxt fields undefined when Railway reports no verification needed", async () => {
+			mockQuery
+				.mockResolvedValueOnce({
+					domains: { serviceDomains: [], customDomains: [] },
+				})
+				.mockResolvedValueOnce({
+					customDomainCreate: {
+						id: "dom-new-uuid",
+						domain: "api.example.com",
+						status: {
+							dnsRecords: [trafficRouteCname("edge.railway-target.app")],
+							verificationDnsHost: null,
+							verificationToken: null,
+						},
+					},
+				});
+
+			const result = await new RailwayDomainResourceProvider().create(inputs());
+
+			expect(result.outs.verificationTxtName).toBeUndefined();
+			expect(result.outs.verificationTxtValue).toBeUndefined();
+		});
+
+		it("does not double-prefix a verification token Railway already prefixed", async () => {
+			mockQuery
+				.mockResolvedValueOnce({
+					domains: { serviceDomains: [], customDomains: [] },
+				})
+				.mockResolvedValueOnce({
+					customDomainCreate: {
+						id: "dom-new-uuid",
+						domain: "api.example.com",
+						status: {
+							dnsRecords: [],
+							verificationDnsHost: "_railway-verify.api",
+							verificationToken: "railway-verify=already-prefixed-token",
+						},
+					},
+				});
+
+			const result = await new RailwayDomainResourceProvider().create(inputs());
+
+			expect(result.outs.verificationTxtValue).toBe(
+				"railway-verify=already-prefixed-token",
+			);
+		});
+
+		it("prefixes a bare verification token if Railway ever returns one unprefixed", async () => {
+			mockQuery
+				.mockResolvedValueOnce({
+					domains: { serviceDomains: [], customDomains: [] },
+				})
+				.mockResolvedValueOnce({
+					customDomainCreate: {
+						id: "dom-new-uuid",
+						domain: "api.example.com",
+						status: {
+							dnsRecords: [],
+							verificationDnsHost: "_railway-verify.api",
+							verificationToken: "bare-token-no-prefix",
+						},
+					},
+				});
+
+			const result = await new RailwayDomainResourceProvider().create(inputs());
+
+			expect(result.outs.verificationTxtValue).toBe(
+				"railway-verify=bare-token-no-prefix",
+			);
+		});
+
 		it("does not set cnameTarget for a plain service domain (no customDomain)", async () => {
 			mockQuery
 				.mockResolvedValueOnce({

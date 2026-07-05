@@ -37,6 +37,21 @@ interface RailwayDomainOutputs extends RailwayDomainInputs {
 	 * own. `undefined` if Railway hasn't returned a traffic-routing CNAME record yet.
 	 */
 	cnameTarget?: string;
+
+	/**
+	 * DNS record name for the ownership-verification TXT record (e.g.
+	 * `"_railway-verify.staging.api"`). `undefined` for service domains, and for
+	 * custom domains Railway doesn't require ownership verification for.
+	 */
+	verificationTxtName?: string;
+
+	/**
+	 * DNS record value for the ownership-verification TXT record, ready to write
+	 * as-is (the `railway-verify=` prefix is already composed — see
+	 * {@link composeVerificationTxtValue}). `undefined` under the same conditions as
+	 * {@link verificationTxtName}.
+	 */
+	verificationTxtValue?: string;
 }
 
 /** A single DNS record Railway expects for a custom domain (CNAME target, ACME challenge, ...). */
@@ -46,11 +61,31 @@ interface DomainDnsRecord {
 	requiredValue: string;
 }
 
+/** Domain ownership-verification status, distinct from `dnsRecords` (see live API notes below). */
+interface CustomDomainStatus {
+	dnsRecords: DomainDnsRecord[];
+	/**
+	 * DNS host for the ownership-verification TXT record. Verified live against
+	 * Railway's current API: this sits on `CustomDomain.status`, as a sibling of
+	 * `dnsRecords` rather than inside it — the two are populated independently
+	 * (`dnsRecords` can be non-empty with `verificationDnsHost` still null, and
+	 * vice versa), so both must be queried explicitly.
+	 */
+	verificationDnsHost?: string | null;
+	/**
+	 * Raw ownership-verification token. Verified live: Railway already returns this
+	 * pre-composed with the `railway-verify=` prefix (not a bare token) — see
+	 * {@link composeVerificationTxtValue}, which stays idempotent in case that ever
+	 * changes.
+	 */
+	verificationToken?: string | null;
+}
+
 /** Shape returned for a custom domain, including its required DNS records. */
 interface CustomDomainEntry {
 	id: string;
 	domain: string;
-	status?: { dnsRecords: DomainDnsRecord[] };
+	status?: CustomDomainStatus;
 }
 
 /**
@@ -67,9 +102,42 @@ function extractCnameTarget(
 	)?.requiredValue;
 }
 
+const RAILWAY_VERIFY_PREFIX = "railway-verify=";
+
+/**
+ * Composes the ownership-verification TXT record value from Railway's token.
+ * Idempotent: Railway currently returns the token already prefixed, but this
+ * guards against a future API response returning the bare token instead.
+ */
+function composeVerificationTxtValue(token: string): string {
+	return token.startsWith(RAILWAY_VERIFY_PREFIX)
+		? token
+		: `${RAILWAY_VERIFY_PREFIX}${token}`;
+}
+
+/**
+ * Extracts the ready-to-use ownership-verification TXT record (name + composed
+ * value) from a custom domain's status, or `undefined` if Railway hasn't assigned
+ * one (service domains, or custom domains needing no verification).
+ */
+function extractVerificationTxt(
+	status: CustomDomainStatus | undefined,
+): { name: string; value: string } | undefined {
+	if (!status?.verificationDnsHost || !status.verificationToken) {
+		return undefined;
+	}
+
+	return {
+		name: status.verificationDnsHost,
+		value: composeVerificationTxtValue(status.verificationToken),
+	};
+}
+
 const DOMAIN_STATUS_FIELDS = `
   status {
     dnsRecords { recordType purpose requiredValue }
+    verificationDnsHost
+    verificationToken
   }
 `;
 
@@ -159,6 +227,8 @@ export class RailwayDomainResourceProvider
 			if (found) {
 				pulumi.log.info(`Adopting existing custom domain "${found.domain}"`);
 
+				const verificationTxt = extractVerificationTxt(found.status);
+
 				return {
 					id: found.domain,
 					outs: {
@@ -166,6 +236,8 @@ export class RailwayDomainResourceProvider
 						domainId: found.id,
 						fqdn: found.domain,
 						cnameTarget: extractCnameTarget(found.status?.dnsRecords),
+						verificationTxtName: verificationTxt?.name,
+						verificationTxtValue: verificationTxt?.value,
 					},
 				};
 			}
@@ -181,6 +253,10 @@ export class RailwayDomainResourceProvider
 				},
 			});
 
+			const createdVerificationTxt = extractVerificationTxt(
+				result.customDomainCreate.status,
+			);
+
 			return {
 				id: result.customDomainCreate.domain,
 				outs: {
@@ -190,6 +266,8 @@ export class RailwayDomainResourceProvider
 					cnameTarget: extractCnameTarget(
 						result.customDomainCreate.status?.dnsRecords,
 					),
+					verificationTxtName: createdVerificationTxt?.name,
+					verificationTxtValue: createdVerificationTxt?.value,
 				},
 			};
 		}
@@ -248,6 +326,8 @@ export class RailwayDomainResourceProvider
 				);
 			}
 
+			const refreshedVerificationTxt = extractVerificationTxt(found.status);
+
 			return {
 				id: found.domain,
 				props: {
@@ -255,6 +335,8 @@ export class RailwayDomainResourceProvider
 					domainId: found.id,
 					fqdn: found.domain,
 					cnameTarget: extractCnameTarget(found.status?.dnsRecords),
+					verificationTxtName: refreshedVerificationTxt?.name,
+					verificationTxtValue: refreshedVerificationTxt?.value,
 				},
 			};
 		}
@@ -318,6 +400,12 @@ export class RailwayDomainResourceProvider
 class RailwayDomainResource extends pulumi.dynamic.Resource {
 	public declare readonly fqdn: pulumi.Output<string>;
 	public declare readonly cnameTarget: pulumi.Output<string | undefined>;
+	public declare readonly verificationTxtName: pulumi.Output<
+		string | undefined
+	>;
+	public declare readonly verificationTxtValue: pulumi.Output<
+		string | undefined
+	>;
 
 	constructor(
 		name: string,
@@ -333,7 +421,14 @@ class RailwayDomainResource extends pulumi.dynamic.Resource {
 		super(
 			new RailwayDomainResourceProvider(),
 			name,
-			{ ...args, domainId: undefined, fqdn: undefined, cnameTarget: undefined },
+			{
+				...args,
+				domainId: undefined,
+				fqdn: undefined,
+				cnameTarget: undefined,
+				verificationTxtName: undefined,
+				verificationTxtValue: undefined,
+			},
 			opts,
 		);
 	}
@@ -394,6 +489,17 @@ export class RailwayDomain extends pulumi.ComponentResource {
 	 */
 	public readonly cnameTarget: pulumi.Output<string | undefined>;
 
+	/**
+	 * DNS record name for the ownership-verification TXT record. `undefined` for
+	 * service domains, and for custom domains Railway doesn't require verification
+	 * for — write this record (alongside `cnameTarget`'s CNAME) to flip Railway's
+	 * domain status to verified and let its TLS certificate issue.
+	 */
+	public readonly verificationTxtName: pulumi.Output<string | undefined>;
+
+	/** DNS record value for the ownership-verification TXT record, ready to write as-is. */
+	public readonly verificationTxtValue: pulumi.Output<string | undefined>;
+
 	constructor(
 		name: string,
 		args: RailwayDomainArgs,
@@ -417,7 +523,14 @@ export class RailwayDomain extends pulumi.ComponentResource {
 
 		this.fqdn = resource.fqdn;
 		this.cnameTarget = resource.cnameTarget;
+		this.verificationTxtName = resource.verificationTxtName;
+		this.verificationTxtValue = resource.verificationTxtValue;
 
-		this.registerOutputs({ fqdn: this.fqdn, cnameTarget: this.cnameTarget });
+		this.registerOutputs({
+			fqdn: this.fqdn,
+			cnameTarget: this.cnameTarget,
+			verificationTxtName: this.verificationTxtName,
+			verificationTxtValue: this.verificationTxtValue,
+		});
 	}
 }
