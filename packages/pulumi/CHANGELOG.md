@@ -1,5 +1,11 @@
 # @infracraft/pulumi
 
+## 1.20.0
+
+### Minor Changes
+
+- 0c1e4ba: VercelDomain: dynamic cnameTarget from Vercel domain config (replaces static VERCEL_CNAME_TARGET export)
+
 ## 1.19.0
 
 ### Minor Changes
