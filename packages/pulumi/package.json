@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/pulumi",
-	"version": "1.29.0",
+	"version": "1.29.1",
 	"type": "module",
 	"license": "MIT",
 	"description": "Native Pulumi providers for Railway, Neon, Vercel, and Fly.io with adopt-or-create semantics and deploy orchestration. No Terraform bridge.",
