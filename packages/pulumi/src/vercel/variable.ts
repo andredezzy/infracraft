@@ -316,8 +316,6 @@ export class VercelVariableResourceProvider
 
 /** Internal dynamic resource — not part of the public API. */
 class VercelVariableResource extends pulumi.dynamic.Resource {
-	public declare readonly contentHash: pulumi.Output<string>;
-
 	constructor(
 		name: string,
 		args: {
@@ -329,10 +327,17 @@ class VercelVariableResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
+		// envIds/contentHash are state-only bookkeeping (read back by update());
+		// they are deliberately NOT declared via `<name>: undefined` input
+		// placeholders — undefined placeholders next to an Output-valued map input
+		// deterministically failed engine serialization with "Unexpected struct
+		// type" on this resource's create AND update (three from-zero runs,
+		// 2026-07-06), the same class the project-token secret-placeholder
+		// incident documented. Nothing consumes them as Outputs.
 		super(
 			new VercelVariableResourceProvider(),
 			name,
-			{ ...args, envIds: undefined, contentHash: undefined },
+			args,
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
 			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
@@ -380,9 +385,6 @@ export interface VercelVariableArgs {
  * ```
  */
 export class VercelVariable extends pulumi.ComponentResource {
-	/** SHA-256 hash of all key-value pairs. Use as a deploy trigger for drift-aware redeployment. */
-	public readonly contentHash: pulumi.Output<string>;
-
 	constructor(
 		name: string,
 		args: VercelVariableArgs,
@@ -402,7 +404,7 @@ export class VercelVariable extends pulumi.ComponentResource {
 			);
 		}
 
-		const resource = new VercelVariableResource(
+		new VercelVariableResource(
 			`${name}-resource`,
 			{
 				token: provider.token,
@@ -414,8 +416,6 @@ export class VercelVariable extends pulumi.ComponentResource {
 			{ parent: this },
 		);
 
-		this.contentHash = resource.contentHash;
-
-		this.registerOutputs({ contentHash: this.contentHash });
+		this.registerOutputs({});
 	}
 }
