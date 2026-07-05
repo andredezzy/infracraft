@@ -1,5 +1,11 @@
 # @infracraft/pulumi
 
+## 1.21.0
+
+### Minor Changes
+
+- 4b0fa67: RailwayDomain: expose ownership-verification TXT record (verificationTxtName/verificationTxtValue)
+
 ## 1.20.0
 
 ### Minor Changes
