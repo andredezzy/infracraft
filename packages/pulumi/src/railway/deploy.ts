@@ -92,7 +92,12 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 		// payload has no trailing newline (read then exits 1 but still fills IC_TOK).
 		// IC_SINCE is captured just before `railway up` as a createdAt fallback for id
 		// resolution.
-		const cli = pulumi.interpolate`IFS= read -r IC_TOK || true; IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); IC_UP_OUT=$(RAILWAY_TOKEN="$IC_TOK" railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); IC_UP_EXIT=$?; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK="$IC_TOK" IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE node "${MONITOR_BIN}"`;
+		// The capture is guarded with if/else because the whole script runs under
+		// `set -e`: a bare `VAR=$(cmd); EXIT=$?` DIES AT THE ASSIGNMENT when cmd
+		// fails, before the exit code is saved and before the output is re-emitted
+		// — swallowing the CLI's error entirely (live incident: a failed production
+		// `railway up` left zero diagnostics).
+		const cli = pulumi.interpolate`IFS= read -r IC_TOK || true; IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); if IC_UP_OUT=$(RAILWAY_TOKEN="$IC_TOK" railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); then IC_UP_EXIT=0; else IC_UP_EXIT=$?; fi; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK="$IC_TOK" IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE node "${MONITOR_BIN}"`;
 
 		// `printf '%s'` (not a bare format string) so railpack values containing %
 		// are literal; the JSON is single-quote-escaped the POSIX way (' -> '\'').

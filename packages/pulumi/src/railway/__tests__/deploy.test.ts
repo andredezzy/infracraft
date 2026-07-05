@@ -99,8 +99,11 @@ describe("RailwayDeploy", () => {
 		expect(commandCalls[0].args.stdin).toBe("tok_1");
 		// The CLI exit code no longer short-circuits: its output + exit are captured and
 		// handed to the API-authoritative monitor bin instead of an inline `node -e` blob.
-		expect(create).toContain("IC_UP_OUT=$(");
-		expect(create).toContain("IC_UP_EXIT=$?");
+		// The capture is if/else-guarded: under `set -e`, a bare VAR=$(cmd); EXIT=$?
+		// dies at the assignment on failure and swallows the CLI's error output.
+		expect(create).toContain("if IC_UP_OUT=$(");
+		expect(create).toContain("then IC_UP_EXIT=0; else IC_UP_EXIT=$?; fi");
+		expect(create).not.toContain('IC_UP_OUT=$("');
 		expect(create).toContain("bin/monitor-deployment.mjs");
 		expect(create).not.toContain("railway up --ci");
 		expect(create).not.toContain("node -e '"); // poller is a real module now, not inline
