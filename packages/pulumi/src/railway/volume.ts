@@ -38,6 +38,12 @@ const VOLUME_CREATE = `
   }
 `;
 
+const VOLUME_ATTACH_DEPLOY = `
+  mutation($serviceId: String!, $environmentId: String!) {
+    serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId)
+  }
+`;
+
 const VOLUME_DELETE = `
   mutation($volumeId: String!) {
     volumeDelete(volumeId: $volumeId)
@@ -138,6 +144,23 @@ export class RailwayVolumeResourceProvider
 			});
 
 			volumeId = result.volumeCreate.id;
+
+			// A volume mounts into the container only on the NEXT deployment —
+			// attaching alone changes nothing for a running service (the dashboard
+			// redeploys after attach for the same reason). Best-effort: a service
+			// with no deployable source yet (code service before its first
+			// `railway up`) has nothing to redeploy, and its mount lands with that
+			// first deploy anyway.
+			try {
+				await client.query(VOLUME_ATTACH_DEPLOY, {
+					serviceId: inputs.serviceId,
+					environmentId: inputs.environmentId,
+				});
+			} catch (error) {
+				pulumi.log.warn(
+					`Volume attached; redeploy skipped (service not deployable yet?): ${String(error)}`,
+				);
+			}
 		}
 
 		return {

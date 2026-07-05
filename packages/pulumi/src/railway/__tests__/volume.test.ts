@@ -11,6 +11,95 @@ const props = {
 	volumeId: "vol-existing",
 };
 
+describe("RailwayVolumeResourceProvider.create", () => {
+	let mockQuery: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockQuery = vi.fn();
+		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("redeploys the service instance after attaching a new volume", async () => {
+		// The mount only lands on the NEXT deployment — attach alone changes
+		// nothing for a running service.
+		mockQuery.mockResolvedValue({
+			project: { volumes: { edges: [] } },
+			volumeCreate: { id: "vol-new" },
+			serviceInstanceDeployV2: "dep-3",
+		});
+
+		const provider = new RailwayVolumeResourceProvider();
+		const { volumeId: _ignored, ...inputs } = props;
+
+		await provider.create(inputs);
+
+		const deploy = mockQuery.mock.calls.find(([mutation]) =>
+			mutation.includes("serviceInstanceDeployV2"),
+		);
+
+		expect(deploy).toBeDefined();
+
+		expect(deploy?.[1]).toEqual({
+			serviceId: "svc-redis",
+			environmentId: "env-staging",
+		});
+	});
+
+	it("does not redeploy when adopting an already-attached volume", async () => {
+		mockQuery.mockResolvedValue({
+			project: {
+				volumes: {
+					edges: [
+						{
+							node: {
+								id: "vol-existing",
+								volumeInstances: {
+									edges: [{ node: { serviceId: "svc-redis" } }],
+								},
+							},
+						},
+					],
+				},
+			},
+		});
+
+		const provider = new RailwayVolumeResourceProvider();
+		const { volumeId: _ignored, ...inputs } = props;
+
+		await provider.create(inputs);
+
+		const deploy = mockQuery.mock.calls.find(([mutation]) =>
+			mutation.includes("serviceInstanceDeployV2"),
+		);
+
+		expect(deploy).toBeUndefined();
+	});
+
+	it("tolerates a failing post-attach redeploy (service not deployable yet)", async () => {
+		mockQuery.mockImplementation(async (mutation: string) => {
+			if (mutation.includes("serviceInstanceDeployV2")) {
+				throw new Error("no deployable source");
+			}
+
+			return {
+				project: { volumes: { edges: [] } },
+				volumeCreate: { id: "vol-new" },
+			};
+		});
+
+		const provider = new RailwayVolumeResourceProvider();
+		const { volumeId: _ignored, ...inputs } = props;
+
+		await expect(provider.create(inputs)).resolves.toMatchObject({
+			id: "vol-new",
+		});
+	});
+});
+
 describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
