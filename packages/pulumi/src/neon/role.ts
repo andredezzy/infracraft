@@ -211,7 +211,7 @@ export class NeonRoleResourceProvider
 	 * a rotation was requested.
 	 */
 	async update(
-		id: string,
+		_id: string,
 		olds: NeonRoleOutputs,
 		news: NeonRoleInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
