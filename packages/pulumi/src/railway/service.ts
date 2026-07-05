@@ -186,9 +186,9 @@ const SERVICE_INSTANCE_QUERY = `
   }
 `;
 
-const ENVIRONMENT_UNSKIP_SERVICE = `
-  mutation($serviceId: String!, $environmentId: String!) {
-    environmentUnskipService(serviceId: $serviceId, environmentId: $environmentId)
+const ENVIRONMENT_PATCH_COMMIT = `
+  mutation($environmentId: String!, $patch: EnvironmentConfig!, $message: String!) {
+    environmentPatchCommit(environmentId: $environmentId, patch: $patch, commitMessage: $message)
   }
 `;
 
@@ -199,10 +199,13 @@ const ENVIRONMENT_UNSKIP_SERVICE = `
  * create time; in every other environment the service is "skipped" — no
  * instance exists there, `serviceInstanceUpdate` returns true while silently
  * doing nothing, and `railway up` fails with UPLOAD_FAILED 404 (live incident:
- * first-ever mesh deploy to production). `environmentUnskipService` is the
- * mutation the dashboard's per-environment enable uses; it also returns a bare
- * boolean, so the instance is re-queried afterward and a still-missing
- * instance is a loud error rather than a fourth silent no-op.
+ * first-ever mesh deploy to production). Materialization goes through the
+ * staged-changes flow — committing a config patch that keys the service in
+ * `services` — which is the documented path for NAMED environments;
+ * `environmentUnskipService` is rejected there ("Can only unskip services in
+ * PR environments", proven live). The commit's return is not trusted: the
+ * instance is re-queried afterward and a still-missing instance is a loud
+ * error rather than another silent no-op.
  */
 async function ensureServiceInstance(
 	client: RailwayClient,
@@ -230,14 +233,18 @@ async function ensureServiceInstance(
 	}
 
 	pulumi.log.info(
-		`[infracraft] service ${serviceId} has no instance in environment ${environmentId} — unskipping`,
+		`[infracraft] service ${serviceId} has no instance in environment ${environmentId} — committing a config patch to materialize it`,
 	);
 
-	await client.query(ENVIRONMENT_UNSKIP_SERVICE, { serviceId, environmentId });
+	await client.query(ENVIRONMENT_PATCH_COMMIT, {
+		environmentId,
+		patch: { services: { [serviceId]: {} } },
+		message: `[infracraft] add service ${serviceId} to environment`,
+	});
 
 	if (!(await exists())) {
 		throw new Error(
-			`Railway service ${serviceId} still has no instance in environment ${environmentId} after environmentUnskipService — cannot configure or deploy it`,
+			`Railway service ${serviceId} still has no instance in environment ${environmentId} after the config-patch commit — cannot configure or deploy it`,
 		);
 	}
 }

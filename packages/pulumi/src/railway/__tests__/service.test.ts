@@ -85,22 +85,23 @@ describe("RailwayServiceResourceProvider", () => {
 			expect(createCall?.[1].input.environmentId).toBe("env-staging");
 		});
 
-		it("unskips the service when the target environment has no instance", async () => {
+		it("materializes the instance via a config-patch commit when the target environment lacks one", async () => {
 			// Regression (live incident): serviceCreate materializes an instance
 			// only in its own environment; elsewhere the service is "skipped" —
 			// serviceInstanceUpdate returns true as a silent no-op and `railway up`
-			// fails with UPLOAD_FAILED 404. The provider must unskip first.
-			let unskipped = false;
+			// fails with UPLOAD_FAILED 404. environmentUnskipService is rejected for
+			// named environments, so materialization is a staged config-patch commit.
+			let materialized = false;
 
 			mockQuery.mockImplementation(async (mutation: string) => {
 				if (mutation.includes("serviceInstance(")) {
-					return { serviceInstance: unskipped ? { id: "si-new" } : null };
+					return { serviceInstance: materialized ? { id: "si-new" } : null };
 				}
 
-				if (mutation.includes("environmentUnskipService")) {
-					unskipped = true;
+				if (mutation.includes("environmentPatchCommit")) {
+					materialized = true;
 
-					return { environmentUnskipService: true };
+					return { environmentPatchCommit: "commit-1" };
 				}
 
 				return {
@@ -121,24 +122,22 @@ describe("RailwayServiceResourceProvider", () => {
 				startCommand: "bun start",
 			});
 
-			const unskip = mockQuery.mock.calls.find(([mutation]) =>
-				mutation.includes("environmentUnskipService"),
+			const patch = mockQuery.mock.calls.find(([mutation]) =>
+				mutation.includes("environmentPatchCommit"),
 			);
 
-			expect(unskip?.[1]).toEqual({
-				serviceId: "svc-mesh",
-				environmentId: "env-production",
-			});
+			expect(patch?.[1].environmentId).toBe("env-production");
+			expect(patch?.[1].patch).toEqual({ services: { "svc-mesh": {} } });
 		});
 
-		it("throws loudly when the instance is still missing after unskip", async () => {
+		it("throws loudly when the instance is still missing after the patch commit", async () => {
 			mockQuery.mockImplementation(async (mutation: string) => {
 				if (mutation.includes("serviceInstance(")) {
 					return { serviceInstance: null };
 				}
 
-				if (mutation.includes("environmentUnskipService")) {
-					return { environmentUnskipService: true };
+				if (mutation.includes("environmentPatchCommit")) {
+					return { environmentPatchCommit: "commit-1" };
 				}
 
 				return {
