@@ -150,12 +150,16 @@ type FlyAppOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 
 /** Args for FlyApp. */
 export interface FlyAppArgs {
-	/** App name (globally unique). Used for adoption lookup and as `.id`. */
+	/**
+	 * App name (globally unique). Used for adoption lookup and as `.id`.
+	 * Maps to the Fly Machines API field `app_name`.
+	 */
 	name: pulumi.Input<string>;
 
 	/**
 	 * Org slug for app creation. Overrides `FlyProvider.organization`.
 	 * Ignored when the app already exists (adoption).
+	 * Maps to the Fly Machines API field `org_slug`.
 	 */
 	organization?: pulumi.Input<string>;
 }

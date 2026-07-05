@@ -187,4 +187,69 @@ describe("NeonRoleResourceProvider", () => {
 			expect(diff.replaces).toEqual([]);
 		});
 	});
+
+	describe("check", () => {
+		const inputs = {
+			apiKey: "key",
+			projectId: "proj",
+			branchId: "br-staging",
+			name: "neondb_owner",
+			resetPassword: false,
+		};
+
+		it("passes a valid role name through untouched", async () => {
+			const result = await new NeonRoleResourceProvider().check(inputs, inputs);
+
+			expect(result.inputs).toEqual(inputs);
+			expect(result.failures).toEqual([]);
+		});
+
+		it("fails an empty role name, naming the property", async () => {
+			const invalid = { ...inputs, name: "" };
+
+			const result = await new NeonRoleResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+			expect(result.failures?.[0].reason).toContain("non-empty");
+		});
+	});
+
+	describe("diff (stables)", () => {
+		const olds = {
+			apiKey: "key",
+			projectId: "proj",
+			branchId: "br-staging",
+			name: "neondb_owner",
+			resetPassword: false,
+			password: "old-pw",
+		};
+
+		it("declares identity fields stable on rotation — but never the password", async () => {
+			const provider = new NeonRoleResourceProvider();
+
+			const diff = await provider.diff("br-staging/neondb_owner", olds, {
+				...olds,
+				passwordVersion: 1,
+			});
+
+			expect(diff.stables).toEqual(["projectId", "branchId", "name"]);
+			expect(diff.stables).not.toContain("password");
+		});
+
+		it("declares no stables when an identity change forces a replace", async () => {
+			const provider = new NeonRoleResourceProvider();
+
+			const diff = await provider.diff("br-staging/neondb_owner", olds, {
+				...olds,
+				branchId: "br-other",
+			});
+
+			expect(diff.replaces).toEqual(["branchId"]);
+			expect(diff.stables).toEqual([]);
+		});
+	});
 });

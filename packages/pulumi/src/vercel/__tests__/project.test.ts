@@ -94,6 +94,61 @@ describe("VercelProjectResourceProvider", () => {
 		projectId: "prj_1",
 	});
 
+	describe("check", () => {
+		// Rule per Vercel docs (Project configuration → General settings): up to
+		// 100 chars, lowercase letters/digits/"."/"_"/"-", no "---" sequence.
+		const inputs = (name: string) => ({ token: "tok", teamId: "team_1", name });
+
+		it("passes a valid project name through untouched", async () => {
+			const valid = inputs("rby-nexus_2.0");
+
+			const result = await new VercelProjectResourceProvider().check(
+				valid,
+				valid,
+			);
+
+			expect(result.inputs).toEqual(valid);
+			expect(result.failures).toEqual([]);
+		});
+
+		it("fails an uppercase name, naming the property", async () => {
+			const invalid = inputs("Rby-Nexus");
+
+			const result = await new VercelProjectResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+			expect(result.failures?.[0].reason).toContain("lowercase");
+		});
+
+		it('fails a name containing the "---" sequence', async () => {
+			const invalid = inputs("rby---nexus");
+
+			const result = await new VercelProjectResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+		});
+
+		it("fails a name longer than 100 characters", async () => {
+			const invalid = inputs("a".repeat(101));
+
+			const result = await new VercelProjectResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+		});
+	});
+
 	describe("read", () => {
 		it("returns a blank ReadResult when the project is gone (deleted out of band)", async () => {
 			mockFetch.mockResolvedValue({ ok: false, status: 404 });

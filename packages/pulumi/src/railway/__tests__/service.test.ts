@@ -139,6 +139,81 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 	});
 
+	describe("check", () => {
+		it("passes valid inputs through untouched", async () => {
+			const provider = new RailwayServiceResourceProvider();
+
+			const inputs = {
+				token: "tok",
+				projectId: "proj-123",
+				environmentId: "env-staging",
+				name: "Redis",
+				source: { image: "redis:8-alpine" },
+			};
+
+			const result = await provider.check(inputs, inputs);
+
+			expect(result.inputs).toEqual(inputs);
+			expect(result.failures).toEqual([]);
+		});
+
+		it("fails an empty source.image, naming the property", async () => {
+			const provider = new RailwayServiceResourceProvider();
+
+			const inputs = {
+				token: "tok",
+				projectId: "proj-123",
+				environmentId: "env-staging",
+				name: "Redis",
+				source: { image: "  " },
+			};
+
+			const result = await provider.check(inputs, inputs);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("source.image");
+			expect(result.failures?.[0].reason).toContain("non-empty");
+		});
+	});
+
+	describe("diff", () => {
+		const olds = {
+			token: "tok",
+			projectId: "proj-123",
+			environmentId: "env-staging",
+			name: "api",
+			serviceId: "svc-uuid",
+		};
+
+		it("declares serviceId stable on in-place updates", async () => {
+			// The live pain: without stables, a startCommand tweak made dependents
+			// (RailwayVolume) see serviceId as unknown during preview and show a
+			// phantom replace.
+			const provider = new RailwayServiceResourceProvider();
+
+			const diff = await provider.diff("svc-uuid", olds, {
+				...olds,
+				startCommand: "bun start",
+			});
+
+			expect(diff.changes).toBe(true);
+			expect(diff.replaces).toEqual([]);
+			expect(diff.stables).toEqual(["serviceId"]);
+		});
+
+		it("declares no stables when an identity change forces a replace", async () => {
+			const provider = new RailwayServiceResourceProvider();
+
+			const diff = await provider.diff("svc-uuid", olds, {
+				...olds,
+				environmentId: "env-production",
+			});
+
+			expect(diff.replaces).toEqual(["environmentId"]);
+			expect(diff.stables).toEqual([]);
+		});
+	});
+
 	describe("update", () => {
 		it("re-applies instance config and redeploys an image service", async () => {
 			mockQuery.mockResolvedValue({

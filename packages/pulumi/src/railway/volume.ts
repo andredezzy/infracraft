@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -118,6 +119,26 @@ async function findVolumeByService(
 export class RailwayVolumeResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. A relative `mountPath` would otherwise
+	 * fail deep inside `volumeCreate` with an opaque GraphQL error.
+	 */
+	async check(
+		_olds: RailwayVolumeInputs,
+		news: RailwayVolumeInputs,
+	): Promise<pulumi.dynamic.CheckResult<RailwayVolumeInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.mountPath) && !news.mountPath.startsWith("/")) {
+			failures.push({
+				property: "mountPath",
+				reason: `mountPath must be an absolute path starting with "/", got "${news.mountPath}"`,
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(
 		inputs: RailwayVolumeInputs,
 	): Promise<pulumi.dynamic.CreateResult> {

@@ -204,6 +204,7 @@ export interface VercelMarketplaceResourceArgs {
 	/**
 	 * Integration product ID or slug (e.g. `"upstash-kv"`, `"neon-postgres"`).
 	 * Replaces on change — use the integration's canonical product slug.
+	 * Maps to the request body field `integrationProductIdOrSlug`.
 	 */
 	type: pulumi.Input<string>;
 

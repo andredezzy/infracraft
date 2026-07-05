@@ -1,3 +1,4 @@
+import * as pulumi from "@pulumi/pulumi";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RailwayClient } from "../client";
 import { RailwayVolumeResourceProvider } from "../volume";
@@ -10,6 +11,46 @@ const props = {
 	mountPath: "/data",
 	volumeId: "vol-existing",
 };
+
+describe("RailwayVolumeResourceProvider.check", () => {
+	const { volumeId: _ignored, ...inputs } = props;
+
+	it("passes an absolute mountPath through untouched", async () => {
+		const result = await new RailwayVolumeResourceProvider().check(
+			inputs,
+			inputs,
+		);
+
+		expect(result.inputs).toEqual(inputs);
+		expect(result.failures).toEqual([]);
+	});
+
+	it("fails a relative mountPath, naming the property", async () => {
+		const invalid = { ...inputs, mountPath: "data" };
+
+		const result = await new RailwayVolumeResourceProvider().check(
+			invalid,
+			invalid,
+		);
+
+		expect(result.failures).toHaveLength(1);
+		expect(result.failures?.[0].property).toBe("mountPath");
+		expect(result.failures?.[0].reason).toContain("absolute path");
+	});
+
+	it("skips validation for a preview-unknown mountPath", async () => {
+		// During preview, an input fed by another resource's output arrives as
+		// Pulumi's unknown sentinel — check() must not fail on it.
+		const unresolved = { ...inputs, mountPath: pulumi.runtime.unknownValue };
+
+		const result = await new RailwayVolumeResourceProvider().check(
+			unresolved,
+			unresolved,
+		);
+
+		expect(result.failures).toEqual([]);
+	});
+});
 
 describe("RailwayVolumeResourceProvider.create", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;

@@ -201,7 +201,7 @@ export interface NeonDatabaseArgs {
 	/** Database name. */
 	name: pulumi.Input<string>;
 
-	/** Owner role name. */
+	/** Owner role name. Maps to the Neon API field `database.owner_name`. */
 	ownerName: pulumi.Input<string>;
 }
 

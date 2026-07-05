@@ -267,6 +267,11 @@ class RailwayProjectResourceProvider
 		return {
 			changes: replaces.length > 0 || changes.length > 0,
 			replaces,
+			// projectId survives every in-place update (nothing replaces this
+			// resource), so dependents keep a known projectId during preview.
+			// productionEnvironmentId is deliberately NOT declared stable — update()
+			// re-resolves it from the live environment list.
+			stables: ["projectId"],
 			deleteBeforeReplace: true,
 		};
 	}

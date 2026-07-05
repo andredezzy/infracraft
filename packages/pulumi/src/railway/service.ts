@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -266,6 +267,31 @@ export class RailwayServiceResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
+	 * Validates inputs at plan time. An empty `source.image` would otherwise
+	 * fail deep inside `serviceInstanceUpdate` with an opaque GraphQL error.
+	 */
+	async check(
+		_olds: RailwayServiceInputs,
+		news: RailwayServiceInputs,
+	): Promise<pulumi.dynamic.CheckResult<RailwayServiceInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (
+			news.source &&
+			isResolvedString(news.source.image) &&
+			news.source.image.trim().length === 0
+		) {
+			failures.push({
+				property: "source.image",
+				reason:
+					'source.image must be a non-empty Docker image reference (e.g. "redis:8-alpine")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
+	/**
 	 * Creates or adopts a Railway service by name, then applies instance config.
 	 */
 	async create(
@@ -468,6 +494,11 @@ export class RailwayServiceResourceProvider
 		return {
 			changes: replaces.length > 0 || changes.length > 0,
 			replaces,
+			// serviceId survives every in-place update (only projectId/environmentId
+			// changes replace), so declaring it stable keeps it known during preview —
+			// dependents (e.g. RailwayVolume) no longer see an unknown serviceId and
+			// stop showing phantom replaces.
+			stables: replaces.length === 0 ? ["serviceId"] : [],
 			deleteBeforeReplace: true,
 		};
 	}

@@ -177,7 +177,10 @@ type FlySecretOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 
 /** Args for FlySecret. */
 export interface FlySecretArgs {
-	/** Secret key/value pairs to set on the app. */
+	/**
+	 * Secret key/value pairs to set on the app.
+	 * Maps to the bulk secrets endpoint's `values` map (where a `null` value deletes a key).
+	 */
 	secrets: pulumi.Input<Record<string, string>>;
 }
 

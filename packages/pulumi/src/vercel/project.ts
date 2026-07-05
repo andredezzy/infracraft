@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
@@ -248,6 +249,32 @@ function buildProjectBody(
 export class VercelProjectResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time against Vercel's published naming rule
+	 * (docs → Project configuration → General settings): "Project names can be
+	 * up to 100 characters long and must be lowercase. They can include
+	 * letters, digits, and the following characters: `.`, `_`, `-`. However,
+	 * they cannot contain the sequence `---`."
+	 */
+	async check(
+		_olds: VercelProjectInputs,
+		news: VercelProjectInputs,
+	): Promise<pulumi.dynamic.CheckResult<VercelProjectInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (
+			isResolvedString(news.name) &&
+			(!/^[a-z0-9._-]{1,100}$/.test(news.name) || news.name.includes("---"))
+		) {
+			failures.push({
+				property: "name",
+				reason: `name must be 1-100 lowercase characters (letters, digits, ".", "_", "-") without the sequence "---", got "${news.name}"`,
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(
 		inputs: VercelProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -365,6 +392,10 @@ export class VercelProjectResourceProvider
 		return {
 			changes: replaces.length > 0 || changes.length > 0,
 			replaces,
+			// projectId survives every in-place update (only teamId replaces), so
+			// dependents (variables, domains, connections) keep a known projectId
+			// during preview.
+			stables: replaces.length === 0 ? ["projectId"] : [],
 			deleteBeforeReplace: true,
 		};
 	}

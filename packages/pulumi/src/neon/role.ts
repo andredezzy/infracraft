@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
 import { NeonClient } from "./client";
@@ -129,6 +130,26 @@ async function resetRolePassword(
 export class NeonRoleResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. An empty role name would otherwise fail
+	 * deep inside the Neon API call — and never match on the adopt lookup.
+	 */
+	async check(
+		_olds: NeonRoleInputs,
+		news: NeonRoleInputs,
+	): Promise<pulumi.dynamic.CheckResult<NeonRoleInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.name) && news.name.trim().length === 0) {
+			failures.push({
+				property: "name",
+				reason: 'name must be a non-empty role name (e.g. "neondb_owner")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(inputs: NeonRoleInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new NeonClient(inputs.apiKey);
 
@@ -269,6 +290,10 @@ export class NeonRoleResourceProvider
 		return {
 			changes: replaces.length > 0 || rotates,
 			replaces,
+			// Identity fields never change in place (each replaces). `password` is
+			// deliberately NOT stable — a passwordVersion bump rotates it during
+			// update, so dependents must see it as unknown and cascade.
+			stables: replaces.length === 0 ? ["projectId", "branchId", "name"] : [],
 			deleteBeforeReplace: true,
 		};
 	}

@@ -211,6 +211,7 @@ export interface VercelResourceConnectionArgs {
 	 * Deployment environments into which the store's env vars will be injected.
 	 * Typical values: `["production", "preview"]`. Note that `development`
 	 * cannot be combined with `makeEnvVarsSensitive: true` (Vercel rejects it).
+	 * Maps to the request body field `envVarEnvironments`.
 	 */
 	targets: pulumi.Input<string[]>;
 

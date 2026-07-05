@@ -455,7 +455,11 @@ type RailwayDomainOptions = Omit<
 
 /** Args for RailwayDomain. */
 export interface RailwayDomainArgs {
-	/** Custom domain FQDN. Omit to create an auto-generated Railway service domain. */
+	/**
+	 * Custom domain FQDN. Omit to create an auto-generated Railway service domain.
+	 * Maps to `CustomDomainCreateInput.domain` (named `customDomain` here to
+	 * distinguish it from the auto-generated service domain this resource also manages).
+	 */
 	customDomain?: pulumi.Input<string>;
 }
 

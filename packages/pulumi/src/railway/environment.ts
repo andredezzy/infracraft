@@ -284,6 +284,7 @@ export interface RailwayEnvironmentArgs {
 	 * Name of an existing environment to fork from when this environment is created.
 	 * Evaluated only at creation time — changing `source` after the environment exists
 	 * has no effect (an existing environment is never re-forked).
+	 * Maps to `EnvironmentCreateInput.sourceEnvironmentId` after name → ID resolution.
 	 */
 	source?: pulumi.Input<string>;
 }

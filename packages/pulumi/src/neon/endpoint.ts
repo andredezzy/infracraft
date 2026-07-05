@@ -216,7 +216,15 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 			olds.maxCu !== news.maxCu ||
 			olds.suspendTimeout !== news.suspendTimeout;
 
-		return { changes: hasChanges, replaces, deleteBeforeReplace: true };
+		return {
+			changes: hasChanges,
+			replaces,
+			// The endpoint keeps its hostname across in-place updates (autoscaling /
+			// suspend PATCHes); only a branchId/projectId replace mints a new host.
+			// Declaring it stable keeps connection strings known during preview.
+			stables: replaces.length === 0 ? ["host"] : [],
+			deleteBeforeReplace: true,
+		};
 	}
 }
 
@@ -260,13 +268,13 @@ type NeonEndpointOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 
 /** Args for NeonEndpoint. */
 export interface NeonEndpointArgs {
-	/** Minimum compute units. */
+	/** Minimum compute units. Maps to the Neon API field `endpoint.autoscaling_limit_min_cu`. */
 	minCu: pulumi.Input<number>;
 
-	/** Maximum compute units. */
+	/** Maximum compute units. Maps to the Neon API field `endpoint.autoscaling_limit_max_cu`. */
 	maxCu: pulumi.Input<number>;
 
-	/** Seconds of inactivity before suspending. */
+	/** Seconds of inactivity before suspending. Maps to the Neon API field `endpoint.suspend_timeout_seconds`. */
 	suspendTimeout: pulumi.Input<number>;
 }
 

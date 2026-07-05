@@ -146,6 +146,9 @@ class NeonProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 		return {
 			changes: replaces.length > 0 || changes.length > 0,
 			replaces,
+			// projectId survives every in-place update (only orgId replaces), so
+			// dependents keep a known projectId during preview.
+			stables: replaces.length === 0 ? ["projectId"] : [],
 			deleteBeforeReplace: true,
 		};
 	}

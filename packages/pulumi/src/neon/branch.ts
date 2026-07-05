@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { NeonClient } from "./client";
 import type { NeonProject } from "./project";
@@ -79,6 +80,26 @@ async function findBranchByName(
 export class NeonBranchResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. An empty branch name would otherwise fail
+	 * deep inside the Neon API call — and never match on the adopt lookup.
+	 */
+	async check(
+		_olds: NeonBranchInputs,
+		news: NeonBranchInputs,
+	): Promise<pulumi.dynamic.CheckResult<NeonBranchInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.name) && news.name.trim().length === 0) {
+			failures.push({
+				property: "name",
+				reason: 'name must be a non-empty branch name (e.g. "production")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(inputs: NeonBranchInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new NeonClient(inputs.apiKey);
 
@@ -236,6 +257,7 @@ export interface NeonBranchArgs {
 	/**
 	 * Name of the parent branch to branch from (copy-on-write). Omit to
 	 * branch from the project root (Neon default branch).
+	 * Maps to the Neon API field `branch.parent_id` after name → ID resolution.
 	 */
 	parent?: pulumi.Input<string>;
 }

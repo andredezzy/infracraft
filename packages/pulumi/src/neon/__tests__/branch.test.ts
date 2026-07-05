@@ -102,6 +102,21 @@ describe("NeonBranchResourceProvider", () => {
 		});
 	});
 
+	describe("check", () => {
+		it("fails an empty branch name, naming the property", async () => {
+			const invalid = { apiKey: "key", projectId: "proj-abc", name: "  " };
+
+			const result = await new NeonBranchResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+			expect(result.failures?.[0].reason).toContain("non-empty");
+		});
+	});
+
 	describe("read", () => {
 		it("returns the branch name and preserves parentName", async () => {
 			mockGet.mockResolvedValue({

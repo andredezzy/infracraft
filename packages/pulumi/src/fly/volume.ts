@@ -49,6 +49,31 @@ interface FlyVolumeResponse {
 export class FlyVolumeResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. A non-positive or fractional `sizeGb`
+	 * would otherwise fail deep inside the volumes API with an opaque error.
+	 * A preview-unknown value arrives as Pulumi's string sentinel, so the
+	 * `typeof` guard skips it.
+	 */
+	async check(
+		_olds: FlyVolumeInputs,
+		news: FlyVolumeInputs,
+	): Promise<pulumi.dynamic.CheckResult<FlyVolumeInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (
+			typeof news.sizeGb === "number" &&
+			(!Number.isInteger(news.sizeGb) || news.sizeGb <= 0)
+		) {
+			failures.push({
+				property: "sizeGb",
+				reason: `sizeGb must be a positive integer (whole GB), got ${news.sizeGb}`,
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(inputs: FlyVolumeInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new FlyClient(inputs.token);
 
@@ -174,6 +199,9 @@ export class FlyVolumeResourceProvider
 		return {
 			changes: replaces.length > 0 || sizeGrew,
 			replaces,
+			// volumeId survives an in-place extend (only appName/name/region/shrink
+			// replace), so dependents keep a known volumeId during preview.
+			stables: replaces.length === 0 ? ["volumeId"] : [],
 			deleteBeforeReplace: true,
 		};
 	}
@@ -221,7 +249,10 @@ export interface FlyVolumeArgs {
 	/** Region (IATA code, e.g. `"iad"`). */
 	region: pulumi.Input<string>;
 
-	/** Volume size in GB. Can be grown (extended) but not shrunk. */
+	/**
+	 * Volume size in GB. Can be grown (extended) but not shrunk.
+	 * Maps to the Fly Machines API field `size_gb`.
+	 */
 	sizeGb: pulumi.Input<number>;
 }
 

@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -66,6 +67,27 @@ const PROJECT_TOKEN_DELETE = `
 export class RailwayProjectTokenResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. An empty token name would otherwise fail
+	 * deep inside `projectTokenCreate` — and worse, silently match every token
+	 * in the stale-name cleanup sweep.
+	 */
+	async check(
+		_olds: RailwayProjectTokenInputs,
+		news: RailwayProjectTokenInputs,
+	): Promise<pulumi.dynamic.CheckResult<RailwayProjectTokenInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.name) && news.name.trim().length === 0) {
+			failures.push({
+				property: "name",
+				reason: 'name must be a non-empty token name (e.g. "pulumi-staging")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	/**
 	 * Deletes stale same-named tokens, mints a new environment-scoped token,
 	 * and captures its ID via a follow-up list query.
