@@ -1,3 +1,5 @@
+// The typed not-found this provider's client throws — consumers catch by instanceof.
+export { ApiNotFoundError } from "../errors/api-not-found-error";
 export type { FlyAppArgs } from "./app";
 export { FlyApp } from "./app";
 export type { FlyCertificateArgs, FlyDnsRequirements } from "./certificate";

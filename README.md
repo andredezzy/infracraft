@@ -61,8 +61,9 @@ The shared deploy-isolation primitives: POSIX shell-script builders that copy a 
 
 ## Design
 
-- **Native APIs, no bridges.** Every provider integration talks to the platform's own REST or GraphQL API. No Terraform providers underneath.
+- **Native APIs, no bridges.** Every provider integration talks to the platform's own REST or GraphQL API — through one resilient transport (timeouts, bounded retries, `Retry-After`). No Terraform providers underneath.
 - **Adopt-or-create.** Existing infrastructure is discovered by name and adopted into state instead of fought over.
+- **Conservative deletes, secret state.** Shared containers are never deleted by Pulumi, deletes are idempotent, and credentials and minted values are marked secret in state — the full canon lives in the [pulumi README's design principles](packages/pulumi#design-principles).
 - **Sandboxed deploys.** Deploys run from an isolated `/tmp` copy of the repo's tracked files, so the platform CLI never reads the live working tree. Shared between pulumi and gate via the sandbox package.
 - **Real switching.** gate writes sessions into the native CLI auth files; there is no wrapper state to drift out of sync.
 - **Universal passthrough.** Every native CLI command runs through gate with per-invocation credential injection — `gate <provider> <anything>` — without touching the native session.

@@ -463,8 +463,8 @@ export interface VercelProjectArgs {
  * Manages a Vercel project with adopt-or-create semantics.
  *
  * On first `pulumi up`, looks up the project by name. If it already exists,
- * the resource adopts it. If not, a new project is created. Deletion is a
- * no-op to protect production projects.
+ * the resource adopts it. If not, a new project is created. Deletion REALLY
+ * deletes the Vercel project — set `protect: true` on precious ones.
  *
  * @example
  * ```typescript

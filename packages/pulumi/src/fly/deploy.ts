@@ -1,4 +1,3 @@
-// src/fly/deploy.ts  (replace entire file)
 import * as pulumi from "@pulumi/pulumi";
 
 import { createDeployCommand, dependsOnList } from "../commands/deploy";

@@ -16,20 +16,24 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 
 ## Design principles
 
-- **Resources model single API objects.** Each resource wraps exactly one platform API object, and argument names mirror the platform API's field names.
-- **Adopt-or-create IS the import principle.** `pulumi import` is unimplemented for dynamic providers, so `create()` looks the object up by name and adopts it before creating a new one.
+- **Resources model single API objects.** Each resource wraps exactly one platform API object, and argument names mirror the platform API's field names (where a name deviates, its JSDoc documents the mapped field).
+- **Context-based.** Resources inherit auth, project, and environment from their options (`{ provider, project, environment }`); no manual ID passing.
+- **Adopt-or-create IS the import principle.** `pulumi import` is unimplemented for dynamic providers, so `create()` looks the object up by name and adopts it before creating a new one. Run `pulumi up` against a pre-existing project and it just works.
 - **Reads reconcile drift.** A resource deleted out of band returns blank on `pulumi refresh` and gets recreated on the next `up`. Write-once secrets and env-var batches are deliberate pass-throughs — their stored state is the source of truth.
-- **Deletes are conservative — and idempotent.** Shared containers (projects, project-level services) are never deleted by Pulumi; volumes retain; deleting an already-gone resource succeeds instead of stranding state.
-- **One resilient transport.** All HTTP goes through a single fetch wrapper with a per-attempt timeout, bounded retries on transient failures (network errors, 5xx, 429), and `Retry-After` support.
+- **Deletes are conservative — and idempotent.** Shared containers (Railway/Neon projects, Railway services, Fly apps) and data stores (Vercel marketplace resources) are never deleted by Pulumi; deleting an already-gone resource succeeds instead of stranding state. Guard everything else that is shared or production-grade with `protect: true`; volumes honor `retainOnDelete`.
+- **Inputs fail at plan time.** `check()` rejects locally decidable mistakes during preview with the offending property named: `RailwayVolume.mountPath` (must be absolute), `RailwayService.source.image` / `RailwayProjectToken.name` / `NeonBranch.name` / `NeonRole.name` (non-empty), `VercelProject.name` (Vercel's published naming rule), `FlyVolume.sizeGb` (positive integer). Preview-unknown inputs are skipped, never failed.
+- **Previews stay faithful.** Identity outputs that provably survive an in-place update are declared stable (`RailwayProject.id`, `RailwayService.id`, `NeonProject.id`, `NeonEndpoint.host`, `NeonRole`'s identity, `VercelProject.id`, `FlyVolume.id`), so dependents keep known values during preview instead of showing phantom replaces. `NeonRole.password` is deliberately not stable — a rotation must cascade.
+- **One resilient transport.** All HTTP goes through a single fetch wrapper with a per-attempt timeout, bounded retries on transient failures (network errors, 5xx, 429), and `Retry-After` support. See [Transport & errors](#transport--errors).
 - **Secrets stay secret.** Provider credentials and minted values are marked secret in Pulumi state, and deploy tokens travel via stdin — never in command text.
+- **Consumer-controlled triggers and protection.** Deploy resources accept a `triggers` array — hash source directories, env values, or anything else; you decide what causes a redeploy. Use `protect: true` on shared/production resources to prevent accidental deletion.
 
 ## Providers
 
 | | Provider | Import | What it does |
 |---|---|---|---|
-| 🚂 | **Railway** | `@infracraft/pulumi/railway` | The only Pulumi provider for Railway. Projects, environments, services, variables, volumes, domains, deploys. |
+| 🚂 | **Railway** | `@infracraft/pulumi/railway` | The only Pulumi provider for Railway. Projects, environments, services, variables, volumes, domains, deploy tokens, deploys. |
 | 🐘 | **Neon** | `@infracraft/pulumi/neon` | Adopt-or-create layer for Neon Postgres. Projects, branches, endpoints, roles, databases. |
-| ▲ | **Vercel** | `@infracraft/pulumi/vercel` | Projects with adopt-or-create, deploy orchestration, marketplace resources, and sensitive env var drift detection. |
+| ▲ | **Vercel** | `@infracraft/pulumi/vercel` | Projects with adopt-or-create, deploy orchestration, custom domains, marketplace resources, and sensitive env var drift detection. |
 | 🎯 | **Fly.io** | `@infracraft/pulumi/fly` | App, Secret, Volume, Certificate, IP, and Deploy resources via the Machines REST API and Fly GraphQL API. |
 | 🤖 | **Agents** | `@infracraft/pulumi/agents` | Emit operating hints for AI coding agents working on the stack. |
 | #️⃣ | **Hash** | `@infracraft/pulumi/hash` | Deterministic directory/env-var/app hashing for deploy triggers. |
@@ -79,6 +83,16 @@ const service = new RailwayService("api", {
   startCommand: "node dist/index.js",
 }, { provider, project, environment })
 
+// Image-sourced service: the provider applies `source` to the target
+// environment's instance and owns its deploys (`serviceInstanceDeployV2`) —
+// on create and on config changes. No RailwayDeploy needed; code services
+// (like `api` above) deploy via RailwayDeploy instead. Secret-bearing start
+// commands (e.g. `redis-server --requirepass …`) belong in `startCommand`.
+new RailwayService("redis", {
+  name: "redis",
+  source: { image: "redis:8-alpine" },
+}, { provider, project, environment })
+
 const env = { DATABASE_URL: dbUrl }
 
 new RailwayVariable("api-vars", {
@@ -101,14 +115,16 @@ new RailwayDeploy("api-deploy", {
 | `RailwayProvider` | — | Pass as `provider` option to every Railway resource |
 | `RailwayProject` | `.id` (project UUID) | Adopt-or-create by name |
 | `RailwayEnvironment` | `.id` | Optional `source` env to fork from |
-| `RailwayService` | `.id` | Full instance config: builder, healthcheck, restart policy |
-| `RailwayDomain` | `.fqdn` | Omit `customDomain` for an auto-generated domain |
+| `RailwayService` | `.id` | Instance config (builder, commands, healthcheck, restart policy) applied per target environment; image services (`source.image`) are deployed by the provider itself |
+| `RailwayDomain` | `.fqdn`, `.cnameTarget`, `.verificationTxtName` / `.verificationTxtValue` | Omit `customDomain` for an auto-generated domain; custom domains expose the CNAME target and ownership-verification TXT record to write into DNS |
 | `RailwayVariable` | — | Batch upsert; uses `skipDeploys` to avoid snapshot errors |
-| `RailwayVolume` | `.id` | Persistent volume; `mountPath` must be absolute |
-| `RailwayProjectToken` | `.token` (secret) | Environment-scoped deploy token; feed into `RailwayDeploy` |
-| `RailwayDeploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API |
+| `RailwayVolume` | — | Persistent volume; `mountPath` must be absolute. Adoption matches BOTH service and environment (never a sibling environment's volume); a newly attached volume redeploys its service so the mount lands |
+| `RailwayProjectToken` | `.token` (secret) | Environment-scoped deploy token; feed into `RailwayDeploy`. Bump `tokenVersion` to rotate — see [Rotating credentials](#rotating-credentials) |
+| `RailwayDeploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API (the API, not the CLI exit code, decides pass/fail). Also accepts `excludePaths` and `railpackConfig` |
 
 **Enums:** `RailwayBuilder` (`RAILPACK`, `NIXPACKS`, `DOCKERFILE`, `HEROKU`, `PAKETO`), `RailwayRestartPolicy` (`ON_FAILURE`, `ALWAYS`, `NEVER`)
+
+**Deploy token security:** `RailwayDeploy` pipes the project token to `railway up` via the command's stdin — never in the script text. pulumi-command embeds the executed command verbatim in its failure error and Pulumi does not scrub secrets from provider diagnostics, so an inlined token would print in plaintext exactly when a deploy fails.
 
 ## Neon
 
@@ -163,8 +179,31 @@ const connectionString = pulumi.interpolate`postgresql://${roleName}:${role.pass
 | `NeonProject` | `.id` | Adopt-or-create by name |
 | `NeonBranch` | `.id` | Optional `parent` for copy-on-write branching |
 | `NeonEndpoint` | `.host` | Read-write compute endpoint; use `.host` in connection strings |
-| `NeonRole` | `.password` (secret) | `resetPassword: true` isolates COW branch passwords from parent |
+| `NeonRole` | `.password` (secret) | `resetPassword: true` isolates COW branch passwords from parent. Bump `passwordVersion` to rotate — see [Rotating credentials](#rotating-credentials) |
 | `NeonDatabase` | — | `name` + `ownerName` |
+
+## Rotating credentials
+
+Minted credentials rotate through a version-bump input — no target-replace URN archaeology, no manual revoke-then-recreate. Bump the number, run `up`, and everything consuming the credential (connection strings, env vars, dependent redeploys) cascades automatically:
+
+```typescript
+// Mints a fresh token BEFORE revoking the old one (create-before-delete),
+// so there is never a tokenless window.
+const deployToken = new RailwayProjectToken("api-token", {
+  name: "api-deploy",
+  tokenVersion: 2,   // bump to rotate
+}, { provider, project, environment })
+
+// Resets the password IN PLACE via Neon's reset_password endpoint — an
+// update, never a replace (a replace would try to delete the role, which
+// Neon refuses for default roles and which would drop grants for others).
+const role = new NeonRole("owner", {
+  name: "neondb_owner",
+  passwordVersion: 2,   // bump to rotate
+}, { provider, project, branch })
+```
+
+Leave the version unset until the first rotation is needed. Identity changes (name, project, environment) still replace normally.
 
 ## Vercel
 
@@ -174,6 +213,7 @@ import {
   VercelProject,
   VercelVariable,
   VercelDeploy,
+  VercelDomain,
   VercelIntegration,
   VercelMarketplaceResource,
   VercelResourceConnection,
@@ -202,6 +242,13 @@ new VercelDeploy("web-deploy", {
   triggers: [hash("apps/web"), vars.contentHash],
 }, { provider, project })
 
+// Custom domain: point the domain's DNS CNAME at `cnameTarget`
+const domain = new VercelDomain("web-domain", {
+  name: "app.example.com",
+}, { provider, project })
+
+export const cnameTarget = domain.cnameTarget
+
 // Marketplace example: provision an Upstash KV store
 const integration = new VercelIntegration("upstash", {
   slug: "upstash",
@@ -210,7 +257,7 @@ const integration = new VercelIntegration("upstash", {
 const store = new VercelMarketplaceResource("kv", {
   integrationConfigurationId: integration.configurationId,
   name: "my-kv",
-  type: "kv",
+  type: "upstash-kv",   // the integration's product ID or slug
   externalId: "my-kv",
 }, { provider })
 
@@ -226,12 +273,14 @@ new VercelResourceConnection("kv-conn", {
 | Class | Key outputs | Notes |
 |---|---|---|
 | `VercelProvider` | — | `token` + `teamId` |
-| `VercelProject` | `.id`, `.url` | `.url` is a full `https://` URL; prefers the custom production domain over `<name>.vercel.app` |
-| `VercelVariable` | `.contentHash` | Use as a deploy trigger to redeploy on env var changes |
+| `VercelProject` | `.id`, `.url` | `.url` is a full `https://` URL; prefers the custom production domain over `<name>.vercel.app`. Deletes the project on destroy — `protect: true` production projects |
+| `VercelVariable` | `.contentHash` | Use as a deploy trigger to redeploy on env var changes. Takes `opts.project` or `args.projectId` |
 | `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes` |
-| `VercelIntegration` | `.configurationId` (`icfg_…`) | Resolves an installed marketplace integration by slug |
-| `VercelMarketplaceResource` | `.id`, `.externalResourceId`, `.status` | Provisions a marketplace store |
-| `VercelResourceConnection` | — | Wires a store to a project; injects env vars into target environments |
+| `VercelDomain` | `.name`, `.verified`, `.cnameTarget` | Attaches a custom domain to a project (adopt-or-create); `.cnameTarget` is Vercel's own DNS recommendation for that specific domain |
+| `VercelIntegration` | `.configurationId` (`icfg_…`) | Resolves an installed marketplace integration by slug (install it once via the dashboard first) |
+| `VercelMarketplaceResource` | `.id`, `.externalResourceId`, `.status` | Provisions a marketplace store; `type` is the integration product ID or slug |
+| `VercelResourceConnection` | — | Wires a store to a project; injects env vars into target environments (`makeEnvVarsSensitive` defaults to `true` — then `targets` must not include `development`) |
+| `VercelClient` | — | Typed REST client behind every Vercel resource (`get` / `tryGet` / `post` / `patch` / `delete`); appends `teamId` to every request and rides the resilient transport |
 
 **Helpers:** `VERCEL_FRAMEWORKS` (const array), `VercelFramework` (derived union type)
 
@@ -301,7 +350,7 @@ new FlyDeploy("api-deploy", {
 }, { provider, app, dependsOn: [secrets] })
 ```
 
-**Requirements:** `flyctl` must be installed on the machine running `pulumi up` (used by `FlyDeploy`). Generate a token with `fly tokens create deploy`. Dedicated IP allocation uses the Fly GraphQL API; everything else uses the Machines REST API.
+**Requirements:** `flyctl` must be installed on the machine running `pulumi up` (used by `FlyDeploy`) — call `assertHostBinaries(["fly"])` from `@infracraft/pulumi/sandbox` at program start to fail fast with an install hint instead of mid-deploy. Generate a token with `fly tokens create deploy`. Dedicated IP allocation uses the Fly GraphQL API; everything else uses the Machines REST API.
 
 ### Fly.io API surface
 
@@ -313,13 +362,13 @@ new FlyDeploy("api-deploy", {
 | `FlyVolume` | `.id` (`vol_…`) | `sizeGb` can only grow |
 | `FlyCertificate` | `.id` (hostname), `.configured`, `.dnsRequirements` | `.dnsRequirements` contains ACME validation records |
 | `FlyIp` | `.id` (IP address) | `type`: `FlyIpType.V4`, `V6`, `SHARED_V4`, `PRIVATE_V6` |
-| `FlyDeploy` | `.deploymentUrl` | Writes fly.toml at deploy time; triggers on config + source hash |
+| `FlyDeploy` | `.deploymentUrl` | Writes fly.toml at deploy time; triggers on config + source hash. Optional `waitTimeout`, `releaseCommandTimeout`, `highAvailability` |
 
 **Enums:** `FlyIpType`, `FlyDeployStrategy` (`ROLLING`, `IMMEDIATE`, `CANARY`, `BLUEGREEN`), `FlyRestartPolicy` (`ALWAYS`, `ON_FAILURE`, `NEVER`), `FlyAutoStopMachines` (`OFF`, `STOP`, `SUSPEND`), `FlyConcurrencyType` (`CONNECTIONS`, `REQUESTS`), `FlyServiceProtocol` (`TCP`, `UDP`), `FlyPortHandler` (`HTTP`, `TLS`, `PG_TLS`, `PROXY_PROTO`, `EDGE_HTTP`), `FlyCpuKind` (`SHARED`, `PERFORMANCE`), `FlyCheckType` (`HTTP`, `TCP`)
 
 **Constants:** `FLY_REGIONS` (IATA codes array), `FlyRegion` (derived type), `FLY_VM_SIZES` (size preset array), `FlyVmSize` (derived type)
 
-**fly.toml types:** `FlyTomlConfig`, `FlyBuildConfig`, `FlyHttpService`, `FlyService`, `FlyServicePort`, `FlyMount`, `FlyVm`, `FlyDeployConfig`, `FlyRestartConfig`, `FlyCheck`, `FlyConcurrency`
+**fly.toml types:** `FlyTomlConfig`, `FlyBuildConfig`, `FlyHttpService`, `FlyService`, `FlyServicePort`, `FlyMount`, `FlyVm`, `FlyCpuCount`, `FlyDeployConfig`, `FlyRestartConfig`, `FlyCheck`, `FlyConcurrency`, `FlyDnsRequirements`
 
 **Helper:** `generateFlyToml(config)` serializes a `FlyTomlConfig` to fly.toml text (camelCase to snake_case, deterministic output).
 
@@ -412,18 +461,15 @@ new VercelDeploy("web-deploy", {
 | `GitGuard` | ComponentResource | Stub-`.git` marker; requires a `DeploySandbox` alongside it |
 | `SandboxMode` | enum | `NONE`, `ORIGINAL`, `STUB`; derived from the markers by the deploy seam |
 | `buildSandboxScript(options)` | function | Builds the sandboxed shell a deploy command runs (used by the deploy resources) |
-| `buildSandboxFileFilter(excludePaths)` | function | Portable awk filter applied to `git ls-files` before the copy |
+| `buildSandboxFileFilter(excludePaths)` | function | Portable awk filter applied to `git ls-files` before the copy; keeps each excluded directory's `package.json` so the workspace graph survives |
+| `assertHostBinaries(binaries)` | function | Preflight doctor: throws one error naming ALL missing host binaries, with install hints. Re-exported from [`@infracraft/sandbox`](https://www.npmjs.com/package/@infracraft/sandbox) |
 | `isDeploySandbox(value)` / `isGitGuard(value)` | functions | Bundle-safe marker checks |
 
-## Design
+`DeploySandbox` runs the preflight for the core POSIX set (`git`, `rsync`, `awk`, `mktemp`) automatically, so a broken host fails fast instead of midway through a deploy script. Call `assertHostBinaries(["railway"])` / `["vercel"]` / `["fly"]` at program start to preflight the platform CLIs your deploys use — see [`@infracraft/sandbox`](../sandbox) for the full doctor.
 
-**Context-based**: Resources inherit auth, project, and environment from their options; no manual ID passing.
+## Transport & errors
 
-**Adopt-or-create**: Existing infrastructure is discovered by name and adopted into Pulumi state. Run `pulumi up` against a pre-existing project and it just works.
-
-**Consumer-controlled protection**: Use `protect: true` on shared/production resources to prevent accidental deletion. Deploy resources accept a `triggers` array; you decide what causes a redeploy.
-
-**Consumer-controlled triggers**: Hash source directories, env values, or anything else. Pass results into `triggers` arrays.
+Every provider client (`RailwayClient`, `NeonClient`, `VercelClient`, `FlyClient`) routes its HTTP through one resilient fetch wrapper: a 15s per-attempt timeout, up to 3 attempts on transient failures (network errors, 5xx, 429), a numeric `Retry-After` honored on 429 (capped at 30s), and exponential backoff otherwise (1s/2s/4s, capped at 20s) — everything else, including non-429 4xx, returns to the caller untouched. The REST clients turn a 404 into a typed `ApiNotFoundError` (carrying the provider and path), and catch sites test `instanceof` rather than matching message strings: adopt-or-create lookups turn it into "create", `read()` turns it into a blank result so `pulumi refresh` reconciles out-of-band deletions, and `delete()` turns it into an idempotent no-op.
 
 ## Why
 
@@ -433,6 +479,10 @@ new VercelDeploy("web-deploy", {
 | Neon | Bridged TF provider; fails on pre-existing resources | Adopt-or-create without manual `import` blocks |
 | Vercel | `@pulumiverse/vercel`; no adopt-or-create, no CLI deploys | Adopt-or-create projects + consumer-controlled deploy triggers |
 | Fly.io | `@ediri/pulumi-fly`; bridges a Terraform provider Fly archived March 2024, no secrets support | Hand-rolled `dynamic` resources matching every other provider: secrets, adopt-or-create, consumer-controlled deploys; no unmaintained upstream |
+
+## Release history
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 

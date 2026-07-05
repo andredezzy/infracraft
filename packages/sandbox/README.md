@@ -24,7 +24,7 @@ npm i @infracraft/sandbox
 bun add @infracraft/sandbox
 ```
 
-Zero runtime dependencies. The generated scripts need `git` and `rsync` on the machine that runs them (`awk` too when `excludePaths` are used) — all present on stock macOS and Linux.
+Zero runtime dependencies. The generated scripts need `git`, `rsync`, `awk`, and `mktemp` on the machine that runs them — all present on stock macOS and Linux, and asserted up front by `prepareSandboxWorkspace()` (see [Preflight](#preflight)).
 
 ## Usage
 
@@ -35,7 +35,8 @@ import {
   SandboxMode,
 } from "@infracraft/sandbox"
 
-// mkdir /tmp/infracraft and sweep sandboxes older than 3 hours
+// Assert git/rsync/awk/mktemp, mkdir /tmp/infracraft, and sweep sandboxes
+// older than 3 hours
 prepareSandboxWorkspace()
 
 const script = buildSandboxScript({
@@ -62,6 +63,18 @@ The script copies the repo's tracked files (`git ls-files`) into a fresh `mktemp
 | `ORIGINAL` | Isolated `/tmp/infracraft` copy of tracked files | The real one, CoW-copied into the sandbox (plain-copy fallback on non-CoW filesystems) |
 | `STUB` | Isolated copy with `excludePaths` applied | A fresh `git init` + `git add -A` stub with an unborn HEAD |
 
+## Preflight
+
+`assertHostBinaries(binaries)` checks every listed binary against the host PATH (POSIX `command -v`) and throws a single error naming ALL missing ones, with a friendly install hint for each known binary (`git`, `rsync`, `awk`, `mktemp`, `node`, `railway`, `vercel`, `fly`) — so a deploy fails fast with actionable guidance instead of dying midway through a shell script with an opaque "command not found".
+
+```typescript
+import { assertHostBinaries } from "@infracraft/sandbox"
+
+assertHostBinaries(["git", "rsync", "awk", "mktemp", "fly"])
+```
+
+`prepareSandboxWorkspace()` runs it for the core POSIX set (`git`, `rsync`, `awk`, `mktemp`) automatically before creating the workspace; add the platform CLIs your deploys use yourself.
+
 ## API surface
 
 | Export | Kind | Notes |
@@ -69,8 +82,9 @@ The script copies the repo's tracked files (`git ls-files`) into a fresh `mktemp
 | `buildSandboxScript(options)` | function | Builds the shell a deploy command runs; returns a single `sh -c` ready string |
 | `SandboxScriptOptions` | interface | `mode`, `appName`, `cli`, plus optional `env`, `excludePaths`, `setup` |
 | `SandboxMode` | enum | `NONE`, `ORIGINAL`, `STUB` |
-| `buildSandboxFileFilter(excludePaths)` | function | Portable awk filter applied to the `git ls-files` list before the copy; keeps `apps/<x>/package.json` so the workspace graph survives |
-| `prepareSandboxWorkspace()` | function | Creates `/tmp/infracraft` and garbage-collects sandboxes older than 3 hours |
+| `buildSandboxFileFilter(excludePaths)` | function | Portable awk filter applied to the `git ls-files` list before the copy; keeps each excluded directory's own `package.json` so the workspace graph survives. Rejects entries containing a single quote or newline (they would break out of the single-quoted awk program) |
+| `assertHostBinaries(binaries)` | function | Preflight doctor: throws one error naming ALL missing host binaries, with install hints |
+| `prepareSandboxWorkspace()` | function | Asserts the core POSIX binaries, creates `/tmp/infracraft`, and garbage-collects sandboxes older than 3 hours |
 
 ## Hardening
 
@@ -78,6 +92,11 @@ The script copies the repo's tracked files (`git ls-files`) into a fresh `mktemp
 - No pipes in the copy path. The scripts target plain `/bin/sh` (which may be dash), where `pipefail` does not exist, so the file list is staged through intermediate files and a failing `git ls-files` aborts the run.
 - Sandbox directories are named `<project>-<env>-<app>.XXXXXX`, so leftovers and concurrent deploys are identifiable at a glance.
 - Each script removes its own sandbox on exit; `prepareSandboxWorkspace()` sweeps anything a hard-killed run left behind.
+- `excludePaths` entries are validated before they reach the awk program: a single quote or newline is rejected with a clear error instead of silently breaking the shell quoting.
+
+## Release history
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## License
 

@@ -338,7 +338,6 @@ export interface RailwayProjectTokenArgs {
  * }, { provider, project, environment: staging });
  *
  * new RailwayDeploy("api-deploy", {
- *   directory: monorepoRoot,
  *   triggers: [sourceHash],
  * }, { provider, project, environment: staging, service, projectToken: stagingToken.token });
  * ```

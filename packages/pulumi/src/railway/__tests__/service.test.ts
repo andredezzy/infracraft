@@ -5,6 +5,24 @@ import { RailwayServiceResourceProvider } from "../service";
 describe("RailwayServiceResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
+	/**
+	 * Routes the instance-existence probe (serviceInstance query) to `exists`
+	 * while delegating everything else to `rest` — every create/update path now
+	 * runs ensureServiceInstance before touching instance config.
+	 */
+	function mockWithInstance(
+		exists: boolean,
+		rest: (mutation: string) => unknown,
+	) {
+		mockQuery.mockImplementation(async (mutation: string) => {
+			if (mutation.includes("serviceInstance(")) {
+				return { serviceInstance: exists ? { id: "si-1" } : null };
+			}
+
+			return rest(mutation);
+		});
+	}
+
 	beforeEach(() => {
 		mockQuery = vi.fn();
 		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
@@ -16,11 +34,11 @@ describe("RailwayServiceResourceProvider", () => {
 
 	describe("create", () => {
 		it("adopts an existing service by name without calling serviceCreate", async () => {
-			mockQuery.mockResolvedValueOnce({
+			mockWithInstance(true, () => ({
 				project: {
 					services: { edges: [{ node: { id: "svc-uuid", name: "api" } }] },
 				},
-			});
+			}));
 
 			const provider = new RailwayServiceResourceProvider();
 
@@ -32,15 +50,20 @@ describe("RailwayServiceResourceProvider", () => {
 			});
 
 			expect(result.id).toBe("svc-uuid");
-			expect(mockQuery).toHaveBeenCalledTimes(1); // no serviceCreate
+
+			const create = mockQuery.mock.calls.find(([mutation]) =>
+				mutation.includes("serviceCreate"),
+			);
+
+			expect(create).toBeUndefined();
 		});
 
 		it("scopes serviceCreate to the target environment when not found", async () => {
-			mockQuery
-				.mockResolvedValueOnce({ project: { services: { edges: [] } } }) // find: not found
-				.mockResolvedValueOnce({
-					serviceCreate: { id: "svc-new-uuid", name: "api" },
-				}); // create
+			mockWithInstance(true, (mutation) =>
+				mutation.includes("serviceCreate")
+					? { serviceCreate: { id: "svc-new-uuid", name: "api" } }
+					: { project: { services: { edges: [] } } },
+			);
 
 			const provider = new RailwayServiceResourceProvider();
 
@@ -52,11 +75,89 @@ describe("RailwayServiceResourceProvider", () => {
 			});
 
 			expect(result.id).toBe("svc-new-uuid");
-			const [mutation, variables] = mockQuery.mock.calls[1];
-			expect(mutation).toContain("serviceCreate");
-			expect(variables.input.projectId).toBe("proj-123");
-			expect(variables.input.name).toBe("api");
-			expect(variables.input.environmentId).toBe("env-staging");
+
+			const createCall = mockQuery.mock.calls.find(([mutation]) =>
+				mutation.includes("serviceCreate"),
+			);
+
+			expect(createCall?.[1].input.projectId).toBe("proj-123");
+			expect(createCall?.[1].input.name).toBe("api");
+			expect(createCall?.[1].input.environmentId).toBe("env-staging");
+		});
+
+		it("unskips the service when the target environment has no instance", async () => {
+			// Regression (live incident): serviceCreate materializes an instance
+			// only in its own environment; elsewhere the service is "skipped" —
+			// serviceInstanceUpdate returns true as a silent no-op and `railway up`
+			// fails with UPLOAD_FAILED 404. The provider must unskip first.
+			let unskipped = false;
+
+			mockQuery.mockImplementation(async (mutation: string) => {
+				if (mutation.includes("serviceInstance(")) {
+					return { serviceInstance: unskipped ? { id: "si-new" } : null };
+				}
+
+				if (mutation.includes("environmentUnskipService")) {
+					unskipped = true;
+
+					return { environmentUnskipService: true };
+				}
+
+				return {
+					project: {
+						services: { edges: [{ node: { id: "svc-mesh", name: "api" } }] },
+					},
+					serviceInstanceUpdate: true,
+				};
+			});
+
+			const provider = new RailwayServiceResourceProvider();
+
+			await provider.create({
+				token: "tok",
+				projectId: "proj-123",
+				environmentId: "env-production",
+				name: "api",
+				startCommand: "bun start",
+			});
+
+			const unskip = mockQuery.mock.calls.find(([mutation]) =>
+				mutation.includes("environmentUnskipService"),
+			);
+
+			expect(unskip?.[1]).toEqual({
+				serviceId: "svc-mesh",
+				environmentId: "env-production",
+			});
+		});
+
+		it("throws loudly when the instance is still missing after unskip", async () => {
+			mockQuery.mockImplementation(async (mutation: string) => {
+				if (mutation.includes("serviceInstance(")) {
+					return { serviceInstance: null };
+				}
+
+				if (mutation.includes("environmentUnskipService")) {
+					return { environmentUnskipService: true };
+				}
+
+				return {
+					project: {
+						services: { edges: [{ node: { id: "svc-mesh", name: "api" } }] },
+					},
+				};
+			});
+
+			const provider = new RailwayServiceResourceProvider();
+
+			await expect(
+				provider.create({
+					token: "tok",
+					projectId: "proj-123",
+					environmentId: "env-production",
+					name: "api",
+				}),
+			).rejects.toThrow(/still has no instance/);
 		});
 
 		it("applies source to the target environment's instance and deploys an adopted image service", async () => {
@@ -65,13 +166,13 @@ describe("RailwayServiceResourceProvider", () => {
 			// has source=null and stays undeployed forever (private DNS never
 			// registers) unless the provider applies source per instance and
 			// triggers the deploy itself.
-			mockQuery.mockResolvedValue({
+			mockWithInstance(true, () => ({
 				project: {
 					services: { edges: [{ node: { id: "svc-redis", name: "Redis" } }] },
 				},
 				serviceInstanceUpdate: true,
 				serviceInstanceDeployV2: "dep-1",
-			});
+			}));
 
 			const provider = new RailwayServiceResourceProvider();
 
@@ -114,12 +215,12 @@ describe("RailwayServiceResourceProvider", () => {
 		it("does not trigger a deploy for code-sourced services", async () => {
 			// Code services deploy via RailwayDeploy (`railway up`); the provider
 			// deploying them here would ship an empty build.
-			mockQuery.mockResolvedValue({
+			mockWithInstance(true, () => ({
 				project: {
 					services: { edges: [{ node: { id: "svc-api", name: "api" } }] },
 				},
 				serviceInstanceUpdate: true,
-			});
+			}));
 
 			const provider = new RailwayServiceResourceProvider();
 
@@ -216,10 +317,10 @@ describe("RailwayServiceResourceProvider", () => {
 
 	describe("update", () => {
 		it("re-applies instance config and redeploys an image service", async () => {
-			mockQuery.mockResolvedValue({
+			mockWithInstance(true, () => ({
 				serviceInstanceUpdate: true,
 				serviceInstanceDeployV2: "dep-2",
-			});
+			}));
 
 			const provider = new RailwayServiceResourceProvider();
 

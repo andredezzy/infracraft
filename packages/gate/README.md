@@ -176,6 +176,10 @@ console.log(result.url, result.exitCode)
 
 Key exports: `AccountStore`, `PROVIDERS`, `Provider`, `vercelProvider`, `railwayProvider`, `flyProvider`, `ensureValidSession`, `EnsureValidSessionOptions`, `detectActiveAccount`, `runDeploy`, `runPassthrough`, `routeCommand`, `splitGateFlags`, `SplitGateFlags`, `SandboxMode`, `InteractionMode`, `CommandRoute`, `GateAuthVerb`, `GateFlagRegion`, `CommandContext`, `RoutedCommand`, `GateTreeRoute`, `PassthroughRoute`, `InvalidRoute`, `GateProvider`, `GateAccount`, `ProviderSession`, `NativeCliContext`, `NativeCliCommand`, `PassthroughTargetCapability`, `DeployRunOptions`, `DeployRunResult`, `DeploySpawner`, `SpawnedDeploy`, `PassthroughRunOptions`, `PassthroughRunResult`, `PassthroughSpawner`, `SpawnedPassthrough`.
 
+## Release history
+
+See [CHANGELOG.md](CHANGELOG.md) for release history.
+
 ## License
 
 MIT

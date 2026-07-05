@@ -1,4 +1,3 @@
-// src/railway/deploy.ts  (replace entire file)
 import { fileURLToPath } from "node:url";
 
 import * as pulumi from "@pulumi/pulumi";

@@ -178,6 +178,70 @@ async function deployServiceInstance(
 	);
 }
 
+const SERVICE_INSTANCE_QUERY = `
+  query($serviceId: String!, $environmentId: String!) {
+    serviceInstance(serviceId: $serviceId, environmentId: $environmentId) {
+      id
+    }
+  }
+`;
+
+const ENVIRONMENT_UNSKIP_SERVICE = `
+  mutation($serviceId: String!, $environmentId: String!) {
+    environmentUnskipService(serviceId: $serviceId, environmentId: $environmentId)
+  }
+`;
+
+/**
+ * Guarantees the service has an instance in the target environment.
+ *
+ * `serviceCreate` materializes an instance ONLY in the environment passed at
+ * create time; in every other environment the service is "skipped" — no
+ * instance exists there, `serviceInstanceUpdate` returns true while silently
+ * doing nothing, and `railway up` fails with UPLOAD_FAILED 404 (live incident:
+ * first-ever mesh deploy to production). `environmentUnskipService` is the
+ * mutation the dashboard's per-environment enable uses; it also returns a bare
+ * boolean, so the instance is re-queried afterward and a still-missing
+ * instance is a loud error rather than a fourth silent no-op.
+ */
+async function ensureServiceInstance(
+	client: RailwayClient,
+	serviceId: string,
+	environmentId: string,
+): Promise<void> {
+	const exists = async (): Promise<boolean> => {
+		try {
+			const result = await client.query<{
+				serviceInstance: { id: string } | null;
+			}>(SERVICE_INSTANCE_QUERY, { serviceId, environmentId });
+
+			return Boolean(result.serviceInstance);
+		} catch (error) {
+			if (error instanceof Error && /not found/i.test(error.message)) {
+				return false;
+			}
+
+			throw error;
+		}
+	};
+
+	if (await exists()) {
+		return;
+	}
+
+	pulumi.log.info(
+		`[infracraft] service ${serviceId} has no instance in environment ${environmentId} — unskipping`,
+	);
+
+	await client.query(ENVIRONMENT_UNSKIP_SERVICE, { serviceId, environmentId });
+
+	if (!(await exists())) {
+		throw new Error(
+			`Railway service ${serviceId} still has no instance in environment ${environmentId} after environmentUnskipService — cannot configure or deploy it`,
+		);
+	}
+}
+
 /**
  * Applies service instance configuration (builder, commands, healthcheck).
  * Retries without healthcheck fields if the first call fails.
@@ -349,6 +413,7 @@ export class RailwayServiceResourceProvider
 			}
 		}
 
+		await ensureServiceInstance(client, serviceId, inputs.environmentId);
 		await applyInstanceConfig(client, serviceId, inputs.environmentId, inputs);
 
 		// Image services have no `railway up` step (see RailwayDeploy for code
@@ -386,6 +451,7 @@ export class RailwayServiceResourceProvider
 			await client.query(SERVICE_UPDATE, { id, input: updateInput });
 		}
 
+		await ensureServiceInstance(client, id, news.environmentId);
 		await applyInstanceConfig(client, id, news.environmentId, news);
 
 		// Instance config changes (source, startCommand, …) only take effect on

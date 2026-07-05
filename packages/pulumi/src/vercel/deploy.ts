@@ -1,4 +1,3 @@
-// src/vercel/deploy.ts  (replace entire file)
 import * as pulumi from "@pulumi/pulumi";
 
 import { createDeployCommand } from "../commands/deploy";
