@@ -146,6 +146,37 @@ const SERVICE_CONNECT = `
   }
 `;
 
+const SERVICE_INSTANCE_DEPLOY = `
+  mutation($serviceId: String!, $environmentId: String!) {
+    serviceInstanceDeployV2(serviceId: $serviceId, environmentId: $environmentId)
+  }
+`;
+
+/**
+ * Triggers a deployment of the service instance in the target environment.
+ * Image-sourced services never deploy there on their own: `serviceCreate`'s
+ * auto-deploy only reaches the project's DEFAULT environment, and
+ * `serviceInstanceUpdate` applies config without redeploying — so a service
+ * in any other environment stays undeployed forever and its private DNS name
+ * never registers. `environmentTriggersDeploy` is no alternative: it returns
+ * success without creating anything for a service that has never deployed in
+ * that environment (proven live, 2026-07-06).
+ */
+async function deployServiceInstance(
+	client: RailwayClient,
+	serviceId: string,
+	environmentId: string,
+): Promise<void> {
+	const result = await client.query<{ serviceInstanceDeployV2: string }>(
+		SERVICE_INSTANCE_DEPLOY,
+		{ serviceId, environmentId },
+	);
+
+	pulumi.log.info(
+		`[infracraft] serviceInstanceDeployV2 created deployment ${result.serviceInstanceDeployV2}`,
+	);
+}
+
 /**
  * Applies service instance configuration (builder, commands, healthcheck).
  * Retries without healthcheck fields if the first call fails.
@@ -157,6 +188,14 @@ async function applyInstanceConfig(
 	inputs: RailwayServiceInputs,
 ): Promise<void> {
 	const instanceInput: Record<string, unknown> = {};
+
+	// Source must be applied PER ENVIRONMENT: `ServiceCreateInput.source` only
+	// configures the instance of the environment passed at create time, and every
+	// other environment's instance is born with source=null — deploy triggers
+	// then no-op silently because there is nothing to deploy.
+	if (inputs.source) {
+		instanceInput.source = { image: inputs.source.image };
+	}
 
 	if (inputs.builder) {
 		instanceInput.builder = inputs.builder;
@@ -286,6 +325,12 @@ export class RailwayServiceResourceProvider
 
 		await applyInstanceConfig(client, serviceId, inputs.environmentId, inputs);
 
+		// Image services have no `railway up` step (see RailwayDeploy for code
+		// services) — the provider owns their deploy.
+		if (inputs.source) {
+			await deployServiceInstance(client, serviceId, inputs.environmentId);
+		}
+
 		const outs: RailwayServiceOutputs = { ...inputs, serviceId };
 
 		return { id: serviceId, outs };
@@ -316,6 +361,13 @@ export class RailwayServiceResourceProvider
 		}
 
 		await applyInstanceConfig(client, id, news.environmentId, news);
+
+		// Instance config changes (source, startCommand, …) only take effect on
+		// the next deployment; image services get none unless the provider
+		// triggers it.
+		if (news.source) {
+			await deployServiceInstance(client, id, news.environmentId);
+		}
 
 		const outs: RailwayServiceOutputs = { ...news, serviceId: id };
 
