@@ -294,7 +294,6 @@ new VercelResourceConnection("kv-conn", {
 |---|---|---|
 | `VercelProvider` | — | `token` or `tokenEnvVar` (see [Provider credentials](#provider-credentials)) + `teamId` |
 | `VercelProject` | `.id`, `.url` | `.url` is a full `https://` URL; prefers the custom production domain over `<name>.vercel.app`. Deletes the project on destroy — `protect: true` production projects |
-| `VercelVariable` | `.contentHash` | ⚠️ Deprecated — prefer `VercelDeploy.variables`. As a dynamic resource it hits a Pulumi engine-level marshal bug on clean-slate creates ("Unexpected struct type", alternating pass/fail across identical from-zero runs, reproduced with plain-literal inputs) — see [Deploy-integrated env vars](#deploy-integrated-env-vars). Stays exported for existing stacks |
 | `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes`; optional `variables` map is upserted (production + preview + development) by the deploy command itself right before the deploy, and hashed into the triggers so variable changes redeploy |
 | `VercelDomain` | `.name`, `.verified`, `.cnameTarget` | Attaches a custom domain to a project (adopt-or-create); `.cnameTarget` is Vercel's own DNS recommendation for that specific domain |
 | `VercelIntegration` | `.configurationId` (`icfg_…`) | Resolves an installed marketplace integration by slug (install it once via the dashboard first) |
@@ -306,11 +305,11 @@ new VercelResourceConnection("kv-conn", {
 
 ### Deploy-integrated env vars
 
-`VercelDeploy.variables` applies env vars inside the deploy command flow instead of as a Pulumi resource, because the dynamic-resource path (`VercelVariable`) hits a Pulumi engine-internal stateful bug on clean-slate first creates: "Unexpected struct type", strictly alternating pass/fail across identical from-zero runs, reproduced with plain-literal inputs — zero Outputs or secrets — on matched CLI/SDK versions, with four structural theories falsified by bisection. No input shape avoids an engine-internal bug, so the fix is architectural: keep env vars off the dynamic-provider marshal path entirely, the same way `RailwayDeploy`'s monitor bin owns Railway's imperative deploy steps.
+`VercelDeploy.variables` applies env vars inside the deploy command flow instead of as a Pulumi resource, because a dynamic-resource path for env vars hits a Pulumi engine-internal stateful bug on clean-slate first creates: "Unexpected struct type", strictly alternating pass/fail across identical from-zero runs, reproduced with plain-literal inputs — zero Outputs or secrets — on matched CLI/SDK versions, with four structural theories falsified by bisection. No input shape avoids an engine-internal bug, so the fix is architectural: keep env vars off the dynamic-provider marshal path entirely, the same way `RailwayDeploy`'s monitor bin owns Railway's imperative deploy steps.
 
 When `variables` is set, the deploy command runs a standalone applier bin (`node dist/vercel/bin/apply-env.mjs`) before `vercel deploy --prod --yes`:
 
-- Each entry is upserted for production + preview + development — created, or updated in place when the key already exists (ENV_CONFLICT) — via the same REST logic `VercelVariable` uses.
+- Each entry is upserted for production + preview + development — created, or updated in place when the key already exists (ENV_CONFLICT) — via the shared `env-var-api` REST logic.
 - The key→value payload travels as a secret JSON value in the command environment (`IC_VC_ENV_JSON`), masked in state and never present in the script text pulumi-command echoes on failure. Values must be known at preview (config-derived) — the same class as the token the command env already carries.
 - A non-secret digest of the variables joins the command triggers automatically, so any variable change redeploys.
 - The applier logs one line per applied key (names only, never values) and exits non-zero on the first failed key — the deploy never runs against a half-applied environment.

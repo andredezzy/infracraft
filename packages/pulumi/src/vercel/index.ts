@@ -15,5 +15,3 @@ export type { VercelProviderArgs } from "./provider";
 export { VercelProvider } from "./provider";
 export type { VercelResourceConnectionArgs } from "./resource-connection";
 export { VercelResourceConnection } from "./resource-connection";
-export type { VercelVariableArgs } from "./variable";
-export { VercelVariable } from "./variable";

@@ -4,7 +4,7 @@
  * Applies a key→value map to a Vercel project (production + preview +
  * development) through the plain REST API, inside the deploy COMMAND flow —
  * never as a Pulumi dynamic resource. The dynamic-resource path
- * (`VercelVariable`) hits a Pulumi engine-internal stateful bug on clean-slate
+ * hits a Pulumi engine-internal stateful bug on clean-slate
  * first creates ("Unexpected struct type", strictly alternating pass/fail
  * across identical from-zero runs, reproduced with plain-literal inputs — zero
  * Outputs/secrets — on matched CLI/SDK versions; four structural theories
@@ -42,7 +42,7 @@ export interface ApplyVercelEnvDeps {
 /**
  * Upserts every entry of `variables` for the project, targeting production +
  * preview + development (create, or update in place on ENV_CONFLICT — the
- * exact semantics `VercelVariable` uses, via the shared `env-var-api`).
+ * exact upsert semantics of the shared `env-var-api`).
  *
  * Logs one line per applied key — names only, never values. Throws on the
  * first failure with the offending key named, so the bin exits non-zero and

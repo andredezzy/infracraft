@@ -25,7 +25,7 @@ export interface VercelDeployArgs {
 	/**
 	 * Env vars upserted for the project (production + preview + development)
 	 * by the deploy command itself, right before `vercel deploy` runs — the
-	 * preferred replacement for `VercelVariable`. The dynamic-resource path
+	 * the env-var mechanism for Vercel deploys. A dynamic-resource path
 	 * hits a Pulumi engine-internal stateful bug on clean-slate first creates
 	 * ("Unexpected struct type", strictly alternating pass/fail across
 	 * identical from-zero runs, reproduced with plain-literal inputs and zero
@@ -55,7 +55,7 @@ const APPLY_ENV_BIN = fileURLToPath(
  *
  * Pass `variables` to apply the project's env vars as part of the deploy
  * command (see `VercelDeployArgs.variables` for why this replaces
- * `VercelVariable`).
+ * a dynamic env-var resource).
  *
  * Recommended preflight: `assertHostBinaries(["vercel"])` (from
  * `@infracraft/pulumi/sandbox`) at program start, so a missing CLI fails fast

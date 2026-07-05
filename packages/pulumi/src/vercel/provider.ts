@@ -36,7 +36,7 @@ export interface VercelProviderArgs {
  *   teamId: "team_xxx",
  * });
  *
- * new VercelVariable("vars", { projectId: "...", variables: {} }, { provider });
+ * new VercelDeploy("deploy", { projectId: "...", variables: { KEY: "value" } }, { provider });
  * ```
  */
 export class VercelProvider extends pulumi.ComponentResource {

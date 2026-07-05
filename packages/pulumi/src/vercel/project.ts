@@ -494,10 +494,11 @@ export interface VercelProjectArgs {
  *   rootDirectory: "apps/nexus",
  * }, { provider });
  *
- * new VercelVariable("nexus-vars", {
+ * new VercelDeploy("nexus-deploy", {
  *   projectId: project.id,
  *   // The app's own URL comes from the project, not from config or a derived name.
  *   variables: { NEXTAUTH_URL: project.url },
+ *   triggers: [sourceHash],
  * }, { provider });
  * ```
  */

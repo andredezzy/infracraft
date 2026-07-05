@@ -1,14 +1,3 @@
-/**
- * REST operations on a Vercel project's environment variables — the single
- * implementation of the upsert/update/delete/decrypted-read calls, shared by
- * the `VercelVariable` dynamic provider and the deploy-integrated env applier
- * (`env-applier.ts`) so the ENV_CONFLICT upsert semantics can never drift
- * between the two paths.
- *
- * Deliberately Pulumi-free: logging is injected, so the applier bin can run
- * these as a plain Node process outside any Pulumi engine context.
- */
-import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { VercelClient } from "./client";
 
 /** Vercel API response for a single env var. */
@@ -24,7 +13,7 @@ export interface VercelEnvVar {
  * Fetches all environment variables for a Vercel project with decrypted values.
  * A variable that vanishes between the list and its decrypt read is skipped.
  */
-export async function fetchEnvVars(
+async function fetchEnvVars(
 	client: VercelClient,
 	projectId: string,
 ): Promise<VercelEnvVar[]> {
@@ -88,29 +77,11 @@ export async function upsertEnvVar(
 /**
  * Updates a single Vercel env var value.
  */
-export async function updateEnvVar(
+async function updateEnvVar(
 	client: VercelClient,
 	projectId: string,
 	envId: string,
 	value: string,
 ): Promise<void> {
 	await client.patch(`/v9/projects/${projectId}/env/${envId}`, { value });
-}
-
-/**
- * Deletes a single Vercel env var. Tolerates 404 (already gone) —
- * deletion is idempotent.
- */
-export async function deleteEnvVar(
-	client: VercelClient,
-	projectId: string,
-	envId: string,
-): Promise<void> {
-	try {
-		await client.delete(`/v9/projects/${projectId}/env/${envId}`);
-	} catch (error) {
-		if (!(error instanceof ApiNotFoundError)) {
-			throw error;
-		}
-	}
 }
