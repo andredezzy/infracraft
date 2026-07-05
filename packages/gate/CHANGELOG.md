@@ -1,5 +1,12 @@
 # @infracraft/gate
 
+## 0.8.1
+
+### Patch Changes
+
+- Updated dependencies [ba9e44e]
+  - @infracraft/sandbox@0.1.3
+
 ## 0.8.0
 
 ### Minor Changes
