@@ -5,10 +5,13 @@ import type { VercelProvider } from "./provider";
 const VERCEL_API_URL = "https://api.vercel.com";
 
 /**
- * Vercel's documented CNAME target for attaching a subdomain to a project.
+ * Fallback CNAME target, used only when Vercel's domain-config endpoint returns no
+ * recommendation (see {@link fetchCnameTarget}). Not the primary source of truth —
+ * `VercelDomain.cnameTarget` queries Vercel's per-domain recommendation dynamically,
+ * since the actual target can vary by account/domain.
  * https://vercel.com/docs/domains/working-with-domains/add-a-domain
  */
-export const VERCEL_CNAME_TARGET = "cname.vercel-dns.com";
+const VERCEL_CNAME_TARGET_FALLBACK = "cname.vercel-dns.com";
 
 /** Resolved inputs for the Vercel domain dynamic provider. */
 export interface VercelDomainInputs {
@@ -29,6 +32,9 @@ export interface VercelDomainInputs {
 interface VercelDomainOutputs extends VercelDomainInputs {
 	/** `true` once the domain's DNS has been verified by Vercel. */
 	verified: boolean;
+
+	/** The value to CNAME `name` to, per Vercel's own per-domain recommendation. */
+	cnameTarget: string;
 }
 
 /** Vercel API response shape for a project domain. */
@@ -36,6 +42,50 @@ interface VercelDomainResponse {
 	name: string;
 	projectId: string;
 	verified: boolean;
+}
+
+/** A single ranked CNAME recommendation from `GET /v6/domains/{domain}/config`. */
+interface VercelRecommendedCname {
+	rank: number;
+	value: string;
+}
+
+/**
+ * Fetches Vercel's recommended CNAME target for a domain from its DNS config endpoint.
+ * Falls back to {@link VERCEL_CNAME_TARGET_FALLBACK} if Vercel returns no recommendation
+ * (logged, since that's an unusual state worth noticing rather than silently accepting).
+ */
+async function fetchCnameTarget(
+	token: string,
+	teamId: string,
+	name: string,
+): Promise<string> {
+	const response = await fetch(
+		`${VERCEL_API_URL}/v6/domains/${encodeURIComponent(name)}/config?teamId=${teamId}`,
+		{ headers: { Authorization: `Bearer ${token}` } },
+	);
+
+	if (!response.ok) {
+		throw new Error(
+			`Vercel API error fetching domain config for "${name}" (${response.status}): ${await response.text()}`,
+		);
+	}
+
+	const { recommendedCNAME = [] } = (await response.json()) as {
+		recommendedCNAME?: VercelRecommendedCname[];
+	};
+
+	const preferred = [...recommendedCNAME].sort((a, b) => a.rank - b.rank)[0];
+
+	if (!preferred) {
+		pulumi.log.info(
+			`Vercel returned no recommended CNAME for "${name}" — falling back to "${VERCEL_CNAME_TARGET_FALLBACK}"`,
+		);
+
+		return VERCEL_CNAME_TARGET_FALLBACK;
+	}
+
+	return preferred.value;
 }
 
 /**
@@ -94,6 +144,11 @@ export class VercelDomainResourceProvider
 			const outs: VercelDomainOutputs = {
 				...inputs,
 				verified: existing.verified,
+				cnameTarget: await fetchCnameTarget(
+					inputs.token,
+					inputs.teamId,
+					inputs.name,
+				),
 			};
 
 			return { id: `${inputs.projectId}/${inputs.name}`, outs };
@@ -119,7 +174,15 @@ export class VercelDomainResourceProvider
 
 		const created = (await response.json()) as VercelDomainResponse;
 
-		const outs: VercelDomainOutputs = { ...inputs, verified: created.verified };
+		const outs: VercelDomainOutputs = {
+			...inputs,
+			verified: created.verified,
+			cnameTarget: await fetchCnameTarget(
+				inputs.token,
+				inputs.teamId,
+				inputs.name,
+			),
+		};
 
 		return { id: `${inputs.projectId}/${inputs.name}`, outs };
 	}
@@ -143,17 +206,27 @@ export class VercelDomainResourceProvider
 
 		return {
 			id: `${props.projectId}/${props.name}`,
-			props: { ...props, verified: domain.verified },
+			props: {
+				...props,
+				verified: domain.verified,
+				cnameTarget: await fetchCnameTarget(
+					props.token,
+					props.teamId,
+					props.name,
+				),
+			},
 		};
 	}
 
 	/** All fields replace (see `diff`) — this is never actually invoked. */
 	async update(
 		_id: string,
-		_olds: VercelDomainOutputs,
+		olds: VercelDomainOutputs,
 		news: VercelDomainInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		return { outs: { ...news, verified: false } };
+		return {
+			outs: { ...news, verified: false, cnameTarget: olds.cnameTarget },
+		};
 	}
 
 	async delete(_id: string, props: VercelDomainOutputs): Promise<void> {
@@ -219,6 +292,7 @@ export class VercelDomainResourceProvider
 class VercelDomainResource extends pulumi.dynamic.Resource {
 	public declare readonly verified: pulumi.Output<boolean>;
 	public declare readonly name: pulumi.Output<string>;
+	public declare readonly cnameTarget: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -233,7 +307,7 @@ class VercelDomainResource extends pulumi.dynamic.Resource {
 		super(
 			new VercelDomainResourceProvider(),
 			name,
-			{ ...args, verified: undefined },
+			{ ...args, verified: undefined, cnameTarget: undefined },
 			opts,
 		);
 	}
@@ -259,7 +333,10 @@ export interface VercelDomainArgs {
  *
  * @example
  * ```typescript
- * new VercelDomain("aura-domain", { name: "app.example.com" }, { provider, project });
+ * const domain = new VercelDomain("aura-domain", { name: "app.example.com" }, { provider, project });
+ *
+ * // Point app.example.com's DNS CNAME at this value.
+ * const cnameTarget = domain.cnameTarget;
  * ```
  */
 export class VercelDomain extends pulumi.ComponentResource {
@@ -268,6 +345,13 @@ export class VercelDomain extends pulumi.ComponentResource {
 
 	/** The attached domain name. */
 	public readonly name: pulumi.Output<string>;
+
+	/**
+	 * The value to CNAME `name` to — Vercel's own recommendation for this specific
+	 * domain, fetched fresh from its DNS config endpoint (falls back to a static default
+	 * only if Vercel returns no recommendation).
+	 */
+	public readonly cnameTarget: pulumi.Output<string>;
 
 	constructor(name: string, args: VercelDomainArgs, opts: VercelDomainOptions) {
 		const { provider, project, ...pulumiOpts } = opts;
@@ -287,7 +371,12 @@ export class VercelDomain extends pulumi.ComponentResource {
 
 		this.verified = resource.verified;
 		this.name = resource.name;
+		this.cnameTarget = resource.cnameTarget;
 
-		this.registerOutputs({ verified: this.verified, name: this.name });
+		this.registerOutputs({
+			verified: this.verified,
+			name: this.name,
+			cnameTarget: this.cnameTarget,
+		});
 	}
 }
