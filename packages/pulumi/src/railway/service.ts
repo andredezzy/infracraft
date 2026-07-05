@@ -428,6 +428,17 @@ export class RailwayServiceResourceProvider
 			});
 		}
 
+		if (
+			isResolvedString(news.healthcheckPath) &&
+			news.healthcheckPath.includes("-")
+		) {
+			failures.push({
+				property: "healthcheckPath",
+				reason:
+					'Railway rejects any healthcheckPath containing a hyphen with "Invalid input" (undocumented; proven by live probe matrix 2026-07-06) — use a hyphen-free path like "/healthcheck"',
+			});
+		}
+
 		return { inputs: news, failures };
 	}
 

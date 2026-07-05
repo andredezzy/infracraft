@@ -456,6 +456,42 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 	});
 
+	describe("check (healthcheckPath)", () => {
+		it("rejects a hyphenated healthcheckPath at plan time", async () => {
+			const provider = new RailwayServiceResourceProvider();
+
+			const inputs = {
+				token: "tok",
+				projectId: "proj-123",
+				environmentId: "env-staging",
+				name: "api",
+				healthcheckPath: "/health-check",
+			};
+
+			const result = await provider.check(inputs, inputs);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("healthcheckPath");
+			expect(result.failures?.[0].reason).toContain("hyphen");
+		});
+
+		it("passes a hyphen-free healthcheckPath", async () => {
+			const provider = new RailwayServiceResourceProvider();
+
+			const inputs = {
+				token: "tok",
+				projectId: "proj-123",
+				environmentId: "env-staging",
+				name: "api",
+				healthcheckPath: "/healthcheck",
+			};
+
+			const result = await provider.check(inputs, inputs);
+
+			expect(result.failures).toEqual([]);
+		});
+	});
+
 	describe("diff", () => {
 		const olds = {
 			token: "tok",
