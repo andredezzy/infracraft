@@ -156,8 +156,10 @@ async function deleteEnvVar(
 
 /**
  * Dynamic provider implementing CRUD for Vercel project environment variables.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class VercelVariableResourceProvider
+export class VercelVariableResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	async create(

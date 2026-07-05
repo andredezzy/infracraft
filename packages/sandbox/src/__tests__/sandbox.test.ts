@@ -20,6 +20,16 @@ vi.mock("node:fs", async (importOriginal) => {
 	};
 });
 
+// Stub only the preflight probe; the awk regression test needs the real execSync.
+vi.mock("node:child_process", async (importOriginal) => {
+	const actual = await importOriginal<typeof import("node:child_process")>();
+
+	return {
+		...actual,
+		spawnSync: vi.fn(() => ({ status: 0 })),
+	};
+});
+
 describe("buildSandboxFileFilter", () => {
 	it("is a passthrough when nothing is excluded", () => {
 		expect(buildSandboxFileFilter()).toBe("cat");
@@ -74,6 +84,26 @@ describe("buildSandboxFileFilter", () => {
 		expect(filter.match(/&&/g)?.length).toBeGreaterThanOrEqual(1);
 		expect(filter).toContain("apps\\/mesh");
 		expect(filter).toContain("docs");
+	});
+
+	it("rejects an entry containing a single quote (would break out of the awk quoting)", () => {
+		expect(() => buildSandboxFileFilter(["apps/it's-a-trap"])).toThrow(
+			/single quote or newline.*pathological/,
+		);
+	});
+
+	it("rejects an entry containing a newline", () => {
+		expect(() => buildSandboxFileFilter(["docs\nrm -rf /"])).toThrow(
+			/single quote or newline.*pathological/,
+		);
+	});
+
+	it("still builds the filter for normal paths alongside the validation", () => {
+		const filter = buildSandboxFileFilter(["apps/my-app_2.0", "packages/ui"]);
+
+		expect(filter).toContain("awk '");
+		expect(filter).toContain("apps\\/my-app_2\\.0");
+		expect(filter).toContain("packages\\/ui");
 	});
 });
 
@@ -166,6 +196,18 @@ describe("buildSandboxScript", () => {
 describe("prepareSandboxWorkspace", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+	});
+
+	it("asserts the core POSIX binaries (git, rsync, awk, mktemp) before touching the filesystem", async () => {
+		const { spawnSync } = await import("node:child_process");
+
+		prepareSandboxWorkspace();
+
+		const probed = vi
+			.mocked(spawnSync)
+			.mock.calls.map((call) => (call[1] as string[]).at(-1));
+
+		expect(probed).toEqual(["git", "rsync", "awk", "mktemp"]);
 	});
 
 	it("creates the workspace root", () => {

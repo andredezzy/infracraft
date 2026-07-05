@@ -3,6 +3,7 @@ import * as pulumi from "@pulumi/pulumi";
 
 export type { SandboxScriptOptions } from "@infracraft/sandbox";
 export {
+	assertHostBinaries,
 	buildSandboxFileFilter,
 	buildSandboxScript,
 	SandboxMode,

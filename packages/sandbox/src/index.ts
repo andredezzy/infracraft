@@ -1,6 +1,10 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 
+import { assertHostBinaries } from "./preflight";
+
+export { assertHostBinaries };
+
 /** Escapes a path literal for embedding inside an awk ERE. */
 function escapeAwkRegex(path: string): string {
 	return path.replace(/[.[\]{}()*+?^$|\\/]/g, "\\$&");
@@ -18,6 +22,17 @@ function escapeAwkRegex(path: string): string {
 export function buildSandboxFileFilter(excludePaths: string[] = []): string {
 	if (excludePaths.length === 0) {
 		return "cat";
+	}
+
+	// escapeAwkRegex escapes ERE metacharacters only — a single quote would end
+	// the surrounding `awk '…'` shell quoting, and a newline would split the
+	// command. Such paths are pathological, not a real use case, so reject them.
+	for (const entry of excludePaths) {
+		if (entry.includes("'") || entry.includes("\n")) {
+			throw new Error(
+				`excludePaths entry ${JSON.stringify(entry)} contains a single quote or newline — such a path would break out of the single-quoted awk filter and is pathological, not a real use case; rename the path instead`,
+			);
+		}
 	}
 
 	const clauses = excludePaths.map((entry) => {
@@ -129,10 +144,16 @@ export function buildSandboxScript(options: SandboxScriptOptions): string {
  * orphan does not linger for a day accumulating in /tmp. */
 const STALE_SANDBOX_MS = 3 * 60 * 60 * 1000;
 
-/** mkdir the workspace root and GC stale sandboxes (best-effort). Sandboxes are
- * flat under the root (`/tmp/infracraft/<project>-<env>-<app>.XXXX`), so this
- * sweeps any entry older than the stale threshold. */
+/** The POSIX tools every sandboxed deploy script invokes (see {@link buildSandboxScript}). */
+const CORE_SANDBOX_BINARIES = ["git", "rsync", "awk", "mktemp"];
+
+/** Assert the core POSIX tools, mkdir the workspace root, and GC stale
+ * sandboxes (best-effort). Sandboxes are flat under the root
+ * (`/tmp/infracraft/<project>-<env>-<app>.XXXX`), so this sweeps any entry
+ * older than the stale threshold. */
 export function prepareSandboxWorkspace(): void {
+	assertHostBinaries(CORE_SANDBOX_BINARIES);
+
 	fs.mkdirSync(SANDBOX_ROOT, { recursive: true });
 
 	let entries: string[] = [];

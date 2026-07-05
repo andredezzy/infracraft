@@ -5,13 +5,19 @@ import { FlyClient } from "../client";
 import { FlyVolumeResourceProvider } from "../volume";
 
 describe("FlyVolumeResourceProvider", () => {
+	let mockGet: ReturnType<typeof vi.fn>;
 	let mockTryGet: ReturnType<typeof vi.fn>;
+	let mockPost: ReturnType<typeof vi.fn>;
 	let mockDelete: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
+		mockGet = vi.fn();
 		mockTryGet = vi.fn();
+		mockPost = vi.fn();
 		mockDelete = vi.fn();
+		vi.spyOn(FlyClient.prototype, "get").mockImplementation(mockGet);
 		vi.spyOn(FlyClient.prototype, "tryGet").mockImplementation(mockTryGet);
+		vi.spyOn(FlyClient.prototype, "post").mockImplementation(mockPost);
 		vi.spyOn(FlyClient.prototype, "delete").mockImplementation(mockDelete);
 	});
 
@@ -27,6 +33,40 @@ describe("FlyVolumeResourceProvider", () => {
 		sizeGb: 10,
 		volumeId: "vol_123",
 	};
+
+	describe("create", () => {
+		const { volumeId: _ignored, ...inputs } = props;
+
+		it("adopts the first non-destroyed volume matching the name", async () => {
+			mockGet.mockResolvedValueOnce([
+				{ id: "vol_dead", name: "data", state: "destroyed" },
+				{ id: "vol_live", name: "data", state: "created" },
+				{ id: "vol_other", name: "cache", state: "created" },
+			]);
+
+			const result = await new FlyVolumeResourceProvider().create(inputs);
+
+			expect(result.id).toBe("vol_live");
+			expect(result.outs.volumeId).toBe("vol_live");
+			expect(mockPost).not.toHaveBeenCalled();
+		});
+
+		it("creates a new encrypted volume when none matches", async () => {
+			mockGet.mockResolvedValueOnce([]);
+			mockPost.mockResolvedValueOnce({ id: "vol_new" });
+
+			const result = await new FlyVolumeResourceProvider().create(inputs);
+
+			expect(result.id).toBe("vol_new");
+
+			expect(mockPost).toHaveBeenCalledWith("/v1/apps/my-app/volumes", {
+				name: "data",
+				region: "iad",
+				size_gb: 10,
+				encrypted: true,
+			});
+		});
+	});
 
 	describe("read", () => {
 		it("returns a blank ReadResult when the volume is gone (deleted out of band)", async () => {

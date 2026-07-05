@@ -10,7 +10,8 @@
 				"NEVER",
 				"STOP",
 				"SUSPEND",
-				"CONNECTIONS"
+				"CONNECTIONS",
+				"PRIVATE_V6"
 			]
 		},
 		"packages/sandbox": {},

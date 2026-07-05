@@ -91,8 +91,10 @@ interface AllocateResult {
  * API. `create()` queries existing IPs and adopts a matching one, otherwise it
  * allocates. `shared_v4` allocations return a null `ipAddress` in the payload —
  * the address is read from `app.sharedIpAddress`.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(inputs: FlyIpInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new FlyClient(inputs.token);
 

@@ -26,6 +26,10 @@ export interface VercelDeployArgs {
  * git-metadata handling are entirely the seam's job — list a `DeploySandbox`
  * (and optionally a `GitGuard`) in `opts.dependsOn` to control them.
  *
+ * Recommended preflight: `assertHostBinaries(["vercel"])` (from
+ * `@infracraft/pulumi/sandbox`) at program start, so a missing CLI fails fast
+ * with an install hint instead of mid-deploy.
+ *
  * @example
  * ```typescript
  * new VercelDeploy("nexus", { projectId: project.id, triggers: [sourceHash, envHash], excludePaths: ["apps/mesh"] },

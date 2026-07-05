@@ -65,6 +65,7 @@ const VOLUMES_QUERY = `
                   id
                   mountPath
                   serviceId
+                  environmentId
                 }
               }
             }
@@ -76,12 +77,17 @@ const VOLUMES_QUERY = `
 `;
 
 /**
- * Finds an existing volume attached to a specific service within a project.
+ * Finds an existing volume attached to a specific service IN a specific
+ * environment. Both must match: services are project-level and shared across
+ * environments, so matching by service alone made a new stack adopt a SIBLING
+ * environment's volume (production adopted staging's, live incident
+ * 2026-07-06) — volume instances are per-environment, and so is adoption.
  */
-async function findVolumeByService(
+async function findAttachedVolume(
 	client: RailwayClient,
 	projectId: string,
 	serviceId: string,
+	environmentId: string,
 ): Promise<string | undefined> {
 	const result = await client.query<{
 		project: {
@@ -91,7 +97,7 @@ async function findVolumeByService(
 						id: string;
 						volumeInstances: {
 							edges: Array<{
-								node: { serviceId: string };
+								node: { serviceId: string; environmentId: string };
 							}>;
 						};
 					};
@@ -102,7 +108,9 @@ async function findVolumeByService(
 
 	const match = result.project.volumes.edges.find((edge) =>
 		edge.node.volumeInstances.edges.some(
-			(vi) => vi.node.serviceId === serviceId,
+			(vi) =>
+				vi.node.serviceId === serviceId &&
+				vi.node.environmentId === environmentId,
 		),
 	);
 
@@ -144,10 +152,11 @@ export class RailwayVolumeResourceProvider
 	): Promise<pulumi.dynamic.CreateResult> {
 		const client = new RailwayClient(inputs.token);
 
-		let volumeId = await findVolumeByService(
+		let volumeId = await findAttachedVolume(
 			client,
 			inputs.projectId,
 			inputs.serviceId,
+			inputs.environmentId,
 		);
 
 		if (volumeId) {
@@ -199,10 +208,11 @@ export class RailwayVolumeResourceProvider
 		let volumeId: string | undefined;
 
 		try {
-			volumeId = await findVolumeByService(
+			volumeId = await findAttachedVolume(
 				client,
 				props.projectId,
 				props.serviceId,
+				props.environmentId,
 			);
 		} catch (error) {
 			pulumi.log.warn(

@@ -99,7 +99,14 @@ describe("RailwayVolumeResourceProvider.create", () => {
 							node: {
 								id: "vol-existing",
 								volumeInstances: {
-									edges: [{ node: { serviceId: "svc-redis" } }],
+									edges: [
+										{
+											node: {
+												serviceId: "svc-redis",
+												environmentId: "env-staging",
+											},
+										},
+									],
 								},
 							},
 						},
@@ -118,6 +125,62 @@ describe("RailwayVolumeResourceProvider.create", () => {
 		);
 
 		expect(deploy).toBeUndefined();
+	});
+
+	it("does NOT adopt a sibling environment's volume for the shared service", async () => {
+		// Regression (live incident): services are project-level, so matching by
+		// service alone made the production stack adopt STAGING's volume — either
+		// data mixing or no persistence at all. A volume instance must match BOTH
+		// serviceId and environmentId; otherwise create a fresh volume.
+		mockQuery.mockImplementation(async (mutation: string) => {
+			if (mutation.includes("volumeCreate")) {
+				return { volumeCreate: { id: "vol-production" } };
+			}
+
+			if (mutation.includes("serviceInstanceDeployV2")) {
+				return { serviceInstanceDeployV2: "dep-4" };
+			}
+
+			return {
+				project: {
+					volumes: {
+						edges: [
+							{
+								node: {
+									id: "vol-staging",
+									volumeInstances: {
+										edges: [
+											{
+												node: {
+													serviceId: "svc-redis",
+													environmentId: "env-staging",
+												},
+											},
+										],
+									},
+								},
+							},
+						],
+					},
+				},
+			};
+		});
+
+		const provider = new RailwayVolumeResourceProvider();
+		const { volumeId: _ignored, ...inputs } = props;
+
+		const result = await provider.create({
+			...inputs,
+			environmentId: "env-production",
+		});
+
+		expect(result.id).toBe("vol-production");
+
+		const create = mockQuery.mock.calls.find(([mutation]) =>
+			mutation.includes("volumeCreate"),
+		);
+
+		expect(create?.[1].input.environmentId).toBe("env-production");
 	});
 
 	it("tolerates a failing post-attach redeploy (service not deployable yet)", async () => {
@@ -162,7 +225,14 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 							node: {
 								id: "vol-found",
 								volumeInstances: {
-									edges: [{ node: { serviceId: "svc-redis" } }],
+									edges: [
+										{
+											node: {
+												serviceId: "svc-redis",
+												environmentId: "env-staging",
+											},
+										},
+									],
 								},
 							},
 						},

@@ -52,8 +52,12 @@ async function applySecrets(
  * `pulumi.secret()` by the public resource so they are encrypted at rest.
  * Setting secrets only takes effect on the next machine restart — wire
  * `FlySecret.version` into `FlyDeploy.triggers` to force a redeploy on change.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class FlySecretResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class FlySecretResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(inputs: FlySecretInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new FlyClient(inputs.token);
 		const version = await applySecrets(client, inputs.appName, inputs.secrets);

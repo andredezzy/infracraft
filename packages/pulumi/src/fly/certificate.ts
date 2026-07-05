@@ -50,8 +50,10 @@ interface FlyCertificateResponse {
  * for an existing cert by hostname and adopts it, otherwise it requests one via
  * `POST /v1/apps/{app}/certificates/acme`. The Machines API returns no `id` —
  * the hostname is the resource key.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class FlyCertificateResourceProvider
+export class FlyCertificateResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	async create(

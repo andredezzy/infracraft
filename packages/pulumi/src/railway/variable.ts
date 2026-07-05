@@ -43,8 +43,10 @@ const VARIABLE_DELETE = `
  *
  * Uses `skipDeploys: true` on all upsert operations to prevent
  * "Cannot redeploy without snapshot" errors on newly created services.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class RailwayVariableResourceProvider
+export class RailwayVariableResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
