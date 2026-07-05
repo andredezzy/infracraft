@@ -1,7 +1,12 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
-import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { VercelClient } from "./client";
+import {
+	deleteEnvVar,
+	fetchEnvVars,
+	updateEnvVar,
+	upsertEnvVar,
+} from "./env-var-api";
 import type { VercelProject } from "./project";
 import type { VercelProvider } from "./provider";
 
@@ -53,111 +58,6 @@ async function hashVariables(
 	return hash.digest("hex");
 }
 
-/** Vercel API response for a single env var. */
-interface VercelEnvVar {
-	id: string;
-	key: string;
-	value: string;
-	type: string;
-	target: string[];
-}
-
-/**
- * Fetches all environment variables for a Vercel project with decrypted values.
- * A variable that vanishes between the list and its decrypt read is skipped.
- */
-async function fetchEnvVars(
-	client: VercelClient,
-	projectId: string,
-): Promise<VercelEnvVar[]> {
-	const list = await client.get<{ envs: VercelEnvVar[] }>(
-		`/v9/projects/${projectId}/env`,
-	);
-
-	const decrypted: VercelEnvVar[] = [];
-
-	for (const env of list.envs) {
-		const decryptedVar = await client.tryGet<VercelEnvVar>(
-			`/v9/projects/${projectId}/env/${env.id}?decrypt=true`,
-		);
-
-		if (decryptedVar) {
-			decrypted.push(decryptedVar);
-		}
-	}
-
-	return decrypted;
-}
-
-/**
- * Creates a single Vercel env var targeting all environments.
- * An already-existing key (ENV_CONFLICT) is updated in place instead.
- */
-async function createEnvVar(
-	client: VercelClient,
-	projectId: string,
-	key: string,
-	value: string,
-): Promise<VercelEnvVar> {
-	try {
-		return await client.post<VercelEnvVar>(`/v10/projects/${projectId}/env`, {
-			key,
-			value,
-			type: "encrypted",
-			target: ["production", "preview", "development"],
-		});
-	} catch (error) {
-		// ENV_CONFLICT is Vercel's error code for "key already exists"; the client
-		// surfaces the API error body in the message, so it is matched there.
-		if (error instanceof Error && error.message.includes("ENV_CONFLICT")) {
-			pulumi.log.info(
-				`Vercel env var "${key}" already exists, will update instead`,
-			);
-
-			const existing = await fetchEnvVars(client, projectId);
-			const match = existing.find((e) => e.key === key);
-
-			if (match) {
-				await updateEnvVar(client, projectId, match.id, value);
-
-				return { ...match, value };
-			}
-		}
-
-		throw error;
-	}
-}
-
-/**
- * Updates a single Vercel env var value.
- */
-async function updateEnvVar(
-	client: VercelClient,
-	projectId: string,
-	envId: string,
-	value: string,
-): Promise<void> {
-	await client.patch(`/v9/projects/${projectId}/env/${envId}`, { value });
-}
-
-/**
- * Deletes a single Vercel env var. Tolerates 404 (already gone) —
- * deletion is idempotent.
- */
-async function deleteEnvVar(
-	client: VercelClient,
-	projectId: string,
-	envId: string,
-): Promise<void> {
-	try {
-		await client.delete(`/v9/projects/${projectId}/env/${envId}`);
-	} catch (error) {
-		if (!(error instanceof ApiNotFoundError)) {
-			throw error;
-		}
-	}
-}
-
 /**
  * Dynamic provider implementing CRUD for Vercel project environment variables.
  *
@@ -177,7 +77,13 @@ export class VercelVariableResourceProvider
 		const envIds: Record<string, string> = {};
 
 		for (const [key, value] of Object.entries(inputs.variables)) {
-			const result = await createEnvVar(client, inputs.projectId, key, value);
+			const result = await upsertEnvVar(
+				client,
+				inputs.projectId,
+				key,
+				value,
+				pulumi.log.info,
+			);
 
 			envIds[key] = result.id;
 		}
@@ -230,7 +136,13 @@ export class VercelVariableResourceProvider
 			if (existingId && olds.variables[key] !== value) {
 				await updateEnvVar(client, news.projectId, existingId, value);
 			} else if (!existingId) {
-				const result = await createEnvVar(client, news.projectId, key, value);
+				const result = await upsertEnvVar(
+					client,
+					news.projectId,
+					key,
+					value,
+					pulumi.log.info,
+				);
 
 				envIds[key] = result.id;
 			}
@@ -374,6 +286,17 @@ export interface VercelVariableArgs {
 /**
  * Manages Vercel project environment variables as a batch with drift detection.
  *
+ * **Warning — known Pulumi engine bug; prefer `VercelDeploy.variables`.** As a
+ * dynamic resource this class rides the engine's dynamic-provider marshal path,
+ * which hits an engine-internal stateful bug on clean-slate first creates:
+ * "Unexpected struct type", strictly alternating pass/fail across identical
+ * from-zero runs, reproduced with plain-literal inputs (zero Outputs/secrets)
+ * on matched CLI/SDK versions — four structural theories falsified by
+ * bisection, so no input shape avoids it. `VercelDeploy.variables` applies the
+ * same upsert logic inside the deploy command flow, off that marshal path
+ * entirely. This class stays exported for existing stacks.
+ *
+ * @deprecated Prefer `VercelDeploy.variables` — see the warning above.
  * @example
  * ```typescript
  * new VercelVariable("nexus-vars", {
