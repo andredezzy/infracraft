@@ -16,6 +16,51 @@ describe("NeonRoleResourceProvider", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
+	});
+
+	describe("provider credentials", () => {
+		it("resolves the API key from the env var named by apiKeyEnvVar", async () => {
+			vi.stubEnv("INFRACRAFT_TEST_NEON_API_KEY", "env-key");
+
+			const seenKeys: string[] = [];
+
+			mockGet.mockImplementation(async function (this: unknown) {
+				seenKeys.push((this as { apiKey: string }).apiKey);
+
+				return { roles: [{ name: "neondb_owner" }] };
+			});
+
+			mockPost.mockResolvedValueOnce({ role: { password: "fresh-pw" } });
+
+			const provider = new NeonRoleResourceProvider();
+
+			await provider.create({
+				apiKeyEnvVar: "INFRACRAFT_TEST_NEON_API_KEY",
+				projectId: "proj",
+				branchId: "br-staging",
+				name: "neondb_owner",
+				resetPassword: true,
+			});
+
+			expect(seenKeys[0]).toBe("env-key");
+		});
+
+		it("throws a loud error naming the env var when it is not set", async () => {
+			const provider = new NeonRoleResourceProvider();
+
+			await expect(
+				provider.create({
+					apiKeyEnvVar: "INFRACRAFT_TEST_NEON_API_KEY_UNSET",
+					projectId: "proj",
+					branchId: "br-staging",
+					name: "neondb_owner",
+					resetPassword: true,
+				}),
+			).rejects.toThrow(
+				"provider credential env var INFRACRAFT_TEST_NEON_API_KEY_UNSET is not set in the Pulumi execution environment",
+			);
+		});
 	});
 
 	describe("create", () => {

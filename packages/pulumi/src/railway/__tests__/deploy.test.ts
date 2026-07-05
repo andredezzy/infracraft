@@ -36,6 +36,11 @@ vi.mock("@pulumi/pulumi", () => {
 				apply: (fn2: (x: unknown) => unknown) => fn2(fn(toStr(v))),
 			}),
 		}),
+		// all(...).apply(fn) resolves synchronously so the healthcheck bindings
+		// land in the interpolated script as a plain string.
+		all: (vals: unknown[]) => ({
+			apply: (fn: (x: unknown[]) => unknown) => fn(vals),
+		}),
 		interpolate: (strings: TemplateStringsArray, ...vals: unknown[]) =>
 			strings.reduce(
 				(acc, s, i) => acc + s + (i < vals.length ? toStr(vals[i]) : ""),
@@ -120,6 +125,29 @@ describe("RailwayDeploy", () => {
 		// IC_SINCE is captured before `railway up` and forwarded as a createdAt fallback.
 		expect(create).toContain("IC_SINCE=$(node -e");
 		expect(create).toContain("IC_SINCE=$IC_SINCE");
+		// No healthcheck args → no IC_HC_* bindings (the monitor must skip cleanly).
+		expect(create).not.toContain("IC_HC_");
+	});
+
+	it("passes IC_HC_* bindings to the monitor only when healthcheck args are provided", () => {
+		new RailwayDeploy(
+			"mesh",
+			{
+				triggers: [],
+				healthcheckPath: "/health-check",
+				healthcheckTimeout: 300,
+			},
+			{ ...ctx, dependsOn: [sandbox, gitGuard] },
+		);
+
+		const create = (
+			commandCalls[0].args.create as {
+				apply: (f: (s: string) => string) => string;
+			}
+		).apply((s) => s);
+
+		expect(create).toContain("IC_HC_PATH='/health-check'");
+		expect(create).toContain("IC_HC_TIMEOUT=300");
 	});
 
 	it("escapes railpackConfig values containing an apostrophe (POSIX single-quote)", () => {

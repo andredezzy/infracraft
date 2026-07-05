@@ -1,9 +1,22 @@
 import * as pulumi from "@pulumi/pulumi";
 
-/** Args for RailwayProvider. */
+/** Args for RailwayProvider. Exactly one of `token` and `tokenEnvVar` must be set. */
 export interface RailwayProviderArgs {
-	/** Railway API bearer token. */
-	token: pulumi.Input<string>;
+	/** Railway API bearer token. Mutually exclusive with `tokenEnvVar`. */
+	token?: pulumi.Input<string>;
+
+	/**
+	 * Name of the environment variable holding the Railway API bearer token.
+	 * Mutually exclusive with `token`, and the recommended form: resources
+	 * carry only the plain variable name, so the credential never enters
+	 * dynamic-resource inputs or per-resource state — which removes the
+	 * substrate for pulumi/pulumi#16041 ("Unexpected struct type": secret
+	 * Outputs in dynamic-provider inputs intermittently fail engine
+	 * serialization). Dynamic-provider operations execute in the Pulumi CLI's
+	 * plugin process, which inherits the program's environment, so
+	 * ESC-provided `environmentVariables` reach them.
+	 */
+	tokenEnvVar?: pulumi.Input<string>;
 }
 
 /**
@@ -15,15 +28,19 @@ export interface RailwayProviderArgs {
  * @example
  * ```typescript
  * const provider = new RailwayProvider("railway", {
- *   token: config.requireSecret("railwayToken"),
+ *   tokenEnvVar: "RAILWAY_TOKEN",
+ *   // or: token: config.requireSecret("railwayToken"),
  * });
  *
  * const project = new RailwayProject("my-project", { name: "my-app" }, { provider });
  * ```
  */
 export class RailwayProvider extends pulumi.ComponentResource {
-	/** Railway API bearer token (secret). */
-	public readonly token: pulumi.Output<string>;
+	/** Railway API bearer token (secret). Set only when configured via `token`. */
+	public readonly token?: pulumi.Output<string>;
+
+	/** Name of the env var holding the token (plain). Set only when configured via `tokenEnvVar`. */
+	public readonly tokenEnvVar?: pulumi.Output<string>;
 
 	constructor(
 		name: string,
@@ -32,8 +49,20 @@ export class RailwayProvider extends pulumi.ComponentResource {
 	) {
 		super("infracraft:railway:Provider", name, {}, opts);
 
-		this.token = pulumi.secret(pulumi.output(args.token));
+		if ((args.token === undefined) === (args.tokenEnvVar === undefined)) {
+			throw new Error(
+				"RailwayProvider requires exactly one of `token` or `tokenEnvVar`",
+			);
+		}
 
-		this.registerOutputs({ token: this.token });
+		if (args.token !== undefined) {
+			this.token = pulumi.secret(pulumi.output(args.token));
+		}
+
+		if (args.tokenEnvVar !== undefined) {
+			this.tokenEnvVar = pulumi.output(args.tokenEnvVar);
+		}
+
+		this.registerOutputs({ token: this.token, tokenEnvVar: this.tokenEnvVar });
 	}
 }

@@ -1,11 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
 
 /** Resolved inputs for the Vercel marketplace resource dynamic provider. */
 interface VercelMarketplaceResourceInputs {
-	/** Vercel API bearer token. */
-	token: string;
+	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
 	teamId: string;
@@ -75,7 +79,10 @@ export class VercelMarketplaceResourceProvider
 				: {}),
 		};
 
-		const client = new VercelClient(inputs.token, inputs.teamId);
+		const client = new VercelClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+			inputs.teamId,
+		);
 
 		const { store } = await client.post<VercelStoreResponse>(
 			"/v1/storage/stores/integration/direct",
@@ -153,7 +160,8 @@ class VercelMarketplaceResourceResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			teamId: pulumi.Input<string>;
 			integrationConfigurationId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
@@ -271,6 +279,7 @@ export class VercelMarketplaceResource extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				teamId: provider.teamId,
 				...args,
 			},

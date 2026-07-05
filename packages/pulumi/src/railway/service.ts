@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -37,8 +38,11 @@ interface RailwayServiceSource {
 
 /** Resolved inputs for the Railway service dynamic provider. */
 interface RailwayServiceInputs {
-	/** Railway API bearer token. */
-	token: string;
+	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
 	projectId: string;
@@ -249,16 +253,30 @@ async function ensureServiceInstance(
 	}
 }
 
+/** What `applyInstanceConfig` had to leave out to get the update accepted. */
+interface InstanceConfigResult {
+	/** True when the healthcheck fields were dropped from a failed first attempt. */
+	droppedHealthcheck: boolean;
+}
+
 /**
  * Applies service instance configuration (builder, commands, healthcheck).
- * Retries without healthcheck fields if the first call fails.
+ *
+ * The healthcheck fields ride on the FIRST attempt — an instance with existing
+ * deployments accepts them, so steady-state applies stay one call. A FRESH
+ * instance with no deployment rejects `healthcheckPath` with "Invalid input"
+ * (live drill finding), so on failure the call is retried without the
+ * healthcheck fields and the drop is reported to the caller — which MUST
+ * re-apply them after the first deployment exists (the provider itself for
+ * image services, the RailwayDeploy monitor for code services). Silent loss is
+ * not an option.
  */
 async function applyInstanceConfig(
 	client: RailwayClient,
 	serviceId: string,
 	environmentId: string,
 	inputs: RailwayServiceInputs,
-): Promise<void> {
+): Promise<InstanceConfigResult> {
 	const instanceInput: Record<string, unknown> = {};
 
 	// Source must be applied PER ENVIRONMENT: `ServiceCreateInput.source` only
@@ -298,8 +316,12 @@ async function applyInstanceConfig(
 	}
 
 	if (Object.keys(instanceInput).length === 0) {
-		return;
+		return { droppedHealthcheck: false };
 	}
+
+	const hasHealthcheck =
+		instanceInput.healthcheckPath !== undefined ||
+		instanceInput.healthcheckTimeout !== undefined;
 
 	try {
 		await client.query(SERVICE_INSTANCE_UPDATE, {
@@ -307,7 +329,13 @@ async function applyInstanceConfig(
 			environmentId,
 			input: instanceInput,
 		});
+
+		return { droppedHealthcheck: false };
 	} catch (error) {
+		if (!hasHealthcheck) {
+			throw error;
+		}
+
 		pulumi.log.warn(
 			`serviceInstanceUpdate failed, retrying without healthcheck fields: ${error}`,
 		);
@@ -322,6 +350,47 @@ async function applyInstanceConfig(
 				input: instanceInput,
 			});
 		}
+
+		return { droppedHealthcheck: true };
+	}
+}
+
+/**
+ * Re-applies ONLY the healthcheck fields after the instance has a deployment.
+ * Called when `applyInstanceConfig` had to drop them (fresh instance, no
+ * deployment); a failure here would silently lose the healthcheck config
+ * forever, so it throws loudly instead.
+ */
+async function applyHealthcheckConfig(
+	client: RailwayClient,
+	serviceId: string,
+	environmentId: string,
+	inputs: RailwayServiceInputs,
+): Promise<void> {
+	const healthcheckInput: Record<string, unknown> = {};
+
+	if (inputs.healthcheckPath) {
+		healthcheckInput.healthcheckPath = inputs.healthcheckPath;
+	}
+
+	if (inputs.healthcheckTimeout) {
+		healthcheckInput.healthcheckTimeout = inputs.healthcheckTimeout;
+	}
+
+	if (Object.keys(healthcheckInput).length === 0) {
+		return;
+	}
+
+	try {
+		await client.query(SERVICE_INSTANCE_UPDATE, {
+			serviceId,
+			environmentId,
+			input: healthcheckInput,
+		});
+	} catch (error) {
+		throw new Error(
+			`Railway healthcheck config ${JSON.stringify(healthcheckInput)} could not be applied to service ${serviceId} in environment ${environmentId} even after its deployment was created — failing instead of silently dropping it: ${error}`,
+		);
 	}
 }
 
@@ -368,7 +437,9 @@ export class RailwayServiceResourceProvider
 	async create(
 		inputs: RailwayServiceInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(inputs.token);
+		const client = new RailwayClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		const result = await client.query<{
 			project: {
@@ -421,12 +492,29 @@ export class RailwayServiceResourceProvider
 		}
 
 		await ensureServiceInstance(client, serviceId, inputs.environmentId);
-		await applyInstanceConfig(client, serviceId, inputs.environmentId, inputs);
+
+		const { droppedHealthcheck } = await applyInstanceConfig(
+			client,
+			serviceId,
+			inputs.environmentId,
+			inputs,
+		);
 
 		// Image services have no `railway up` step (see RailwayDeploy for code
-		// services) — the provider owns their deploy.
+		// services) — the provider owns their deploy, and with it the post-deploy
+		// re-apply of any dropped healthcheck fields. Code services get theirs
+		// from the RailwayDeploy monitor instead.
 		if (inputs.source) {
 			await deployServiceInstance(client, serviceId, inputs.environmentId);
+
+			if (droppedHealthcheck) {
+				await applyHealthcheckConfig(
+					client,
+					serviceId,
+					inputs.environmentId,
+					inputs,
+				);
+			}
 		}
 
 		const outs: RailwayServiceOutputs = { ...inputs, serviceId };
@@ -442,7 +530,9 @@ export class RailwayServiceResourceProvider
 		olds: RailwayServiceOutputs,
 		news: RailwayServiceInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(news.token);
+		const client = new RailwayClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+		);
 
 		const updateInput: Record<string, unknown> = {};
 
@@ -459,13 +549,24 @@ export class RailwayServiceResourceProvider
 		}
 
 		await ensureServiceInstance(client, id, news.environmentId);
-		await applyInstanceConfig(client, id, news.environmentId, news);
+
+		const { droppedHealthcheck } = await applyInstanceConfig(
+			client,
+			id,
+			news.environmentId,
+			news,
+		);
 
 		// Instance config changes (source, startCommand, …) only take effect on
 		// the next deployment; image services get none unless the provider
-		// triggers it.
+		// triggers it. Dropped healthcheck fields are re-applied once that
+		// deployment exists (see applyHealthcheckConfig).
 		if (news.source) {
 			await deployServiceInstance(client, id, news.environmentId);
+
+			if (droppedHealthcheck) {
+				await applyHealthcheckConfig(client, id, news.environmentId, news);
+			}
 		}
 
 		const outs: RailwayServiceOutputs = { ...news, serviceId: id };
@@ -480,7 +581,9 @@ export class RailwayServiceResourceProvider
 		id: string,
 		props: RailwayServiceOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		try {
 			await client.query<{ service: { id: string; name: string } }>(
@@ -584,7 +687,8 @@ class RailwayServiceResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			environmentId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
@@ -693,6 +797,7 @@ export class RailwayService extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				projectId: project.id,
 				environmentId: environment.id,
 				...args,

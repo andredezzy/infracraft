@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -8,8 +9,11 @@ import type { RailwayService } from "./service";
 
 /** Resolved inputs for the Railway volume dynamic provider. */
 export interface RailwayVolumeInputs {
-	/** Railway API bearer token. */
-	token: string;
+	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
 	projectId: string;
@@ -150,7 +154,9 @@ export class RailwayVolumeResourceProvider
 	async create(
 		inputs: RailwayVolumeInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(inputs.token);
+		const client = new RailwayClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		let volumeId = await findAttachedVolume(
 			client,
@@ -203,7 +209,9 @@ export class RailwayVolumeResourceProvider
 		id: string,
 		props: RailwayVolumeOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		let volumeId: string | undefined;
 
@@ -232,7 +240,9 @@ export class RailwayVolumeResourceProvider
 	}
 
 	async delete(id: string, props: RailwayVolumeOutputs): Promise<void> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		try {
 			await client.query(VOLUME_DELETE, { volumeId: id });
@@ -279,7 +289,8 @@ class RailwayVolumeResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			serviceId: pulumi.Input<string>;
 			environmentId: pulumi.Input<string>;
@@ -345,6 +356,7 @@ export class RailwayVolume extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				projectId: project.id,
 				serviceId: service.id,
 				environmentId: environment.id,

@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
@@ -7,8 +8,11 @@ import type { FlyProvider } from "./provider";
 
 /** Resolved inputs for the Fly volume dynamic provider. */
 interface FlyVolumeInputs {
-	/** Fly API token. */
-	token: string;
+	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** App name the volume belongs to. */
 	appName: string;
@@ -75,7 +79,9 @@ export class FlyVolumeResourceProvider
 	}
 
 	async create(inputs: FlyVolumeInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(inputs.token);
+		const client = new FlyClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		const volumes = await client.get<FlyVolumeResponse[]>(
 			`/v1/apps/${inputs.appName}/volumes`,
@@ -116,7 +122,9 @@ export class FlyVolumeResourceProvider
 		id: string,
 		props: FlyVolumeOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new FlyClient(props.token);
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const volume = await client.tryGet<FlyVolumeResponse>(
 			`/v1/apps/${props.appName}/volumes/${id}`,
@@ -144,7 +152,9 @@ export class FlyVolumeResourceProvider
 		news: FlyVolumeInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
 		if (news.sizeGb > olds.sizeGb) {
-			const client = new FlyClient(news.token);
+			const client = new FlyClient(
+				resolveCredential(news.token, news.tokenEnvVar),
+			);
 
 			await client.put(`/v1/apps/${news.appName}/volumes/${id}/extend`, {
 				size_gb: news.sizeGb,
@@ -155,7 +165,9 @@ export class FlyVolumeResourceProvider
 	}
 
 	async delete(id: string, props: FlyVolumeOutputs): Promise<void> {
-		const client = new FlyClient(props.token);
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		try {
 			await client.delete(`/v1/apps/${props.appName}/volumes/${id}`);
@@ -214,7 +226,8 @@ class FlyVolumeResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			appName: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			region: pulumi.Input<string>;
@@ -281,6 +294,7 @@ export class FlyVolume extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				appName: app.id,
 				...args,
 			},

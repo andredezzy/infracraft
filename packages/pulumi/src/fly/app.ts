@@ -1,12 +1,16 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
 
 /** Resolved inputs for the Fly app dynamic provider. */
 interface FlyAppInputs {
-	/** Fly API token. */
-	token: string;
+	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** App name (globally unique). Used as the resource identifier. */
 	name: string;
@@ -39,7 +43,9 @@ interface FlyAppResponse {
  */
 export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(inputs: FlyAppInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(inputs.token);
+		const client = new FlyClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		const existing = await client.tryGet<FlyAppResponse>(
 			`/v1/apps/${inputs.name}`,
@@ -71,7 +77,10 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 		id: string,
 		props: FlyAppOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new FlyClient(props.token);
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
+
 		const app = await client.tryGet<FlyAppResponse>(`/v1/apps/${id}`);
 
 		if (!app) {
@@ -126,7 +135,8 @@ class FlyAppResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			organization?: pulumi.Input<string | undefined>;
 		},
@@ -185,6 +195,7 @@ export class FlyApp extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				name: args.name,
 				organization: args.organization ?? provider.organization,
 			},

@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
 import { NeonClient } from "./client";
@@ -7,8 +8,11 @@ import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon database dynamic provider. */
 interface NeonDatabaseInputs {
-	/** Neon API key. */
-	apiKey: string;
+	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
+	apiKey?: string;
+
+	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	apiKeyEnvVar?: string;
 
 	/** Neon project ID. */
 	projectId: string;
@@ -71,7 +75,9 @@ class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: NeonDatabaseInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(inputs.apiKey);
+		const client = new NeonClient(
+			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
+		);
 
 		const exists = await findDatabaseByName(
 			client,
@@ -99,7 +105,9 @@ class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
 		id: string,
 		props: NeonDatabaseOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			const result = await client.get<DatabaseResponse>(
@@ -121,7 +129,9 @@ class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	async delete(_id: string, props: NeonDatabaseOutputs): Promise<void> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			await client.delete(
@@ -166,7 +176,8 @@ class NeonDatabaseResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			apiKey: pulumi.Input<string>;
+			apiKey?: pulumi.Input<string>;
+			apiKeyEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			branchId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
@@ -226,6 +237,7 @@ export class NeonDatabase extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
+				apiKeyEnvVar: provider.apiKeyEnvVar,
 				projectId: project.id,
 				branchId: branch.id,
 				name: args.name,

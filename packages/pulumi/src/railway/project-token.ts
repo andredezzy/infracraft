@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -7,8 +8,11 @@ import type { RailwayProvider } from "./provider";
 
 /** Resolved inputs for the Railway project token dynamic provider. */
 interface RailwayProjectTokenInputs {
-	/** Railway API bearer token (account-scoped, used for API calls). */
-	token: string;
+	/** Railway API bearer token (account-scoped, used for API calls). Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the account token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
 	projectId: string;
@@ -98,7 +102,9 @@ export class RailwayProjectTokenResourceProvider
 	async create(
 		inputs: RailwayProjectTokenInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(inputs.token);
+		const client = new RailwayClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		const tokensResult = await client.query<{
 			projectTokens: {
@@ -191,7 +197,9 @@ export class RailwayProjectTokenResourceProvider
 			return;
 		}
 
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		try {
 			await client.query(PROJECT_TOKEN_DELETE, { id: props.tokenId });
@@ -260,7 +268,8 @@ class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			environmentId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
@@ -362,6 +371,7 @@ export class RailwayProjectToken extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				projectId: project.id,
 				environmentId: environment.id,
 				name: args.name,

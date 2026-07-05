@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { VercelClient } from "./client";
 import type { VercelProject } from "./project";
@@ -15,8 +16,11 @@ const VERCEL_CNAME_TARGET_FALLBACK = "cname.vercel-dns.com";
 
 /** Resolved inputs for the Vercel domain dynamic provider. */
 export interface VercelDomainInputs {
-	/** Vercel API bearer token. */
-	token: string;
+	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
 	teamId: string;
@@ -103,7 +107,11 @@ export class VercelDomainResourceProvider
 	async create(
 		inputs: VercelDomainInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new VercelClient(inputs.token, inputs.teamId);
+		const client = new VercelClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+			inputs.teamId,
+		);
+
 		const existing = await fetchDomain(client, inputs.projectId, inputs.name);
 
 		if (existing) {
@@ -138,7 +146,11 @@ export class VercelDomainResourceProvider
 		_id: string,
 		props: VercelDomainOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new VercelClient(props.token, props.teamId);
+		const client = new VercelClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+			props.teamId,
+		);
+
 		const domain = await fetchDomain(client, props.projectId, props.name);
 
 		if (!domain) {
@@ -168,7 +180,10 @@ export class VercelDomainResourceProvider
 	}
 
 	async delete(_id: string, props: VercelDomainOutputs): Promise<void> {
-		const client = new VercelClient(props.token, props.teamId);
+		const client = new VercelClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+			props.teamId,
+		);
 
 		try {
 			await client.delete(
@@ -232,7 +247,8 @@ class VercelDomainResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			teamId: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
@@ -298,6 +314,7 @@ export class VercelDomain extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				teamId: provider.teamId,
 				projectId: project.id,
 				...args,

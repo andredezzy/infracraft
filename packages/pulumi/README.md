@@ -24,7 +24,7 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 - **Inputs fail at plan time.** `check()` rejects locally decidable mistakes during preview with the offending property named: `RailwayVolume.mountPath` (must be absolute), `RailwayService.source.image` / `RailwayProjectToken.name` / `NeonBranch.name` / `NeonRole.name` (non-empty), `VercelProject.name` (Vercel's published naming rule), `FlyVolume.sizeGb` (positive integer). Preview-unknown inputs are skipped, never failed.
 - **Previews stay faithful.** Identity outputs that provably survive an in-place update are declared stable (`RailwayProject.id`, `RailwayService.id`, `NeonProject.id`, `NeonEndpoint.host`, `NeonRole`'s identity, `VercelProject.id`, `FlyVolume.id`), so dependents keep known values during preview instead of showing phantom replaces. `NeonRole.password` is deliberately not stable — a rotation must cascade.
 - **One resilient transport.** All HTTP goes through a single fetch wrapper with a per-attempt timeout, bounded retries on transient failures (network errors, 5xx, 429), and `Retry-After` support. See [Transport & errors](#transport--errors).
-- **Secrets stay secret.** Provider credentials and minted values are marked secret in Pulumi state, and deploy tokens travel via stdin — never in command text.
+- **Secrets stay secret.** Provider credentials and minted values are marked secret in Pulumi state, and deploy tokens travel via stdin — never in command text. Better yet, credentials can stay out of state entirely: every provider accepts the credential as an env var *name* instead of a value — see [Provider credentials](#provider-credentials).
 - **Consumer-controlled triggers and protection.** Deploy resources accept a `triggers` array — hash source directories, env values, or anything else; you decide what causes a redeploy. Use `protect: true` on shared/production resources to prevent accidental deletion.
 
 ## Providers
@@ -50,6 +50,24 @@ bun add @infracraft/pulumi
 
 Peer dependencies: `@pulumi/pulumi` ^3, `@pulumi/command` ^1 (optional)
 
+## Provider credentials
+
+Every provider takes its API credential in one of two mutually exclusive forms — the constructor throws unless exactly one is set:
+
+- **Env-var-first (recommended)** — `tokenEnvVar` (Neon: `apiKeyEnvVar`): the *name* of an environment variable holding the credential. Resources carry only the plain name; each dynamic-provider operation reads the value from the environment at execution time and fails loudly — naming the variable — when it is unset.
+- **Direct** — `token` (Neon: `apiKey`): a secret `Input<string>`, marked secret in per-resource state via `additionalSecretOutputs`.
+
+```typescript
+const railway = new RailwayProvider("railway", { tokenEnvVar: "RAILWAY_TOKEN" })
+const neon = new NeonProvider("neon", { apiKeyEnvVar: "NEON_API_KEY" })
+const vercel = new VercelProvider("vercel", { tokenEnvVar: "VERCEL_TOKEN", teamId: "team_xxx" })
+const fly = new FlyProvider("fly", { tokenEnvVar: "FLY_API_TOKEN" })
+```
+
+Prefer the env-var form. It keeps the credential out of dynamic-resource inputs and per-resource state entirely, which removes the substrate for [pulumi/pulumi#16041](https://github.com/pulumi/pulumi/issues/16041) ("Unexpected struct type": secret Outputs in dynamic-provider inputs intermittently fail engine serialization — closed not-planned upstream) and matches how first-class provider configuration handles credentials. Dynamic-provider operations execute in the Pulumi CLI's plugin process, which inherits the program's environment — so variables provided by the shell or by an ESC environment's `environmentVariables` block reach them.
+
+The deploy components that feed the credential to a CLI (`VercelDeploy`, `FlyDeploy`) and program-runtime lookups (`VercelProject.url`) resolve the env var at program runtime into a secret Output, so the command env still receives the actual value without it ever becoming a dynamic-resource input.
+
 ## Railway
 
 ```typescript
@@ -66,7 +84,7 @@ import {
 import { hash } from "@infracraft/pulumi/hash"
 
 const provider = new RailwayProvider("railway", {
-  token: config.requireSecret("railwayToken"),
+  tokenEnvVar: "RAILWAY_TOKEN",   // or token: config.requireSecret("railwayToken")
 })
 
 const project = new RailwayProject("my-project", {
@@ -105,6 +123,7 @@ const deployToken = new RailwayProjectToken("api-token", {
 
 new RailwayDeploy("api-deploy", {
   triggers: [hash("apps/api"), hash(env)],   // hash(env): a non-secret digest, not raw secret values
+  healthcheckPath: "/health",                // applied post-deploy by the monitor (see Healthcheck config)
 }, { provider, project, environment, service, projectToken: deployToken.token })
 ```
 
@@ -112,19 +131,21 @@ new RailwayDeploy("api-deploy", {
 
 | Class | Key outputs | Notes |
 |---|---|---|
-| `RailwayProvider` | — | Pass as `provider` option to every Railway resource |
+| `RailwayProvider` | — | Pass as `provider` option to every Railway resource. `token` or `tokenEnvVar` — see [Provider credentials](#provider-credentials) |
 | `RailwayProject` | `.id` (project UUID) | Adopt-or-create by name |
 | `RailwayEnvironment` | `.id` | Optional `source` env to fork from |
-| `RailwayService` | `.id` | Instance config (builder, commands, healthcheck, restart policy) applied per target environment; image services (`source.image`) are deployed by the provider itself |
+| `RailwayService` | `.id` | Instance config (builder, commands, healthcheck, restart policy) applied per target environment; image services (`source.image`) are deployed by the provider itself. Healthcheck fields a fresh instance rejects are re-applied post-deploy — see [Healthcheck config](#railway-api-surface) below |
 | `RailwayDomain` | `.fqdn`, `.cnameTarget`, `.verificationTxtName` / `.verificationTxtValue` | Omit `customDomain` for an auto-generated domain; custom domains expose the CNAME target and ownership-verification TXT record to write into DNS |
 | `RailwayVariable` | — | Batch upsert; uses `skipDeploys` to avoid snapshot errors |
 | `RailwayVolume` | — | Persistent volume; `mountPath` must be absolute. Adoption matches BOTH service and environment (never a sibling environment's volume); a newly attached volume redeploys its service so the mount lands |
 | `RailwayProjectToken` | `.token` (secret) | Environment-scoped deploy token; feed into `RailwayDeploy`. Bump `tokenVersion` to rotate — see [Rotating credentials](#rotating-credentials) |
-| `RailwayDeploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API (the API, not the CLI exit code, decides pass/fail). Also accepts `excludePaths` and `railpackConfig` |
+| `RailwayDeploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API (the API, not the CLI exit code, decides pass/fail). Also accepts `excludePaths`, `railpackConfig`, and `healthcheckPath` / `healthcheckTimeout` (applied by the monitor post-deploy) |
 
 **Enums:** `RailwayBuilder` (`RAILPACK`, `NIXPACKS`, `DOCKERFILE`, `HEROKU`, `PAKETO`), `RailwayRestartPolicy` (`ON_FAILURE`, `ALWAYS`, `NEVER`)
 
 **Deploy token security:** `RailwayDeploy` pipes the project token to `railway up` via the command's stdin — never in the script text. pulumi-command embeds the executed command verbatim in its failure error and Pulumi does not scrub secrets from provider diagnostics, so an inlined token would print in plaintext exactly when a deploy fails.
+
+**Healthcheck config:** Railway rejects healthcheck fields on a fresh service instance with no deployment (`serviceInstanceUpdate` fails with "Invalid input"), so a from-zero `up` cannot set them at configure time. `RailwayService` still sends them on the first attempt — an instance with existing deployments accepts them in one call — and when the API rejects, drops them for the retry and guarantees they land later instead of silently losing them: for image services the provider re-applies them right after its own `serviceInstanceDeployV2`; for code services pass `healthcheckPath` / `healthcheckTimeout` to `RailwayDeploy` too, and its monitor applies them once the deployment reaches a live status. Either re-apply failing fails the resource loudly — healthcheck config is never dropped silently.
 
 ## Neon
 
@@ -139,7 +160,7 @@ import {
 } from "@infracraft/pulumi/neon"
 
 const provider = new NeonProvider("neon", {
-  apiKey: config.requireSecret("neonApiKey"),
+  apiKeyEnvVar: "NEON_API_KEY",   // or apiKey: config.requireSecret("neonApiKey")
 })
 
 const project = new NeonProject("db", { name: "my-app" }, { provider })
@@ -175,7 +196,7 @@ const connectionString = pulumi.interpolate`postgresql://${roleName}:${role.pass
 
 | Class | Key outputs | Notes |
 |---|---|---|
-| `NeonProvider` | — | `apiKey` + optional `orgId` |
+| `NeonProvider` | — | `apiKey` or `apiKeyEnvVar` (see [Provider credentials](#provider-credentials)) + optional `orgId` |
 | `NeonProject` | `.id` | Adopt-or-create by name |
 | `NeonBranch` | `.id` | Optional `parent` for copy-on-write branching |
 | `NeonEndpoint` | `.host` | Read-write compute endpoint; use `.host` in connection strings |
@@ -221,7 +242,7 @@ import {
 import { hash } from "@infracraft/pulumi/hash"
 
 const provider = new VercelProvider("vercel", {
-  token: config.requireSecret("vercelToken"),
+  tokenEnvVar: "VERCEL_TOKEN",   // or token: config.requireSecret("vercelToken")
   teamId: "team_xxx",
 })
 
@@ -272,7 +293,7 @@ new VercelResourceConnection("kv-conn", {
 
 | Class | Key outputs | Notes |
 |---|---|---|
-| `VercelProvider` | — | `token` + `teamId` |
+| `VercelProvider` | — | `token` or `tokenEnvVar` (see [Provider credentials](#provider-credentials)) + `teamId` |
 | `VercelProject` | `.id`, `.url` | `.url` is a full `https://` URL; prefers the custom production domain over `<name>.vercel.app`. Deletes the project on destroy — `protect: true` production projects |
 | `VercelVariable` | `.contentHash` | Use as a deploy trigger to redeploy on env var changes. Takes `opts.project` or `args.projectId` |
 | `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes` |
@@ -302,7 +323,7 @@ import { hash } from "@infracraft/pulumi/hash"
 
 // Provider: auth context (token + optional default org)
 const provider = new FlyProvider("fly", {
-  token: config.requireSecret("flyToken"),
+  tokenEnvVar: "FLY_API_TOKEN",   // or token: config.requireSecret("flyToken")
   organization: "personal",
 })
 
@@ -356,7 +377,7 @@ new FlyDeploy("api-deploy", {
 
 | Class | Key outputs | Notes |
 |---|---|---|
-| `FlyProvider` | — | Pass as `provider` option to every Fly resource |
+| `FlyProvider` | — | Pass as `provider` option to every Fly resource. `token` or `tokenEnvVar` — see [Provider credentials](#provider-credentials) |
 | `FlyApp` | `.id` (app name) | Adopt-or-create |
 | `FlySecret` | `.version` | Feed into `FlyDeploy` triggers to redeploy on secret changes |
 | `FlyVolume` | `.id` (`vol_…`) | `sizeGb` can only grow |

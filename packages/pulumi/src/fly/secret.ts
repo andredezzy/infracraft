@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
@@ -7,8 +8,11 @@ import type { FlyProvider } from "./provider";
 
 /** Resolved inputs for the Fly secret dynamic provider. */
 interface FlySecretInputs {
-	/** Fly API token. */
-	token: string;
+	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** App name the secrets belong to. */
 	appName: string;
@@ -59,7 +63,10 @@ export class FlySecretResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	async create(inputs: FlySecretInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(inputs.token);
+		const client = new FlyClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
+
 		const version = await applySecrets(client, inputs.appName, inputs.secrets);
 
 		const outs: FlySecretOutputs = { ...inputs, version };
@@ -81,7 +88,9 @@ export class FlySecretResourceProvider
 		olds: FlySecretOutputs,
 		news: FlySecretInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new FlyClient(news.token);
+		const client = new FlyClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+		);
 
 		const values: Record<string, string | null> = { ...news.secrets };
 
@@ -97,7 +106,9 @@ export class FlySecretResourceProvider
 	}
 
 	async delete(_id: string, props: FlySecretOutputs): Promise<void> {
-		const client = new FlyClient(props.token);
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const values: Record<string, string | null> = {};
 
@@ -154,7 +165,8 @@ class FlySecretResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			appName: pulumi.Input<string>;
 			secrets: pulumi.Input<Record<string, string>>;
 		},
@@ -214,6 +226,7 @@ export class FlySecret extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				appName: app.id,
 				secrets: pulumi.secret(args.secrets),
 			},

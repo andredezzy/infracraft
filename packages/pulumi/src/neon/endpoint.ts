@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
 import { NeonClient } from "./client";
@@ -7,8 +8,11 @@ import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon endpoint dynamic provider. */
 interface NeonEndpointInputs {
-	/** Neon API key. */
-	apiKey: string;
+	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
+	apiKey?: string;
+
+	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	apiKeyEnvVar?: string;
 
 	/** Neon project ID. */
 	projectId: string;
@@ -81,7 +85,9 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: NeonEndpointInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(inputs.apiKey);
+		const client = new NeonClient(
+			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
+		);
 
 		const existing = await findEndpointByBranch(
 			client,
@@ -136,7 +142,9 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 		_olds: NeonEndpointOutputs,
 		news: NeonEndpointInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new NeonClient(news.apiKey);
+		const client = new NeonClient(
+			resolveCredential(news.apiKey, news.apiKeyEnvVar),
+		);
 
 		const result = await client.patch<EndpointResponse>(
 			`/projects/${news.projectId}/endpoints/${id}`,
@@ -156,7 +164,9 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 		id: string,
 		props: NeonEndpointOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			const result = await client.get<EndpointResponse>(
@@ -184,7 +194,9 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	async delete(id: string, props: NeonEndpointOutputs): Promise<void> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			await client.delete(`/projects/${props.projectId}/endpoints/${id}`);
@@ -235,7 +247,8 @@ class NeonEndpointResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			apiKey: pulumi.Input<string>;
+			apiKey?: pulumi.Input<string>;
+			apiKeyEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			branchId: pulumi.Input<string>;
 			minCu: pulumi.Input<number>;
@@ -304,6 +317,7 @@ export class NeonEndpoint extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
+				apiKeyEnvVar: provider.apiKeyEnvVar,
 				projectId: project.id,
 				branchId: branch.id,
 				...args,

@@ -1,11 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayProvider } from "./provider";
 
 /** Resolved inputs for the Railway project dynamic provider. */
 interface RailwayProjectInputs {
-	/** Railway API bearer token. */
-	token: string;
+	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Desired display name for the project in Railway's dashboard. */
 	name: string;
@@ -116,7 +120,9 @@ class RailwayProjectResourceProvider
 	async create(
 		inputs: RailwayProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(inputs.token);
+		const client = new RailwayClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		const workspaceResult = await client.query<{
 			me: {
@@ -205,7 +211,9 @@ class RailwayProjectResourceProvider
 		_olds: RailwayProjectOutputs,
 		news: RailwayProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(news.token);
+		const client = new RailwayClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+		);
 
 		await client.query(PROJECT_UPDATE, {
 			id,
@@ -229,7 +237,9 @@ class RailwayProjectResourceProvider
 		id: string,
 		props: RailwayProjectOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const environments = await fetchProjectEnvironments(client, id);
 
@@ -285,7 +295,8 @@ class RailwayProjectResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			description?: pulumi.Input<string>;
 		},
@@ -360,6 +371,7 @@ export class RailwayProject extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				name: args.name,
 				description: args.description,
 			},

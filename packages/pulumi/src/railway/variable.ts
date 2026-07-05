@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -7,8 +8,11 @@ import type { RailwayService } from "./service";
 
 /** Resolved inputs for the Railway variable dynamic provider. */
 interface RailwayVariableInputs {
-	/** Railway API bearer token. */
-	token: string;
+	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
 	projectId: string;
@@ -55,7 +59,9 @@ export class RailwayVariableResourceProvider
 	async create(
 		inputs: RailwayVariableInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(inputs.token);
+		const client = new RailwayClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		await client.query(VARIABLE_UPSERT, {
 			input: {
@@ -80,7 +86,9 @@ export class RailwayVariableResourceProvider
 		olds: RailwayVariableOutputs,
 		news: RailwayVariableInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(news.token);
+		const client = new RailwayClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+		);
 
 		const removedKeys = Object.keys(olds.variables).filter(
 			(key) => !(key in news.variables),
@@ -127,7 +135,9 @@ export class RailwayVariableResourceProvider
 	 * Deletes all variables one by one. Silently succeeds if already deleted.
 	 */
 	async delete(_id: string, props: RailwayVariableOutputs): Promise<void> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		for (const key of Object.keys(props.variables)) {
 			try {
@@ -173,7 +183,8 @@ class RailwayVariableResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			serviceId: pulumi.Input<string>;
 			environmentId: pulumi.Input<string>;
@@ -239,6 +250,7 @@ export class RailwayVariable extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				projectId: project.id,
 				serviceId: service.id,
 				environmentId: environment.id,

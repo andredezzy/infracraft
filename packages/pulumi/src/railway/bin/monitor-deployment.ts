@@ -22,6 +22,12 @@ async function main(): Promise<void> {
 			uploadOutput: process.env.IC_UP_OUT,
 			uploadExitCode: Number(process.env.IC_UP_EXIT ?? "0"),
 			since: Number(process.env.IC_SINCE ?? "0"),
+			// Healthcheck config applied post-deploy (fresh instances reject it
+			// pre-deploy); set by RailwayDeploy only when the consumer configured it.
+			healthcheckPath: process.env.IC_HC_PATH || undefined,
+			healthcheckTimeout: process.env.IC_HC_TIMEOUT
+				? Number(process.env.IC_HC_TIMEOUT)
+				: undefined,
 		},
 		{
 			fetch: globalThis.fetch,

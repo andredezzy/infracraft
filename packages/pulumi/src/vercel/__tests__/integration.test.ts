@@ -11,6 +11,50 @@ describe("VercelIntegrationResourceProvider", () => {
 
 	afterEach(() => {
 		vi.unstubAllGlobals();
+		vi.unstubAllEnvs();
+	});
+
+	describe("provider credentials", () => {
+		it("resolves the API token from the env var named by tokenEnvVar", async () => {
+			vi.stubEnv("INFRACRAFT_TEST_VERCEL_TOKEN", "env-tok");
+
+			mockFetch.mockResolvedValue({
+				ok: true,
+				json: () =>
+					Promise.resolve([{ id: "icfg_upstash123", slug: "upstash" }]),
+			});
+
+			const provider = new VercelIntegrationResourceProvider();
+
+			await provider.create({
+				tokenEnvVar: "INFRACRAFT_TEST_VERCEL_TOKEN",
+				teamId: "team_xyz",
+				slug: "upstash",
+			});
+
+			expect(fetch).toHaveBeenCalledWith(
+				expect.any(String),
+				expect.objectContaining({
+					headers: expect.objectContaining({
+						Authorization: "Bearer env-tok",
+					}),
+				}),
+			);
+		});
+
+		it("throws a loud error naming the env var when it is not set", async () => {
+			const provider = new VercelIntegrationResourceProvider();
+
+			await expect(
+				provider.create({
+					tokenEnvVar: "INFRACRAFT_TEST_VERCEL_TOKEN_UNSET",
+					teamId: "team_xyz",
+					slug: "upstash",
+				}),
+			).rejects.toThrow(
+				"provider credential env var INFRACRAFT_TEST_VERCEL_TOKEN_UNSET is not set in the Pulumi execution environment",
+			);
+		});
 	});
 
 	describe("create", () => {

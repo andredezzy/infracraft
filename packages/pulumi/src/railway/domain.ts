@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -7,8 +8,11 @@ import type { RailwayService } from "./service";
 
 /** Resolved inputs for the Railway domain dynamic provider. */
 interface RailwayDomainInputs {
-	/** Railway API bearer token. */
-	token: string;
+	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
 	projectId: string;
@@ -210,7 +214,9 @@ export class RailwayDomainResourceProvider
 	async create(
 		inputs: RailwayDomainInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(inputs.token);
+		const client = new RailwayClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		const existing = await findExistingDomains(
 			client,
@@ -306,7 +312,9 @@ export class RailwayDomainResourceProvider
 		_id: string,
 		props: RailwayDomainOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const existing = await findExistingDomains(
 			client,
@@ -354,7 +362,9 @@ export class RailwayDomainResourceProvider
 	}
 
 	async delete(_id: string, props: RailwayDomainOutputs): Promise<void> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const mutation = props.customDomain
 			? CUSTOM_DOMAIN_DELETE
@@ -410,7 +420,8 @@ class RailwayDomainResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			serviceId: pulumi.Input<string>;
 			environmentId: pulumi.Input<string>;
@@ -518,6 +529,7 @@ export class RailwayDomain extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				projectId: project.id,
 				serviceId: service.id,
 				environmentId: environment.id,

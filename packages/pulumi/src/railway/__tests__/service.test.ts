@@ -30,6 +30,58 @@ describe("RailwayServiceResourceProvider", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
+	});
+
+	describe("provider credentials", () => {
+		it("resolves the API token from the env var named by tokenEnvVar", async () => {
+			vi.stubEnv("INFRACRAFT_TEST_RAILWAY_TOKEN", "env-tok");
+
+			const seenTokens: string[] = [];
+
+			mockQuery.mockImplementation(async function (
+				this: unknown,
+				mutation: string,
+			) {
+				seenTokens.push((this as { token: string }).token);
+
+				if (mutation.includes("serviceInstance(")) {
+					return { serviceInstance: { id: "si-1" } };
+				}
+
+				return {
+					project: {
+						services: { edges: [{ node: { id: "svc-uuid", name: "api" } }] },
+					},
+				};
+			});
+
+			const provider = new RailwayServiceResourceProvider();
+
+			await provider.create({
+				tokenEnvVar: "INFRACRAFT_TEST_RAILWAY_TOKEN",
+				projectId: "proj-123",
+				environmentId: "env-staging",
+				name: "api",
+			});
+
+			expect(seenTokens[0]).toBe("env-tok");
+		});
+
+		it("throws a loud error naming the env var when it is not set", async () => {
+			const provider = new RailwayServiceResourceProvider();
+
+			await expect(
+				provider.create({
+					tokenEnvVar: "INFRACRAFT_TEST_RAILWAY_TOKEN_UNSET",
+					projectId: "proj-123",
+					environmentId: "env-staging",
+					name: "api",
+				}),
+			).rejects.toThrow(
+				"provider credential env var INFRACRAFT_TEST_RAILWAY_TOKEN_UNSET is not set in the Pulumi execution environment",
+			);
+		});
 	});
 
 	describe("create", () => {
@@ -209,6 +261,134 @@ describe("RailwayServiceResourceProvider", () => {
 				serviceId: "svc-redis",
 				environmentId: "env-staging",
 			});
+		});
+
+		it("re-applies dropped healthcheck fields after deploying an image service", async () => {
+			// Live drill finding: a FRESH instance with no deployment rejects
+			// healthcheckPath with "Invalid input". The first attempt still carries
+			// the fields (steady-state instances accept them); on rejection they are
+			// dropped, the deploy runs, and ONLY the healthcheck fields are
+			// re-applied — never silently lost.
+			const instanceUpdates: Array<Record<string, unknown>> = [];
+
+			mockQuery.mockImplementation(
+				async (mutation: string, variables?: Record<string, unknown>) => {
+					if (mutation.includes("serviceInstance(")) {
+						return { serviceInstance: { id: "si-1" } };
+					}
+
+					if (mutation.includes("serviceInstanceUpdate")) {
+						// Copy — the provider mutates the same input object when it
+						// drops the healthcheck fields for the retry.
+						instanceUpdates.push({
+							...(variables as { input: Record<string, unknown> }).input,
+						});
+
+						if (instanceUpdates.length === 1) {
+							throw new Error("Invalid input");
+						}
+
+						return { serviceInstanceUpdate: true };
+					}
+
+					if (mutation.includes("serviceInstanceDeployV2")) {
+						return { serviceInstanceDeployV2: "dep-1" };
+					}
+
+					return {
+						project: {
+							services: {
+								edges: [{ node: { id: "svc-redis", name: "Redis" } }],
+							},
+						},
+					};
+				},
+			);
+
+			const provider = new RailwayServiceResourceProvider();
+
+			await provider.create({
+				token: "tok",
+				projectId: "proj-123",
+				environmentId: "env-staging",
+				name: "Redis",
+				source: { image: "redis:8-alpine" },
+				healthcheckPath: "/health",
+				healthcheckTimeout: 300,
+			});
+
+			// First attempt carries the healthcheck fields (steady-state must not regress).
+			expect(instanceUpdates[0].healthcheckPath).toBe("/health");
+
+			// The retry drops them so the rest of the config lands.
+			expect(instanceUpdates[1].healthcheckPath).toBeUndefined();
+
+			// Post-deploy re-apply carries ONLY the healthcheck fields.
+			expect(instanceUpdates[2]).toEqual({
+				healthcheckPath: "/health",
+				healthcheckTimeout: 300,
+			});
+
+			// The re-apply happens AFTER the deploy exists.
+			const mutations = mockQuery.mock.calls.map(([mutation]) => mutation);
+
+			const deployIndex = mutations.findIndex((mutation: string) =>
+				mutation.includes("serviceInstanceDeployV2"),
+			);
+
+			const lastUpdateIndex = mutations.findLastIndex((mutation: string) =>
+				mutation.includes("serviceInstanceUpdate"),
+			);
+
+			expect(deployIndex).toBeGreaterThan(-1);
+			expect(lastUpdateIndex).toBeGreaterThan(deployIndex);
+		});
+
+		it("throws loudly when the post-deploy healthcheck re-apply also fails", async () => {
+			let updateCalls = 0;
+
+			mockQuery.mockImplementation(async (mutation: string) => {
+				if (mutation.includes("serviceInstance(")) {
+					return { serviceInstance: { id: "si-1" } };
+				}
+
+				if (mutation.includes("serviceInstanceUpdate")) {
+					updateCalls++;
+
+					// Call 2 is the retry without healthcheck fields — it succeeds;
+					// calls 1 (with healthcheck) and 3 (healthcheck-only) reject.
+					if (updateCalls === 2) {
+						return { serviceInstanceUpdate: true };
+					}
+
+					throw new Error("Invalid input");
+				}
+
+				if (mutation.includes("serviceInstanceDeployV2")) {
+					return { serviceInstanceDeployV2: "dep-1" };
+				}
+
+				return {
+					project: {
+						services: {
+							edges: [{ node: { id: "svc-redis", name: "Redis" } }],
+						},
+					},
+				};
+			});
+
+			const provider = new RailwayServiceResourceProvider();
+
+			await expect(
+				provider.create({
+					token: "tok",
+					projectId: "proj-123",
+					environmentId: "env-staging",
+					name: "Redis",
+					source: { image: "redis:8-alpine" },
+					healthcheckPath: "/health",
+				}),
+			).rejects.toThrow(/healthcheck config .* could not be applied/);
 		});
 
 		it("does not trigger a deploy for code-sourced services", async () => {

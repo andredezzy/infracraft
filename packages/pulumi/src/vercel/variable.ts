@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { VercelClient } from "./client";
 import type { VercelProject } from "./project";
@@ -6,8 +7,11 @@ import type { VercelProvider } from "./provider";
 
 /** Resolved inputs for the Vercel variable dynamic provider. */
 interface VercelVariableInputs {
-	/** Vercel API bearer token. */
-	token: string;
+	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
 	teamId: string;
@@ -165,7 +169,11 @@ export class VercelVariableResourceProvider
 	async create(
 		inputs: VercelVariableInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new VercelClient(inputs.token, inputs.teamId);
+		const client = new VercelClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+			inputs.teamId,
+		);
+
 		const envIds: Record<string, string> = {};
 
 		for (const [key, value] of Object.entries(inputs.variables)) {
@@ -189,7 +197,11 @@ export class VercelVariableResourceProvider
 		olds: VercelVariableOutputs,
 		news: VercelVariableInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new VercelClient(news.token, news.teamId);
+		const client = new VercelClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+			news.teamId,
+		);
+
 		const envIds = { ...olds.envIds };
 
 		const removedKeys = Object.keys(olds.variables).filter(
@@ -237,7 +249,11 @@ export class VercelVariableResourceProvider
 		id: string,
 		props: VercelVariableOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new VercelClient(props.token, props.teamId);
+		const client = new VercelClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+			props.teamId,
+		);
+
 		const actual = await fetchEnvVars(client, props.projectId);
 
 		const actualVariables: Record<string, string> = {};
@@ -264,7 +280,10 @@ export class VercelVariableResourceProvider
 	}
 
 	async delete(_id: string, props: VercelVariableOutputs): Promise<void> {
-		const client = new VercelClient(props.token, props.teamId);
+		const client = new VercelClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+			props.teamId,
+		);
 
 		for (const [key, envId] of Object.entries(props.envIds)) {
 			try {
@@ -302,7 +321,8 @@ class VercelVariableResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			teamId: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			variables: pulumi.Input<Record<string, pulumi.Input<string>>>;
@@ -386,6 +406,7 @@ export class VercelVariable extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				teamId: provider.teamId,
 				projectId,
 				variables: args.variables,

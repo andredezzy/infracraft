@@ -21,6 +21,17 @@ export interface RailwayDeployArgs {
 	excludePaths?: string[];
 	/** Railpack configuration written to `railpack.json` before deploy. */
 	railpackConfig?: Record<string, unknown>;
+	/**
+	 * HTTP path polled for health checks (e.g. `"/health-check"`), applied by
+	 * the deploy monitor once the deployment is live. Railway rejects
+	 * healthcheck fields on a fresh instance with no deployment ("Invalid
+	 * input"), so a code service's healthcheck can only land post-deploy —
+	 * pass it here (mirroring `RailwayServiceArgs.healthcheckPath`) and the
+	 * monitor applies it, failing loudly instead of silently dropping it.
+	 */
+	healthcheckPath?: pulumi.Input<string>;
+	/** Seconds to wait for a healthy response; applied alongside `healthcheckPath`. */
+	healthcheckTimeout?: pulumi.Input<number>;
 }
 
 type RailwayDeployOptions = Omit<
@@ -96,7 +107,28 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 		// fails, before the exit code is saved and before the output is re-emitted
 		// — swallowing the CLI's error entirely (live incident: a failed production
 		// `railway up` left zero diagnostics).
-		const cli = pulumi.interpolate`IFS= read -r IC_TOK || true; IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); if IC_UP_OUT=$(RAILWAY_TOKEN="$IC_TOK" railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); then IC_UP_EXIT=0; else IC_UP_EXIT=$?; fi; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK="$IC_TOK" IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE node "${MONITOR_BIN}"`;
+		//
+		// IC_HC_PATH / IC_HC_TIMEOUT ride into the monitor only when the consumer
+		// configured them — the monitor applies the healthcheck post-deploy (a
+		// fresh instance rejects it pre-deploy) and fails loudly if that errors.
+		// The path is single-quote-escaped the POSIX way (' -> '\'').
+		const healthcheckBindings = pulumi
+			.all([args.healthcheckPath, args.healthcheckTimeout])
+			.apply(([path, timeout]) => {
+				const bindings: string[] = [];
+
+				if (path) {
+					bindings.push(`IC_HC_PATH='${path.replace(/'/g, "'\\''")}'`);
+				}
+
+				if (timeout !== undefined) {
+					bindings.push(`IC_HC_TIMEOUT=${timeout}`);
+				}
+
+				return bindings.length > 0 ? `${bindings.join(" ")} ` : "";
+			});
+
+		const cli = pulumi.interpolate`IFS= read -r IC_TOK || true; IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); if IC_UP_OUT=$(RAILWAY_TOKEN="$IC_TOK" railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); then IC_UP_EXIT=0; else IC_UP_EXIT=$?; fi; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK="$IC_TOK" IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE ${healthcheckBindings}node "${MONITOR_BIN}"`;
 
 		// `printf '%s'` (not a bare format string) so railpack values containing %
 		// are literal; the JSON is single-quote-escaped the POSIX way (' -> '\'').

@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 
 import { createDeployCommand, dependsOnList } from "../commands/deploy";
+import { resolveCredentialOutput } from "../dynamic/resolve-credential";
 import type { FlyApp } from "./app";
 import type { FlyProvider } from "./provider";
 import { type FlyTomlConfig, generateFlyToml } from "./toml";
@@ -66,7 +67,13 @@ export class FlyDeploy extends pulumi.ComponentResource {
 				triggers,
 				setup,
 				environment: {
-					FLY_API_TOKEN: provider.token,
+					// Resolved at program runtime (secret) so the CLI still gets the
+					// actual value when the provider is configured via tokenEnvVar —
+					// without the credential ever being a dynamic-resource input.
+					FLY_API_TOKEN: resolveCredentialOutput(
+						provider.token,
+						provider.tokenEnvVar,
+					),
 					FLY_TOML_CONTENT: tomlContent,
 				},
 			},

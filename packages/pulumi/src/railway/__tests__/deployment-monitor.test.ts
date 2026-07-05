@@ -15,10 +15,12 @@ function makeFetch(routes: {
 	deployments?: Array<Array<{ id: string; status: string; createdAt: string }>>;
 	buildLogs?: Array<{ message: string }>;
 	deploymentLogs?: Array<{ message: string }>;
+	/** Scripted `serviceInstanceUpdate` results (one per call; last one repeats). */
+	serviceInstanceUpdate?: Array<boolean | null>;
 	/** Calls that should reject before resolving (transient network errors). */
 	rejectFirst?: number;
 }) {
-	const cursors = { deployment: 0, deployments: 0 };
+	const cursors = { deployment: 0, deployments: 0, serviceInstanceUpdate: 0 };
 	let rejectsLeft = routes.rejectFirst ?? 0;
 
 	const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
@@ -31,6 +33,17 @@ function makeFetch(routes: {
 		const body = String(init.body);
 
 		const data = (() => {
+			if (body.includes("serviceInstanceUpdate")) {
+				const seq = routes.serviceInstanceUpdate ?? [];
+
+				const result =
+					seq[Math.min(cursors.serviceInstanceUpdate, seq.length - 1)];
+
+				cursors.serviceInstanceUpdate++;
+
+				return { serviceInstanceUpdate: result };
+			}
+
 			if (body.includes("deploymentLogs")) {
 				return { deploymentLogs: routes.deploymentLogs ?? [] };
 			}
@@ -259,6 +272,98 @@ describe("monitorRailwayDeployment", () => {
 		);
 
 		expect(result.failed).toBe(false);
+	});
+
+	it("applies the healthcheck config via serviceInstanceUpdate once the deployment is live", async () => {
+		const fetchMock = makeFetch({
+			deployment: [{ status: "SUCCESS" }],
+			serviceInstanceUpdate: [true],
+		});
+
+		const { deps, lines } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(
+			{
+				...baseInput,
+				healthcheckPath: "/health-check",
+				healthcheckTimeout: 300,
+			},
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
+		expect(result.failed).toBe(false);
+
+		const updateCall = (
+			fetchMock as unknown as {
+				mock: { calls: Array<[string, { body: string }]> };
+			}
+		).mock.calls.find(([, init]) =>
+			String(init.body).includes("serviceInstanceUpdate"),
+		);
+
+		expect(updateCall).toBeDefined();
+
+		const { variables } = JSON.parse(String(updateCall?.[1].body));
+
+		expect(variables).toEqual({
+			s: "svc",
+			e: "env",
+			i: { healthcheckPath: "/health-check", healthcheckTimeout: 300 },
+		});
+
+		expect(lines.join("\n")).toContain("applied healthcheck config");
+	});
+
+	it("skips the healthcheck apply cleanly when no healthcheck bindings are present", async () => {
+		const fetchMock = makeFetch({ deployment: [{ status: "SUCCESS" }] });
+		const { deps } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(baseInput, deps);
+
+		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
+
+		const updateCall = (
+			fetchMock as unknown as {
+				mock: { calls: Array<[string, { body: string }]> };
+			}
+		).mock.calls.find(([, init]) =>
+			String(init.body).includes("serviceInstanceUpdate"),
+		);
+
+		expect(updateCall).toBeUndefined();
+	});
+
+	it("FAILS the deploy loudly when the healthcheck apply keeps erroring", async () => {
+		// null models a rejected update (GraphQL error → no data); the monitor
+		// retries to absorb transient blips, then fails rather than silently
+		// dropping the healthcheck config.
+		const fetchMock = makeFetch({
+			deployment: [{ status: "SUCCESS" }],
+			serviceInstanceUpdate: [null],
+		});
+
+		const { deps, lines } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(
+			{ ...baseInput, healthcheckPath: "/health-check" },
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.FAILED);
+		expect(result.failed).toBe(true);
+
+		const updateCalls = (
+			fetchMock as unknown as {
+				mock: { calls: Array<[string, { body: string }]> };
+			}
+		).mock.calls.filter(([, init]) =>
+			String(init.body).includes("serviceInstanceUpdate"),
+		);
+
+		expect(updateCalls).toHaveLength(3); // retried before giving up
+
+		expect(lines.join("\n")).toContain("FAILED to apply healthcheck config");
 	});
 
 	it("times out (and fails) if the deployment never reaches a terminal state", async () => {

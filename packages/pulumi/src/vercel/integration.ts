@@ -1,11 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
 
 /** Resolved inputs for the Vercel integration dynamic provider. */
 interface VercelIntegrationInputs {
-	/** Vercel API bearer token. */
-	token: string;
+	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
 	teamId: string;
@@ -43,7 +47,10 @@ export class VercelIntegrationResourceProvider
 	async create(
 		inputs: VercelIntegrationInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new VercelClient(inputs.token, inputs.teamId);
+		const client = new VercelClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+			inputs.teamId,
+		);
 
 		// `view=account` is required by the configurations endpoint (a missing view returns 400).
 		const data = await client.get<VercelIntegrationConfigurationsResponse>(
@@ -118,7 +125,8 @@ class VercelIntegrationResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			teamId: pulumi.Input<string>;
 			slug: pulumi.Input<string>;
 		},
@@ -190,6 +198,7 @@ export class VercelIntegration extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				teamId: provider.teamId,
 				slug: args.slug,
 			},

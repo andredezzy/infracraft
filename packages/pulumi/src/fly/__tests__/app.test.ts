@@ -16,6 +16,39 @@ describe("FlyAppResourceProvider", () => {
 
 	afterEach(() => {
 		vi.restoreAllMocks();
+		vi.unstubAllEnvs();
+	});
+
+	describe("provider credentials", () => {
+		it("resolves the API token from the env var named by tokenEnvVar", async () => {
+			vi.stubEnv("INFRACRAFT_TEST_FLY_TOKEN", "env-tok");
+
+			const seenTokens: string[] = [];
+
+			mockTryGet.mockImplementation(async function (this: unknown) {
+				seenTokens.push((this as { token: string }).token);
+
+				return { id: "app-internal", name: "my-app" };
+			});
+
+			await new FlyAppResourceProvider().create({
+				tokenEnvVar: "INFRACRAFT_TEST_FLY_TOKEN",
+				name: "my-app",
+			});
+
+			expect(seenTokens[0]).toBe("env-tok");
+		});
+
+		it("throws a loud error naming the env var when it is not set", async () => {
+			await expect(
+				new FlyAppResourceProvider().create({
+					tokenEnvVar: "INFRACRAFT_TEST_FLY_TOKEN_UNSET",
+					name: "my-app",
+				}),
+			).rejects.toThrow(
+				"provider credential env var INFRACRAFT_TEST_FLY_TOKEN_UNSET is not set in the Pulumi execution environment",
+			);
+		});
 	});
 
 	const props = {

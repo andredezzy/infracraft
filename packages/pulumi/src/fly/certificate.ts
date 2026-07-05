@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
@@ -19,8 +20,11 @@ export interface FlyDnsRequirements {
 
 /** Resolved inputs for the Fly certificate dynamic provider. */
 interface FlyCertificateInputs {
-	/** Fly API token. */
-	token: string;
+	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** App name the certificate belongs to. */
 	appName: string;
@@ -59,7 +63,10 @@ export class FlyCertificateResourceProvider
 	async create(
 		inputs: FlyCertificateInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(inputs.token);
+		const client = new FlyClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
+
 		const path = `/v1/apps/${inputs.appName}/certificates/${encodeURIComponent(inputs.hostname)}`;
 
 		let cert = await client.tryGet<FlyCertificateResponse>(path);
@@ -86,7 +93,9 @@ export class FlyCertificateResourceProvider
 		id: string,
 		props: FlyCertificateOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new FlyClient(props.token);
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const cert = await client.tryGet<FlyCertificateResponse>(
 			`/v1/apps/${props.appName}/certificates/${encodeURIComponent(id)}`,
@@ -119,7 +128,9 @@ export class FlyCertificateResourceProvider
 	}
 
 	async delete(id: string, props: FlyCertificateOutputs): Promise<void> {
-		const client = new FlyClient(props.token);
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		try {
 			await client.delete(
@@ -168,7 +179,8 @@ class FlyCertificateResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			appName: pulumi.Input<string>;
 			hostname: pulumi.Input<string>;
 		},
@@ -238,6 +250,7 @@ export class FlyCertificate extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				appName: app.id,
 				hostname: args.hostname,
 			},

@@ -1,12 +1,16 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayProject } from "./project";
 import type { RailwayProvider } from "./provider";
 
 /** Resolved inputs for the Railway environment dynamic provider. */
 interface RailwayEnvironmentInputs {
-	/** Railway API bearer token. */
-	token: string;
+	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
 	projectId: string;
@@ -94,7 +98,9 @@ export class RailwayEnvironmentResourceProvider
 	async create(
 		inputs: RailwayEnvironmentInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(inputs.token);
+		const client = new RailwayClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		let environmentId = await findEnvironmentId(
 			client,
@@ -152,7 +158,9 @@ export class RailwayEnvironmentResourceProvider
 		_id: string,
 		props: RailwayEnvironmentOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const environmentId = await findEnvironmentId(
 			client,
@@ -173,7 +181,9 @@ export class RailwayEnvironmentResourceProvider
 		_olds: RailwayEnvironmentOutputs,
 		news: RailwayEnvironmentInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(news.token);
+		const client = new RailwayClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+		);
 
 		const environmentId = await findEnvironmentId(
 			client,
@@ -196,7 +206,9 @@ export class RailwayEnvironmentResourceProvider
 	 * via the `protect` resource option, not provider logic.
 	 */
 	async delete(_id: string, props: RailwayEnvironmentOutputs): Promise<void> {
-		const client = new RailwayClient(props.token);
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		try {
 			await client.query(ENVIRONMENT_DELETE_MUTATION, {
@@ -243,7 +255,8 @@ class RailwayEnvironmentResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			source?: pulumi.Input<string>;
@@ -332,6 +345,7 @@ export class RailwayEnvironment extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				projectId: project.id,
 				name: args.name,
 				source: args.source,

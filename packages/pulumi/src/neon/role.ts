@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
 import { NeonClient } from "./client";
@@ -8,8 +9,11 @@ import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon role dynamic provider. */
 export interface NeonRoleInputs {
-	/** Neon API key. */
-	apiKey: string;
+	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
+	apiKey?: string;
+
+	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	apiKeyEnvVar?: string;
 
 	/** Neon project ID. */
 	projectId: string;
@@ -151,7 +155,9 @@ export class NeonRoleResourceProvider
 	}
 
 	async create(inputs: NeonRoleInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(inputs.apiKey);
+		const client = new NeonClient(
+			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
+		);
 
 		const exists = await roleExists(
 			client,
@@ -198,7 +204,9 @@ export class NeonRoleResourceProvider
 		id: string,
 		props: NeonRoleOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			const password = await revealPassword(
@@ -223,7 +231,9 @@ export class NeonRoleResourceProvider
 	}
 
 	async delete(_id: string, props: NeonRoleOutputs): Promise<void> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			await client.delete(
@@ -253,7 +263,9 @@ export class NeonRoleResourceProvider
 				`Rotating password for Neon role "${news.name}" (passwordVersion ${olds.passwordVersion ?? "unset"} → ${news.passwordVersion ?? "unset"})`,
 			);
 
-			const client = new NeonClient(news.apiKey);
+			const client = new NeonClient(
+				resolveCredential(news.apiKey, news.apiKeyEnvVar),
+			);
 
 			password = await resetRolePassword(
 				client,
@@ -306,7 +318,8 @@ class NeonRoleResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			apiKey: pulumi.Input<string>;
+			apiKey?: pulumi.Input<string>;
+			apiKeyEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			branchId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
@@ -388,6 +401,7 @@ export class NeonRole extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
+				apiKeyEnvVar: provider.apiKeyEnvVar,
 				projectId: project.id,
 				branchId: branch.id,
 				name: args.name,

@@ -1,5 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
+import {
+	resolveCredential,
+	resolveCredentialOutput,
+} from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
@@ -102,8 +106,11 @@ export type VercelFramework = (typeof VERCEL_FRAMEWORKS)[number];
 
 /** Resolved inputs for the Vercel project dynamic provider. */
 export interface VercelProjectInputs {
-	/** Vercel API bearer token. */
-	token: string;
+	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
 	teamId: string;
@@ -278,7 +285,10 @@ export class VercelProjectResourceProvider
 	async create(
 		inputs: VercelProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new VercelClient(inputs.token, inputs.teamId);
+		const client = new VercelClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+			inputs.teamId,
+		);
 
 		const existing = await client.tryGet<VercelProjectResponse>(
 			`/v9/projects/${encodeURIComponent(inputs.name)}`,
@@ -314,7 +324,10 @@ export class VercelProjectResourceProvider
 		id: string,
 		props: VercelProjectOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new VercelClient(props.token, props.teamId);
+		const client = new VercelClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+			props.teamId,
+		);
 
 		const project = await client.tryGet<VercelProjectResponse>(
 			`/v9/projects/${encodeURIComponent(id)}`,
@@ -336,7 +349,10 @@ export class VercelProjectResourceProvider
 		_olds: VercelProjectOutputs,
 		news: VercelProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new VercelClient(news.token, news.teamId);
+		const client = new VercelClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+			news.teamId,
+		);
 
 		await client.patch(`/v9/projects/${id}`, buildProjectBody(news));
 
@@ -348,7 +364,10 @@ export class VercelProjectResourceProvider
 	 * responsibility via the `protect` resource option, not provider logic.
 	 */
 	async delete(id: string, props: VercelProjectOutputs): Promise<void> {
-		const client = new VercelClient(props.token, props.teamId);
+		const client = new VercelClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+			props.teamId,
+		);
 
 		try {
 			await client.delete(`/v9/projects/${encodeURIComponent(id)}`);
@@ -408,7 +427,8 @@ class VercelProjectResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			teamId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			framework?: pulumi.Input<VercelFramework>;
@@ -505,6 +525,7 @@ export class VercelProject extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				teamId: provider.teamId,
 				...args,
 			},
@@ -522,7 +543,7 @@ export class VercelProject extends pulumi.ComponentResource {
 			pulumi
 				.all([
 					this.id,
-					provider.token,
+					resolveCredentialOutput(provider.token, provider.tokenEnvVar),
 					provider.teamId,
 					pulumi.output(args.name),
 				])

@@ -1,12 +1,16 @@
 import * as pulumi from "@pulumi/pulumi";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { NeonClient } from "./client";
 import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon project dynamic provider. */
 interface NeonProjectInputs {
-	/** Neon API key. */
-	apiKey: string;
+	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
+	apiKey?: string;
+
+	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	apiKeyEnvVar?: string;
 
 	/** Exact project display name to adopt or create. */
 	name: string;
@@ -47,7 +51,9 @@ class NeonProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(
 		inputs: NeonProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(inputs.apiKey);
+		const client = new NeonClient(
+			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
+		);
 
 		const query = inputs.orgId
 			? `/projects?org_id=${inputs.orgId}&search=${encodeURIComponent(inputs.name)}`
@@ -84,7 +90,9 @@ class NeonProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 		id: string,
 		props: NeonProjectOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			const result = await client.get<ProjectReadResponse>(`/projects/${id}`);
@@ -112,7 +120,9 @@ class NeonProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 		_olds: NeonProjectOutputs,
 		news: NeonProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new NeonClient(news.apiKey);
+		const client = new NeonClient(
+			resolveCredential(news.apiKey, news.apiKeyEnvVar),
+		);
 
 		await client.patch(`/projects/${id}`, {
 			project: { name: news.name },
@@ -161,7 +171,8 @@ class NeonProjectResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			apiKey: pulumi.Input<string>;
+			apiKey?: pulumi.Input<string>;
+			apiKeyEnvVar?: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			orgId?: pulumi.Input<string>;
 		},
@@ -216,6 +227,7 @@ export class NeonProject extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
+				apiKeyEnvVar: provider.apiKeyEnvVar,
 				name: args.name,
 				orgId: provider.orgId,
 			},

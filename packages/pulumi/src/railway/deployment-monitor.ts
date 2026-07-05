@@ -26,6 +26,9 @@ const DEFAULTS = {
 	failureLogLimit: 250,
 	/** Clock-skew buffer so the createdAt filter never drops the just-created deployment. */
 	skewMs: 120_000,
+	/** Attempts × interval to apply the post-deploy healthcheck config (absorbs transient blips). */
+	healthcheckApplyAttempts: 3,
+	healthcheckApplyIntervalMs: 5_000,
 } as const;
 
 /** Railway GraphQL operations, named so each query is readable at its call site. */
@@ -37,6 +40,8 @@ const QUERIES = {
 		"query($d:String!,$n:Int!){buildLogs(deploymentId:$d,limit:$n){message severity timestamp}}",
 	deploymentLogs:
 		"query($d:String!,$n:Int!){deploymentLogs(deploymentId:$d,limit:$n){message severity timestamp}}",
+	updateHealthcheck:
+		"mutation($s:String!,$e:String!,$i:ServiceInstanceUpdateInput!){serviceInstanceUpdate(serviceId:$s,environmentId:$e,input:$i)}",
 } as const;
 
 const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i;
@@ -98,6 +103,15 @@ export interface MonitorInput {
 	uploadExitCode: number;
 	/** Epoch ms captured just before `railway up` (createdAt fallback for id resolution). */
 	since: number;
+	/**
+	 * Healthcheck path applied via `serviceInstanceUpdate` once the deployment
+	 * is live. Railway rejects healthcheck fields on a fresh instance with no
+	 * deployment ("Invalid input"), so a code service's healthcheck can only
+	 * land post-deploy — the monitor is the component that knows when that is.
+	 */
+	healthcheckPath?: string;
+	/** Healthcheck timeout (seconds) applied alongside `healthcheckPath`. */
+	healthcheckTimeout?: number;
 	resolveAttempts?: number;
 	resolveIntervalMs?: number;
 	pollAttempts?: number;
@@ -184,6 +198,12 @@ interface DeploymentNode {
 	createdAt: string;
 }
 
+/** The healthcheck subset of `ServiceInstanceUpdateInput` the monitor applies post-deploy. */
+interface HealthcheckFields {
+	healthcheckPath?: string;
+	healthcheckTimeout?: number;
+}
+
 interface LogLine {
 	message: string;
 	severity?: string;
@@ -266,6 +286,16 @@ function createRailwayApi(
 			return data?.deployment?.status;
 		},
 
+		/** Applies healthcheck fields via `serviceInstanceUpdate`; false on any failure. */
+		async applyHealthcheck(fields: HealthcheckFields): Promise<boolean> {
+			const data = await call<{ serviceInstanceUpdate: boolean }>(
+				QUERIES.updateHealthcheck,
+				{ s: config.serviceId, e: config.environmentId, i: fields },
+			);
+
+			return data?.serviceInstanceUpdate === true;
+		},
+
 		async failureLogs(
 			id: string,
 			limit: number,
@@ -312,6 +342,49 @@ export async function monitorRailwayDeployment(
 		serviceId: input.serviceId,
 		requestTimeoutMs: input.requestTimeoutMs ?? DEFAULTS.requestTimeoutMs,
 	});
+
+	// Applies the healthcheck config once the deployment is live (see
+	// MonitorInput.healthcheckPath). Retries absorb transient blips — the same
+	// network flakiness the rest of the monitor tolerates — but a config that
+	// still won't apply fails the deploy loudly: silently dropping it is how
+	// the healthcheck got lost forever before this existed.
+	const applyHealthcheckConfig = async (): Promise<boolean> => {
+		const fields: HealthcheckFields = {};
+
+		if (input.healthcheckPath !== undefined) {
+			fields.healthcheckPath = input.healthcheckPath;
+		}
+
+		if (input.healthcheckTimeout !== undefined) {
+			fields.healthcheckTimeout = input.healthcheckTimeout;
+		}
+
+		if (Object.keys(fields).length === 0) {
+			return true;
+		}
+
+		for (
+			let attempt = 0;
+			attempt < DEFAULTS.healthcheckApplyAttempts;
+			attempt++
+		) {
+			if (await api.applyHealthcheck(fields)) {
+				deps.log(
+					`[infracraft] applied healthcheck config ${JSON.stringify(fields)} to service ${input.serviceId}`,
+				);
+
+				return true;
+			}
+
+			await deps.sleep(DEFAULTS.healthcheckApplyIntervalMs);
+		}
+
+		deps.log(
+			`[infracraft] FAILED to apply healthcheck config ${JSON.stringify(fields)} to service ${input.serviceId} — failing the deploy so the config is not silently dropped`,
+		);
+
+		return false;
+	};
 
 	const dumpFailureLogs = async (id: string): Promise<void> => {
 		const logs = await api.failureLogs(id, failureLogLimit);
@@ -386,6 +459,15 @@ export async function monitorRailwayDeployment(
 				DISPOSITION_BY_STATUS[status] ?? DeploymentDisposition.PENDING;
 
 			if (disposition === DeploymentDisposition.LIVE) {
+				if (!(await applyHealthcheckConfig())) {
+					return {
+						outcome: MonitorOutcome.FAILED,
+						failed: true,
+						deploymentId,
+						status,
+					};
+				}
+
 				return {
 					outcome: MonitorOutcome.SUCCESS,
 					failed: false,

@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { resolveCredential } from "../dynamic/resolve-credential";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
@@ -17,8 +18,11 @@ export enum FlyIpType {
 
 /** Resolved inputs for the Fly IP dynamic provider. */
 interface FlyIpInputs {
-	/** Fly API token. */
-	token: string;
+	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
+	token?: string;
+
+	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	tokenEnvVar?: string;
 
 	/** App name (used as GraphQL appId). */
 	appName: string;
@@ -96,7 +100,9 @@ interface AllocateResult {
  */
 export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(inputs: FlyIpInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(inputs.token);
+		const client = new FlyClient(
+			resolveCredential(inputs.token, inputs.tokenEnvVar),
+		);
 
 		const existing = await this.findExisting(client, inputs);
 
@@ -150,7 +156,9 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	async delete(_id: string, props: FlyIpOutputs): Promise<void> {
-		const client = new FlyClient(props.token);
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
 
 		const input: Record<string, string> = { appId: props.appName };
 
@@ -235,7 +243,8 @@ class FlyIpResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			token: pulumi.Input<string>;
+			token?: pulumi.Input<string>;
+			tokenEnvVar?: pulumi.Input<string>;
 			appName: pulumi.Input<string>;
 			type: pulumi.Input<FlyIpType>;
 			region?: pulumi.Input<string>;
@@ -291,6 +300,7 @@ export class FlyIp extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				token: provider.token,
+				tokenEnvVar: provider.tokenEnvVar,
 				appName: app.id,
 				type: args.type,
 				region: args.region,

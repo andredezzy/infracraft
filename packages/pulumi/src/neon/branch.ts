@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
+import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { NeonClient } from "./client";
 import type { NeonProject } from "./project";
@@ -7,8 +8,11 @@ import type { NeonProvider } from "./provider";
 
 /** Resolved inputs for the Neon branch dynamic provider. */
 export interface NeonBranchInputs {
-	/** Neon API key. */
-	apiKey: string;
+	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
+	apiKey?: string;
+
+	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	apiKeyEnvVar?: string;
 
 	/** Neon project ID (e.g. `"quiet-forest-69719462"`). */
 	projectId: string;
@@ -101,7 +105,9 @@ export class NeonBranchResourceProvider
 	}
 
 	async create(inputs: NeonBranchInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(inputs.apiKey);
+		const client = new NeonClient(
+			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
+		);
 
 		let branchId = await findBranchByName(
 			client,
@@ -155,7 +161,9 @@ export class NeonBranchResourceProvider
 		id: string,
 		props: NeonBranchOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			const result = await client.get<BranchResponse>(
@@ -183,7 +191,9 @@ export class NeonBranchResourceProvider
 	 * responsibility via the `protect` resource option, not provider logic.
 	 */
 	async delete(id: string, props: NeonBranchOutputs): Promise<void> {
-		const client = new NeonClient(props.apiKey);
+		const client = new NeonClient(
+			resolveCredential(props.apiKey, props.apiKeyEnvVar),
+		);
 
 		try {
 			await client.delete(`/projects/${props.projectId}/branches/${id}`);
@@ -222,7 +232,8 @@ class NeonBranchResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
-			apiKey: pulumi.Input<string>;
+			apiKey?: pulumi.Input<string>;
+			apiKeyEnvVar?: pulumi.Input<string>;
 			projectId: pulumi.Input<string>;
 			name: pulumi.Input<string>;
 			/** Name of the parent branch; omit for project-root branches. */
@@ -292,6 +303,7 @@ export class NeonBranch extends pulumi.ComponentResource {
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,
+				apiKeyEnvVar: provider.apiKeyEnvVar,
 				projectId: project.id,
 				name: args.name,
 				parentName: args.parent,

@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 
 import { createDeployCommand } from "../commands/deploy";
+import { resolveCredentialOutput } from "../dynamic/resolve-credential";
 import type { VercelProject } from "./project";
 import type { VercelProvider } from "./provider";
 
@@ -60,7 +61,13 @@ export class VercelDeploy extends pulumi.ComponentResource {
 				triggers: args.triggers,
 				excludePaths: args.excludePaths,
 				environment: {
-					VERCEL_TOKEN: provider.token,
+					// Resolved at program runtime (secret) so the CLI still gets the
+					// actual value when the provider is configured via tokenEnvVar —
+					// without the credential ever being a dynamic-resource input.
+					VERCEL_TOKEN: resolveCredentialOutput(
+						provider.token,
+						provider.tokenEnvVar,
+					),
 					VERCEL_ORG_ID: provider.teamId,
 					VERCEL_PROJECT_ID: projectId,
 				},
