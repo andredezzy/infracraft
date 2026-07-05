@@ -87,7 +87,15 @@ describe("RailwayDeploy", () => {
 		).apply((s) => s);
 
 		// Detached upload (no flaky build-log stream); JSON for the exact deployment id.
-		expect(create).toContain("RAILWAY_TOKEN=tok_1 railway up --detach --json");
+		expect(create).toContain(
+			'RAILWAY_TOKEN="$IC_TOK" railway up --detach --json',
+		);
+		// The token travels via stdin and must NEVER appear in the script text:
+		// pulumi-command embeds the executed command in its failure error, and Pulumi
+		// does not scrub secrets from provider diagnostics.
+		expect(create).not.toContain("tok_1");
+		expect(create).toContain("IFS= read -r IC_TOK || true");
+		expect(commandCalls[0].args.stdin).toBe("tok_1");
 		// The CLI exit code no longer short-circuits: its output + exit are captured and
 		// handed to the API-authoritative monitor bin instead of an inline `node -e` blob.
 		expect(create).toContain("IC_UP_OUT=$(");
@@ -97,10 +105,10 @@ describe("RailwayDeploy", () => {
 		expect(create).not.toContain("node -e '"); // poller is a real module now, not inline
 		expect(create).toContain("railpack.json"); // setup runs in the sandbox
 		expect(create).toContain("git init -q && git add -A"); // stub mode
-		expect(commandCalls[0].args.environment).toBeUndefined(); // token is inlined, not env
+		expect(commandCalls[0].args.environment).toBeUndefined(); // token is stdin, not env
 		// The monitor's IC_* bindings must be wired (a rename/reorder here would otherwise
 		// fail silently — the monitor can't poll without them).
-		expect(create).toContain("IC_TOK=tok_1");
+		expect(create).toContain('IC_TOK="$IC_TOK"');
 		expect(create).toContain("IC_PROJ=proj_1");
 		expect(create).toContain("IC_ENV=env_1");
 		expect(create).toContain("IC_SVC=svc_1");

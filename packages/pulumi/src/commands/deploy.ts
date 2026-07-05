@@ -18,6 +18,13 @@ export interface CreateDeployCommandArgs {
 	setup?: string;
 	/** Env passed to the command (secrets that survive preview; not the inlined ones). */
 	environment?: Record<string, pulumi.Input<string>>;
+	/**
+	 * Piped to the command's standard input. The channel for secrets that are
+	 * unknown at preview (resource-output tokens): the `environment` map fails
+	 * preview on unknowns, and inlining into `cli` leaks the value in
+	 * pulumi-command's failure error, which Pulumi does not scrub.
+	 */
+	stdin?: pulumi.Input<string>;
 }
 
 export interface CreateDeployCommandResult {
@@ -79,7 +86,12 @@ export function createDeployCommand(
 
 	const cmd = new command.local.Command(
 		args.name,
-		{ create, triggers: args.triggers, environment: args.environment },
+		{
+			create,
+			triggers: args.triggers,
+			environment: args.environment,
+			stdin: args.stdin,
+		},
 		opts,
 	);
 

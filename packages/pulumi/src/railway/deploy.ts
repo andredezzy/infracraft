@@ -81,10 +81,18 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 		// CLI exit non-zero even when the deploy actually succeeds. We capture its `--json`
 		// output (for the exact deployment id) and exit code, re-emit it for visibility,
 		// then hand off to the monitor bin which polls the Railway API to a terminal status.
-		// The API — not the CLI exit code — decides pass/fail. Token is inlined (not via the
-		// env map): an unknown secret in `environment` makes `pulumi preview` fail. IC_SINCE
-		// is captured just before `railway up` as a createdAt fallback for id resolution.
-		const cli = pulumi.interpolate`IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); IC_UP_OUT=$(RAILWAY_TOKEN=${projectToken} railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); IC_UP_EXIT=$?; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK=${projectToken} IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE node "${MONITOR_BIN}"`;
+		// The API — not the CLI exit code — decides pass/fail.
+		//
+		// The token travels via the command's STDIN, never in the script text: on failure
+		// pulumi-command embeds the executed command verbatim in its error message, and
+		// Pulumi does not scrub secrets from provider diagnostics — an inlined token prints
+		// in plaintext exactly when a deploy fails. The `environment` map is no alternative:
+		// an unknown secret there makes `pulumi preview` fail (the token is a resource
+		// output, unknown on first preview). `|| true` keeps `set -e` alive when the stdin
+		// payload has no trailing newline (read then exits 1 but still fills IC_TOK).
+		// IC_SINCE is captured just before `railway up` as a createdAt fallback for id
+		// resolution.
+		const cli = pulumi.interpolate`IFS= read -r IC_TOK || true; IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); IC_UP_OUT=$(RAILWAY_TOKEN="$IC_TOK" railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); IC_UP_EXIT=$?; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK="$IC_TOK" IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE node "${MONITOR_BIN}"`;
 
 		// `printf '%s'` (not a bare format string) so railpack values containing %
 		// are literal; the JSON is single-quote-escaped the POSIX way (' -> '\'').
@@ -99,6 +107,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 				triggers: args.triggers,
 				excludePaths: args.excludePaths,
 				setup,
+				stdin: projectToken,
 			},
 			{ parent: this, ...pulumiOpts },
 		);
