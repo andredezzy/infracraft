@@ -95,8 +95,10 @@ export function createDeployCommand(
 		opts,
 	);
 
+	// stdout is undefined when the command never ran or errored before emitting
+	// output — guard it so a real failure isn't masked by a TypeError on trim.
 	const deploymentUrl = cmd.stdout.apply(
-		(out) => out.trim().split("\n").pop() ?? "",
+		(out) => (out ?? "").trim().split("\n").pop() ?? "",
 	);
 
 	return { command: cmd, deploymentUrl };
