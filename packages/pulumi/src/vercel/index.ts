@@ -1,3 +1,4 @@
+export { VercelClient } from "./client";
 export type { VercelDeployArgs } from "./deploy";
 export { VercelDeploy } from "./deploy";
 export type { VercelDomainArgs } from "./domain";

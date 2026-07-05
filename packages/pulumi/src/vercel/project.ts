@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
+import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
-
-const VERCEL_API_URL = "https://api.vercel.com";
 
 /**
  * Authoritative list of Vercel framework preset slugs.
@@ -147,33 +147,6 @@ interface VercelDomainEntry {
 }
 
 /**
- * Fetches a Vercel project by name or ID.
- * Returns `null` if the project is not found (404).
- */
-async function fetchProject(
-	token: string,
-	teamId: string,
-	idOrName: string,
-): Promise<VercelProjectResponse | null> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(idOrName)}?teamId=${teamId}`,
-		{ headers: { Authorization: `Bearer ${token}` } },
-	);
-
-	if (response.status === 404) {
-		return null;
-	}
-
-	if (!response.ok) {
-		throw new Error(
-			`Vercel API error fetching project "${idOrName}" (${response.status}): ${await response.text()}`,
-		);
-	}
-
-	return (await response.json()) as VercelProjectResponse;
-}
-
-/**
  * Picks a project's production domain from its domain list, mirroring how Vercel
  * derives `VERCEL_PROJECT_PRODUCTION_URL`: a verified, non-redirect, non-branch
  * domain, preferring a custom domain over the `*.vercel.app` default. Returns a
@@ -222,20 +195,11 @@ async function fetchProductionUrl(
 	idOrName: string,
 	name: string,
 ): Promise<string> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(idOrName)}/domains?teamId=${teamId}`,
-		{ headers: { Authorization: `Bearer ${token}` } },
+	const client = new VercelClient(token, teamId);
+
+	const { domains = [] } = await client.get<{ domains?: VercelDomainEntry[] }>(
+		`/v9/projects/${encodeURIComponent(idOrName)}/domains`,
 	);
-
-	if (!response.ok) {
-		throw new Error(
-			`Vercel API error fetching domains for "${idOrName}" (${response.status}): ${await response.text()}`,
-		);
-	}
-
-	const { domains = [] } = (await response.json()) as {
-		domains?: VercelDomainEntry[];
-	};
 
 	return pickProductionDomain(domains, name);
 }
@@ -287,10 +251,10 @@ export class VercelProjectResourceProvider
 	async create(
 		inputs: VercelProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const existing = await fetchProject(
-			inputs.token,
-			inputs.teamId,
-			inputs.name,
+		const client = new VercelClient(inputs.token, inputs.teamId);
+
+		const existing = await client.tryGet<VercelProjectResponse>(
+			`/v9/projects/${encodeURIComponent(inputs.name)}`,
 		);
 
 		let projectId: string;
@@ -306,25 +270,10 @@ export class VercelProjectResourceProvider
 				`Vercel project "${inputs.name}" not found — creating...`,
 			);
 
-			const response = await fetch(
-				`${VERCEL_API_URL}/v9/projects?teamId=${inputs.teamId}`,
-				{
-					method: "POST",
-					headers: {
-						Authorization: `Bearer ${inputs.token}`,
-						"Content-Type": "application/json",
-					},
-					body: JSON.stringify(buildProjectBody(inputs)),
-				},
+			const created = await client.post<VercelProjectResponse>(
+				"/v9/projects",
+				buildProjectBody(inputs),
 			);
-
-			if (!response.ok) {
-				throw new Error(
-					`Vercel API error creating project "${inputs.name}" (${response.status}): ${await response.text()}`,
-				);
-			}
-
-			const created = (await response.json()) as VercelProjectResponse;
 
 			projectId = created.id;
 		}
@@ -338,10 +287,15 @@ export class VercelProjectResourceProvider
 		id: string,
 		props: VercelProjectOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const project = await fetchProject(props.token, props.teamId, id);
+		const client = new VercelClient(props.token, props.teamId);
+
+		const project = await client.tryGet<VercelProjectResponse>(
+			`/v9/projects/${encodeURIComponent(id)}`,
+		);
 
 		if (!project) {
-			throw new Error(`Vercel project "${id}" not found during refresh`);
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
 		}
 
 		return {
@@ -355,23 +309,9 @@ export class VercelProjectResourceProvider
 		_olds: VercelProjectOutputs,
 		news: VercelProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const response = await fetch(
-			`${VERCEL_API_URL}/v9/projects/${id}?teamId=${news.teamId}`,
-			{
-				method: "PATCH",
-				headers: {
-					Authorization: `Bearer ${news.token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(buildProjectBody(news)),
-			},
-		);
+		const client = new VercelClient(news.token, news.teamId);
 
-		if (!response.ok) {
-			throw new Error(
-				`Vercel API error updating project "${id}" (${response.status}): ${await response.text()}`,
-			);
-		}
+		await client.patch(`/v9/projects/${id}`, buildProjectBody(news));
 
 		return { outs: { ...news, projectId: id } };
 	}
@@ -381,18 +321,15 @@ export class VercelProjectResourceProvider
 	 * responsibility via the `protect` resource option, not provider logic.
 	 */
 	async delete(id: string, props: VercelProjectOutputs): Promise<void> {
-		const response = await fetch(
-			`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(id)}?teamId=${props.teamId}`,
-			{
-				method: "DELETE",
-				headers: { Authorization: `Bearer ${props.token}` },
-			},
-		);
+		const client = new VercelClient(props.token, props.teamId);
 
-		if (!response.ok && response.status !== 404) {
-			throw new Error(
-				`Vercel API error deleting project "${props.name}" (${response.status}): ${await response.text()}`,
-			);
+		try {
+			await client.delete(`/v9/projects/${encodeURIComponent(id)}`);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (!(error instanceof ApiNotFoundError)) {
+				throw error;
+			}
 		}
 
 		pulumi.log.info(`Deleted Vercel project "${props.name}" (${id})`);
@@ -455,7 +392,8 @@ class VercelProjectResource extends pulumi.dynamic.Resource {
 			new VercelProjectResourceProvider(),
 			name,
 			{ ...args, projectId: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

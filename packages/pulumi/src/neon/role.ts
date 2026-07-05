@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
 import { NeonClient } from "./client";
 import type { NeonProject } from "./project";
@@ -178,17 +179,26 @@ export class NeonRoleResourceProvider
 	): Promise<pulumi.dynamic.ReadResult> {
 		const client = new NeonClient(props.apiKey);
 
-		const password = await revealPassword(
-			client,
-			props.projectId,
-			props.branchId,
-			props.name,
-		);
+		try {
+			const password = await revealPassword(
+				client,
+				props.projectId,
+				props.branchId,
+				props.name,
+			);
 
-		return {
-			id,
-			props: { ...props, password },
-		};
+			return {
+				id,
+				props: { ...props, password },
+			};
+		} catch (error) {
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			if (error instanceof ApiNotFoundError) {
+				return {};
+			}
+
+			throw error;
+		}
 	}
 
 	async delete(_id: string, props: NeonRoleOutputs): Promise<void> {
@@ -285,12 +295,13 @@ class NeonRoleResource extends pulumi.dynamic.Resource {
 		// way to mark a dynamic-provider output secret: the placeholder gives the property
 		// both a secret-undefined input and a real output, and a downstream dynamic resource
 		// consuming it can race onto the undefined, producing "Unexpected struct type"
-		// during protobuf serialization (Pulumi #16041, #3012).
+		// during protobuf serialization (Pulumi #16041, #3012). `apiKey` rides along in
+		// state with the outputs, so it is marked secret too.
 		super(
 			new NeonRoleResourceProvider(),
 			name,
 			{ ...args, password: undefined },
-			{ ...opts, additionalSecretOutputs: ["password"] },
+			{ ...opts, additionalSecretOutputs: ["password", "apiKey"] },
 		);
 	}
 }

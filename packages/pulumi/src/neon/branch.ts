@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { NeonClient } from "./client";
 import type { NeonProject } from "./project";
 import type { NeonProvider } from "./provider";
@@ -135,16 +136,25 @@ export class NeonBranchResourceProvider
 	): Promise<pulumi.dynamic.ReadResult> {
 		const client = new NeonClient(props.apiKey);
 
-		const result = await client.get<BranchResponse>(
-			`/projects/${props.projectId}/branches/${id}`,
-		);
+		try {
+			const result = await client.get<BranchResponse>(
+				`/projects/${props.projectId}/branches/${id}`,
+			);
 
-		// parentName is preserved from prior state (props): the Neon API does not expose
-		// a branch's parent on GET /branches/:id, so it cannot be re-derived here.
-		return {
-			id: result.branch.id,
-			props: { ...props, name: result.branch.name },
-		};
+			// parentName is preserved from prior state (props): the Neon API does not expose
+			// a branch's parent on GET /branches/:id, so it cannot be re-derived here.
+			return {
+				id: result.branch.id,
+				props: { ...props, name: result.branch.name },
+			};
+		} catch (error) {
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			if (error instanceof ApiNotFoundError) {
+				return {};
+			}
+
+			throw error;
+		}
 	}
 
 	/**
@@ -199,7 +209,13 @@ class NeonBranchResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new NeonBranchResourceProvider(), name, { ...args }, opts);
+		super(
+			new NeonBranchResourceProvider(),
+			name,
+			{ ...args },
+			// The API key flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["apiKey"] },
+		);
 	}
 }
 

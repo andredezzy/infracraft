@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
@@ -42,8 +43,12 @@ interface FlyVolumeResponse {
  * matching the name (volume names are not unique, so it adopts the first
  * non-destroyed match); otherwise it creates a new encrypted volume. Growing
  * `sizeGb` extends in place; shrinking is not supported by Fly.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class FlyVolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class FlyVolumeResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(inputs: FlyVolumeInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new FlyClient(inputs.token);
 
@@ -93,7 +98,8 @@ class FlyVolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
 		);
 
 		if (!volume) {
-			throw new Error(`Fly volume "${id}" not found during refresh`);
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
 		}
 
 		return {
@@ -126,7 +132,18 @@ class FlyVolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async delete(id: string, props: FlyVolumeOutputs): Promise<void> {
 		const client = new FlyClient(props.token);
 
-		await client.delete(`/v1/apps/${props.appName}/volumes/${id}`);
+		try {
+			await client.delete(`/v1/apps/${props.appName}/volumes/${id}`);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Fly volume "${id}" already deleted`);
+
+				return;
+			}
+
+			throw error;
+		}
 	}
 
 	async diff(
@@ -181,7 +198,8 @@ class FlyVolumeResource extends pulumi.dynamic.Resource {
 			new FlyVolumeResourceProvider(),
 			name,
 			{ ...args, volumeId: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

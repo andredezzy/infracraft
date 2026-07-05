@@ -34,8 +34,10 @@ interface FlyAppResponse {
  * `POST /v1/apps`. `delete()` is a no-op — deleting a Fly app destroys
  * everything in it, so (like Railway/Neon/Vercel top-level resources) Pulumi
  * does not delete apps.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 	async create(inputs: FlyAppInputs): Promise<pulumi.dynamic.CreateResult> {
 		const client = new FlyClient(inputs.token);
 
@@ -73,7 +75,8 @@ class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 		const app = await client.tryGet<FlyAppResponse>(`/v1/apps/${id}`);
 
 		if (!app) {
-			throw new Error(`Fly app "${id}" not found during refresh`);
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
 		}
 
 		return { id, props: { ...props, name: app.name, appId: app.name } };
@@ -133,7 +136,8 @@ class FlyAppResource extends pulumi.dynamic.Resource {
 			new FlyAppResourceProvider(),
 			name,
 			{ ...args, appId: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

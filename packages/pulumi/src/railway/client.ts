@@ -1,3 +1,5 @@
+import { resilientFetch } from "../http/resilient-fetch";
+
 const RAILWAY_API_URL = "https://backboard.railway.app/graphql/v2";
 
 /** Standard GraphQL response envelope from Railway's API. */
@@ -12,8 +14,8 @@ interface GraphQLResponse<T> {
 /**
  * Typed GraphQL client for Railway's API.
  *
- * Wraps `fetch` with auth headers, JSON serialization, and error
- * extraction so callers only deal with typed response data.
+ * Wraps the resilient transport with auth headers, JSON serialization, and
+ * error extraction so callers only deal with typed response data.
  *
  * @example
  * ```typescript
@@ -51,7 +53,7 @@ export class RailwayClient {
 		query: string,
 		variables?: Record<string, unknown>,
 	): Promise<T> {
-		const response = await fetch(RAILWAY_API_URL, {
+		const response = await resilientFetch(RAILWAY_API_URL, {
 			method: "POST",
 			headers: {
 				"Content-Type": "application/json",

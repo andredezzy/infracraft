@@ -321,9 +321,8 @@ export class RailwayDomainResourceProvider
 			);
 
 			if (!found) {
-				throw new Error(
-					`Custom domain "${props.customDomain}" not found during refresh`,
-				);
+				// Resource gone → blank id lets refresh reconcile the deletion.
+				return {};
 			}
 
 			const refreshedVerificationTxt = extractVerificationTxt(found.status);
@@ -350,7 +349,8 @@ export class RailwayDomainResourceProvider
 			};
 		}
 
-		throw new Error("Railway domain not found during refresh");
+		// Resource gone → blank id lets refresh reconcile the deletion.
+		return {};
 	}
 
 	async delete(_id: string, props: RailwayDomainOutputs): Promise<void> {
@@ -429,7 +429,8 @@ class RailwayDomainResource extends pulumi.dynamic.Resource {
 				verificationTxtName: undefined,
 				verificationTxtValue: undefined,
 			},
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

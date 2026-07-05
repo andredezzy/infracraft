@@ -1,3 +1,6 @@
+import { ApiNotFoundError } from "../errors/api-not-found-error";
+import { resilientFetch } from "../http/resilient-fetch";
+
 const FLY_MACHINES_API_URL = "https://api.machines.dev";
 const FLY_GRAPHQL_API_URL = "https://api.fly.io/graphql";
 
@@ -32,7 +35,8 @@ export class FlyClient {
 
 	/**
 	 * GET a Machines API resource.
-	 * @throws {Error} On any non-2xx status (including 404).
+	 * @throws {ApiNotFoundError} On 404.
+	 * @throws {Error} On any other non-2xx status.
 	 */
 	async get<T>(path: string): Promise<T> {
 		return this.request<T>("GET", path);
@@ -44,24 +48,15 @@ export class FlyClient {
 	 * @throws {Error} On non-2xx statuses other than 404.
 	 */
 	async tryGet<T>(path: string): Promise<T | null> {
-		const response = await fetch(`${FLY_MACHINES_API_URL}${path}`, {
-			method: "GET",
-			headers: this.headers(),
-		});
+		try {
+			return await this.request<T>("GET", path);
+		} catch (error) {
+			if (error instanceof ApiNotFoundError) {
+				return null;
+			}
 
-		if (response.status === 404) {
-			return null;
+			throw error;
 		}
-
-		if (!response.ok) {
-			throw new Error(
-				`Fly API error (${response.status}): ${await response.text()}`,
-			);
-		}
-
-		const text = await response.text();
-
-		return (text ? JSON.parse(text) : undefined) as T;
 	}
 
 	/** POST to a Machines API resource. */
@@ -91,7 +86,7 @@ export class FlyClient {
 		query: string,
 		variables: Record<string, unknown> = {},
 	): Promise<T> {
-		const response = await fetch(FLY_GRAPHQL_API_URL, {
+		const response = await resilientFetch(FLY_GRAPHQL_API_URL, {
 			method: "POST",
 			headers: this.headers(),
 			body: JSON.stringify({ query, variables }),
@@ -127,11 +122,15 @@ export class FlyClient {
 		path: string,
 		body?: unknown,
 	): Promise<T> {
-		const response = await fetch(`${FLY_MACHINES_API_URL}${path}`, {
+		const response = await resilientFetch(`${FLY_MACHINES_API_URL}${path}`, {
 			method,
 			headers: this.headers(),
 			body: body ? JSON.stringify(body) : undefined,
 		});
+
+		if (response.status === 404) {
+			throw new ApiNotFoundError("fly", path);
+		}
 
 		if (!response.ok) {
 			throw new Error(

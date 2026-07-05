@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ApiNotFoundError } from "../../errors/api-not-found-error";
 import { NeonClient } from "../client";
 
 describe("NeonClient", () => {
@@ -47,13 +48,29 @@ describe("NeonClient", () => {
 	it("throws on non-200 HTTP status", async () => {
 		globalThis.fetch = vi.fn().mockResolvedValue({
 			ok: false,
+			status: 401,
+			statusText: "Unauthorized",
+			text: () => Promise.resolve("Unauthorized"),
+		});
+
+		const client = new NeonClient("test-api-key");
+
+		await expect(client.get("/projects/invalid")).rejects.toThrow("401");
+	});
+
+	it("throws ApiNotFoundError on 404", async () => {
+		globalThis.fetch = vi.fn().mockResolvedValue({
+			ok: false,
 			status: 404,
 			statusText: "Not Found",
 			text: () => Promise.resolve("Not found"),
 		});
 
 		const client = new NeonClient("test-api-key");
+		const error = await client.get("/projects/missing").catch((e) => e);
 
-		await expect(client.get("/projects/invalid")).rejects.toThrow("404");
+		expect(error).toBeInstanceOf(ApiNotFoundError);
+		expect(error.provider).toBe("neon");
+		expect(error.path).toBe("/projects/missing");
 	});
 });

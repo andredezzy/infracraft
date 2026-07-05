@@ -1,3 +1,6 @@
+import { ApiNotFoundError } from "../errors/api-not-found-error";
+import { resilientFetch } from "../http/resilient-fetch";
+
 const NEON_API_URL = "https://console.neon.tech/api/v2";
 
 /**
@@ -27,7 +30,8 @@ export class NeonClient {
 	 *
 	 * @param path API path (e.g. `/projects/abc/branches`)
 	 * @returns Typed JSON response body
-	 * @throws {Error} On non-2xx HTTP status
+	 * @throws {ApiNotFoundError} On 404
+	 * @throws {Error} On any other non-2xx HTTP status
 	 */
 	async get<T>(path: string): Promise<T> {
 		return this.request<T>("GET", path);
@@ -39,7 +43,8 @@ export class NeonClient {
 	 * @param path API path
 	 * @param body Request body (will be JSON-serialized)
 	 * @returns Typed JSON response body
-	 * @throws {Error} On non-2xx HTTP status
+	 * @throws {ApiNotFoundError} On 404
+	 * @throws {Error} On any other non-2xx HTTP status
 	 */
 	async post<T>(path: string, body?: unknown): Promise<T> {
 		return this.request<T>("POST", path, body);
@@ -51,7 +56,8 @@ export class NeonClient {
 	 * @param path API path
 	 * @param body Request body (will be JSON-serialized)
 	 * @returns Typed JSON response body
-	 * @throws {Error} On non-2xx HTTP status
+	 * @throws {ApiNotFoundError} On 404
+	 * @throws {Error} On any other non-2xx HTTP status
 	 */
 	async patch<T>(path: string, body?: unknown): Promise<T> {
 		return this.request<T>("PATCH", path, body);
@@ -61,7 +67,8 @@ export class NeonClient {
 	 * Performs a DELETE request against the Neon API.
 	 *
 	 * @param path API path
-	 * @throws {Error} On non-2xx HTTP status
+	 * @throws {ApiNotFoundError} On 404
+	 * @throws {Error} On any other non-2xx HTTP status
 	 */
 	async delete(path: string): Promise<void> {
 		await this.request<void>("DELETE", path);
@@ -72,7 +79,7 @@ export class NeonClient {
 		path: string,
 		body?: unknown,
 	): Promise<T> {
-		const response = await fetch(`${NEON_API_URL}${path}`, {
+		const response = await resilientFetch(`${NEON_API_URL}${path}`, {
 			method,
 			headers: {
 				"Content-Type": "application/json",
@@ -80,6 +87,10 @@ export class NeonClient {
 			},
 			body: body ? JSON.stringify(body) : undefined,
 		});
+
+		if (response.status === 404) {
+			throw new ApiNotFoundError("neon", path);
+		}
 
 		if (!response.ok) {
 			const errorText = await response.text();

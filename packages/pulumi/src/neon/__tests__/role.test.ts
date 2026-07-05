@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiNotFoundError } from "../../errors/api-not-found-error";
 import { NeonClient } from "../client";
 import { NeonRoleResourceProvider } from "../role";
 
@@ -95,6 +96,41 @@ describe("NeonRoleResourceProvider", () => {
 			);
 
 			expect(result.outs.password).toBe("generated-pw");
+		});
+	});
+
+	describe("read", () => {
+		const props = {
+			apiKey: "key",
+			projectId: "proj",
+			branchId: "br-staging",
+			name: "neondb_owner",
+			resetPassword: false,
+			password: "old-pw",
+		};
+
+		it("returns a blank ReadResult when the role is gone (deleted out of band)", async () => {
+			mockGet.mockRejectedValueOnce(
+				new ApiNotFoundError(
+					"neon",
+					"/projects/proj/branches/br-staging/roles/neondb_owner/reveal_password",
+				),
+			);
+
+			const result = await new NeonRoleResourceProvider().read(
+				"br-staging/neondb_owner",
+				props,
+			);
+
+			expect(result).toEqual({});
+		});
+
+		it("rethrows non-404 errors", async () => {
+			mockGet.mockRejectedValueOnce(new Error("Neon API error (500): boom"));
+
+			await expect(
+				new NeonRoleResourceProvider().read("br-staging/neondb_owner", props),
+			).rejects.toThrow("500");
 		});
 	});
 

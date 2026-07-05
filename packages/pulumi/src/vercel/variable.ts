@@ -1,8 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
+import { VercelClient } from "./client";
 import type { VercelProject } from "./project";
 import type { VercelProvider } from "./provider";
-
-const VERCEL_API_URL = "https://api.vercel.com";
 
 /** Resolved inputs for the Vercel variable dynamic provider. */
 interface VercelVariableInputs {
@@ -60,35 +60,25 @@ interface VercelEnvVar {
 
 /**
  * Fetches all environment variables for a Vercel project with decrypted values.
+ * A variable that vanishes between the list and its decrypt read is skipped.
  */
 async function fetchEnvVars(
-	token: string,
-	teamId: string,
+	client: VercelClient,
 	projectId: string,
 ): Promise<VercelEnvVar[]> {
-	const listResponse = await fetch(
-		`${VERCEL_API_URL}/v9/projects/${projectId}/env?teamId=${teamId}`,
-		{ headers: { Authorization: `Bearer ${token}` } },
+	const list = await client.get<{ envs: VercelEnvVar[] }>(
+		`/v9/projects/${projectId}/env`,
 	);
-
-	if (!listResponse.ok) {
-		throw new Error(
-			`Vercel API error (${listResponse.status}): ${await listResponse.text()}`,
-		);
-	}
-
-	const list = (await listResponse.json()) as { envs: VercelEnvVar[] };
 
 	const decrypted: VercelEnvVar[] = [];
 
 	for (const env of list.envs) {
-		const response = await fetch(
-			`${VERCEL_API_URL}/v9/projects/${projectId}/env/${env.id}?teamId=${teamId}&decrypt=true`,
-			{ headers: { Authorization: `Bearer ${token}` } },
+		const decryptedVar = await client.tryGet<VercelEnvVar>(
+			`/v9/projects/${projectId}/env/${env.id}?decrypt=true`,
 		);
 
-		if (response.ok) {
-			decrypted.push((await response.json()) as VercelEnvVar);
+		if (decryptedVar) {
+			decrypted.push(decryptedVar);
 		}
 	}
 
@@ -97,107 +87,70 @@ async function fetchEnvVars(
 
 /**
  * Creates a single Vercel env var targeting all environments.
+ * An already-existing key (ENV_CONFLICT) is updated in place instead.
  */
 async function createEnvVar(
-	token: string,
-	teamId: string,
+	client: VercelClient,
 	projectId: string,
 	key: string,
 	value: string,
 ): Promise<VercelEnvVar> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v10/projects/${projectId}/env?teamId=${teamId}`,
-		{
-			method: "POST",
-			headers: {
-				Authorization: `Bearer ${token}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({
-				key,
-				value,
-				type: "encrypted",
-				target: ["production", "preview", "development"],
-			}),
-		},
-	);
-
-	if (!response.ok) {
-		const errorText = await response.text();
-
-		if (errorText.includes("ENV_CONFLICT")) {
+	try {
+		return await client.post<VercelEnvVar>(`/v10/projects/${projectId}/env`, {
+			key,
+			value,
+			type: "encrypted",
+			target: ["production", "preview", "development"],
+		});
+	} catch (error) {
+		// ENV_CONFLICT is Vercel's error code for "key already exists"; the client
+		// surfaces the API error body in the message, so it is matched there.
+		if (error instanceof Error && error.message.includes("ENV_CONFLICT")) {
 			pulumi.log.info(
 				`Vercel env var "${key}" already exists, will update instead`,
 			);
 
-			const existing = await fetchEnvVars(token, teamId, projectId);
+			const existing = await fetchEnvVars(client, projectId);
 			const match = existing.find((e) => e.key === key);
 
 			if (match) {
-				await updateEnvVar(token, teamId, projectId, match.id, value);
+				await updateEnvVar(client, projectId, match.id, value);
 
 				return { ...match, value };
 			}
 		}
 
-		throw new Error(
-			`Vercel API error creating "${key}" (${response.status}): ${errorText}`,
-		);
+		throw error;
 	}
-
-	return (await response.json()) as VercelEnvVar;
 }
 
 /**
  * Updates a single Vercel env var value.
  */
 async function updateEnvVar(
-	token: string,
-	teamId: string,
+	client: VercelClient,
 	projectId: string,
 	envId: string,
 	value: string,
 ): Promise<void> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v9/projects/${projectId}/env/${envId}?teamId=${teamId}`,
-		{
-			method: "PATCH",
-			headers: {
-				Authorization: `Bearer ${token}`,
-				"Content-Type": "application/json",
-			},
-			body: JSON.stringify({ value }),
-		},
-	);
-
-	if (!response.ok) {
-		throw new Error(
-			`Vercel API error updating env var (${response.status}): ${await response.text()}`,
-		);
-	}
+	await client.patch(`/v9/projects/${projectId}/env/${envId}`, { value });
 }
 
 /**
- * Deletes a single Vercel env var.
+ * Deletes a single Vercel env var. Tolerates 404 (already gone) —
+ * deletion is idempotent.
  */
 async function deleteEnvVar(
-	token: string,
-	teamId: string,
+	client: VercelClient,
 	projectId: string,
 	envId: string,
 ): Promise<void> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v9/projects/${projectId}/env/${envId}?teamId=${teamId}`,
-		{
-			method: "DELETE",
-			headers: { Authorization: `Bearer ${token}` },
-		},
-	);
-
-	if (!response.ok && response.status !== 404) {
-		throw new Error(
-			`Vercel API error deleting env var (${response.status}): ${await response.text()}`,
-		);
+	try {
+		await client.delete(`/v9/projects/${projectId}/env/${envId}`);
+	} catch (error) {
+		if (!(error instanceof ApiNotFoundError)) {
+			throw error;
+		}
 	}
 }
 
@@ -210,16 +163,11 @@ class VercelVariableResourceProvider
 	async create(
 		inputs: VercelVariableInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
+		const client = new VercelClient(inputs.token, inputs.teamId);
 		const envIds: Record<string, string> = {};
 
 		for (const [key, value] of Object.entries(inputs.variables)) {
-			const result = await createEnvVar(
-				inputs.token,
-				inputs.teamId,
-				inputs.projectId,
-				key,
-				value,
-			);
+			const result = await createEnvVar(client, inputs.projectId, key, value);
 
 			envIds[key] = result.id;
 		}
@@ -239,6 +187,7 @@ class VercelVariableResourceProvider
 		olds: VercelVariableOutputs,
 		news: VercelVariableInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
+		const client = new VercelClient(news.token, news.teamId);
 		const envIds = { ...olds.envIds };
 
 		const removedKeys = Object.keys(olds.variables).filter(
@@ -250,7 +199,7 @@ class VercelVariableResourceProvider
 
 			if (envId) {
 				try {
-					await deleteEnvVar(news.token, news.teamId, news.projectId, envId);
+					await deleteEnvVar(client, news.projectId, envId);
 				} catch {
 					pulumi.log.warn(
 						`Failed to delete Vercel env var "${key}" (may already be deleted)`,
@@ -265,21 +214,9 @@ class VercelVariableResourceProvider
 			const existingId = envIds[key];
 
 			if (existingId && olds.variables[key] !== value) {
-				await updateEnvVar(
-					news.token,
-					news.teamId,
-					news.projectId,
-					existingId,
-					value,
-				);
+				await updateEnvVar(client, news.projectId, existingId, value);
 			} else if (!existingId) {
-				const result = await createEnvVar(
-					news.token,
-					news.teamId,
-					news.projectId,
-					key,
-					value,
-				);
+				const result = await createEnvVar(client, news.projectId, key, value);
 
 				envIds[key] = result.id;
 			}
@@ -298,11 +235,8 @@ class VercelVariableResourceProvider
 		id: string,
 		props: VercelVariableOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const actual = await fetchEnvVars(
-			props.token,
-			props.teamId,
-			props.projectId,
-		);
+		const client = new VercelClient(props.token, props.teamId);
+		const actual = await fetchEnvVars(client, props.projectId);
 
 		const actualVariables: Record<string, string> = {};
 		const actualEnvIds: Record<string, string> = {};
@@ -328,9 +262,11 @@ class VercelVariableResourceProvider
 	}
 
 	async delete(_id: string, props: VercelVariableOutputs): Promise<void> {
+		const client = new VercelClient(props.token, props.teamId);
+
 		for (const [key, envId] of Object.entries(props.envIds)) {
 			try {
-				await deleteEnvVar(props.token, props.teamId, props.projectId, envId);
+				await deleteEnvVar(client, props.projectId, envId);
 			} catch {
 				pulumi.log.warn(
 					`Failed to delete Vercel env var "${key}" (may already be deleted)`,
@@ -375,7 +311,8 @@ class VercelVariableResource extends pulumi.dynamic.Resource {
 			new VercelVariableResourceProvider(),
 			name,
 			{ ...args, envIds: undefined, contentHash: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

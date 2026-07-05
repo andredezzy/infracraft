@@ -84,6 +84,10 @@ export class RailwayProjectTokenResourceProvider
 			};
 		}>(PROJECT_TOKENS_QUERY, { projectId: inputs.projectId });
 
+		// During a tokenVersion rotation this cleanup revokes the OLD token (same
+		// name, still tracked by the engine) as a side effect — the engine's own
+		// delete step then finds it already gone, which delete() tolerates. That
+		// tolerance is what makes this create-before-delete race harmless.
 		const stale = tokensResult.projectTokens.edges.filter(
 			(edge) => edge.node.name === inputs.name,
 		);
@@ -152,15 +156,35 @@ export class RailwayProjectTokenResourceProvider
 
 	/**
 	 * Deletes the Railway token by its stored UUID for clean teardown.
+	 * Tolerates an already-revoked token (deletion is idempotent): during a
+	 * `tokenVersion` rotation, `create()`'s stale-name cleanup revokes the old
+	 * token before the engine gets to delete it — throwing here would strand a
+	 * pending-delete tombstone in state that fails every subsequent `up`.
 	 *
 	 * @param _id Resource ID (unused).
 	 * @param props Currently stored outputs containing the tokenId.
 	 */
 	async delete(_id: string, props: RailwayProjectTokenOutputs): Promise<void> {
-		if (props.tokenId) {
-			const client = new RailwayClient(props.token);
+		if (!props.tokenId) {
+			return;
+		}
 
+		const client = new RailwayClient(props.token);
+
+		try {
 			await client.query(PROJECT_TOKEN_DELETE, { id: props.tokenId });
+		} catch (error) {
+			// Railway reports an already-revoked token as a GraphQL "not found"
+			// error (no HTTP 404, so no ApiNotFoundError path exists here).
+			if (error instanceof Error && /not found/i.test(error.message)) {
+				pulumi.log.info(
+					`Railway project token "${props.name}" already revoked (rotation cleanup) — nothing to delete`,
+				);
+
+				return;
+			}
+
+			throw error;
 		}
 	}
 
@@ -228,7 +252,8 @@ class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
 		// both a secret-undefined input and a real output, so a downstream dynamic resource
 		// consuming the token can race onto the undefined ("malformed RPC secret: missing
 		// value" / "Unexpected struct type"). `tokenId` is a plain (non-secret) output. See
-		// Pulumi #16041, #3012.
+		// Pulumi #16041, #3012. `token` (the account API credential) rides along in state
+		// with the outputs, so it is marked secret too.
 		super(
 			new RailwayProjectTokenResourceProvider(),
 			name,
@@ -237,7 +262,7 @@ class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
 				value: undefined,
 				tokenId: undefined,
 			},
-			{ ...opts, additionalSecretOutputs: ["value"] },
+			{ ...opts, additionalSecretOutputs: ["value", "token"] },
 		);
 	}
 }

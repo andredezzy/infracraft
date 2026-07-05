@@ -158,7 +158,22 @@ class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 			input.ip = props.address;
 		}
 
-		await client.graphql(RELEASE_IP, { input });
+		try {
+			await client.graphql(RELEASE_IP, { input });
+		} catch (error) {
+			// Fly reports an already-released IP as a GraphQL "not found" error —
+			// deletion is idempotent, so tolerate it.
+			if (
+				error instanceof Error &&
+				/not found|could not find/i.test(error.message)
+			) {
+				pulumi.log.warn(`Fly IP "${props.address}" already released`);
+
+				return;
+			}
+
+			throw error;
+		}
 	}
 
 	async diff(
@@ -229,7 +244,8 @@ class FlyIpResource extends pulumi.dynamic.Resource {
 			new FlyIpResourceProvider(),
 			name,
 			{ ...args, address: undefined, ipAddressId: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

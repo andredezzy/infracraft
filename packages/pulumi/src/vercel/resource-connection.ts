@@ -1,7 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
+import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
-
-const VERCEL_API_URL = "https://api.vercel.com";
 
 /** Resolved inputs for the Vercel resource connection dynamic provider. */
 interface VercelResourceConnectionInputs {
@@ -44,25 +43,18 @@ interface StoreConnectionsResponse {
 
 /**
  * Finds an existing connection from a store to a specific project.
+ * A 404 (store gone or not yet visible) reads as "no connection".
  */
 async function findConnection(
-	token: string,
-	teamId: string,
+	client: VercelClient,
 	storeId: string,
 	projectId: string,
 ): Promise<StoreConnection | undefined> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v1/storage/stores/${storeId}/connections?teamId=${teamId}`,
-		{ headers: { Authorization: `Bearer ${token}` } },
+	const data = await client.tryGet<StoreConnectionsResponse>(
+		`/v1/storage/stores/${storeId}/connections`,
 	);
 
-	if (!response.ok) {
-		return undefined;
-	}
-
-	const data = (await response.json()) as StoreConnectionsResponse;
-
-	return data.connections.find((c) => c.projectId === projectId);
+	return data?.connections.find((c) => c.projectId === projectId);
 }
 
 /**
@@ -84,11 +76,12 @@ export class VercelResourceConnectionProvider
 			);
 		}
 
+		const client = new VercelClient(inputs.token, inputs.teamId);
+
 		// Adopt-or-create: a store can only be connected to a given project once,
 		// so re-creating an out-of-band connection (or a prior partial apply) adopts it.
 		const existing = await findConnection(
-			inputs.token,
-			inputs.teamId,
+			client,
 			inputs.storeId,
 			inputs.projectId,
 		);
@@ -104,27 +97,11 @@ export class VercelResourceConnectionProvider
 			};
 		}
 
-		const response = await fetch(
-			`${VERCEL_API_URL}/v1/storage/stores/${inputs.storeId}/connections?teamId=${inputs.teamId}`,
-			{
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${inputs.token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({
-					projectId: inputs.projectId,
-					envVarEnvironments: inputs.targets,
-					makeEnvVarsSensitive: inputs.makeEnvVarsSensitive,
-				}),
-			},
-		);
-
-		if (!response.ok) {
-			throw new Error(
-				`Vercel resource connection failed (${response.status}): ${await response.text()}`,
-			);
-		}
+		await client.post(`/v1/storage/stores/${inputs.storeId}/connections`, {
+			projectId: inputs.projectId,
+			envVarEnvironments: inputs.targets,
+			makeEnvVarsSensitive: inputs.makeEnvVarsSensitive,
+		});
 
 		return {
 			id: `${inputs.storeId}:${inputs.projectId}`,
@@ -198,7 +175,13 @@ class VercelResourceConnectionResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new VercelResourceConnectionProvider(), name, { ...args }, opts);
+		super(
+			new VercelResourceConnectionProvider(),
+			name,
+			{ ...args },
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
+		);
 	}
 }
 

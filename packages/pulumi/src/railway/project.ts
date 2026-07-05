@@ -294,7 +294,8 @@ class RailwayProjectResource extends pulumi.dynamic.Resource {
 				projectId: undefined,
 				productionEnvironmentId: undefined,
 			},
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

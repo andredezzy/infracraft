@@ -1,7 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
+import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
-
-const VERCEL_API_URL = "https://api.vercel.com";
 
 /** Resolved inputs for the Vercel marketplace resource dynamic provider. */
 interface VercelMarketplaceResourceInputs {
@@ -76,26 +75,12 @@ export class VercelMarketplaceResourceProvider
 				: {}),
 		};
 
-		const response = await fetch(
-			`${VERCEL_API_URL}/v1/storage/stores/integration/direct?teamId=${inputs.teamId}`,
-			{
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${inputs.token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify(body),
-			},
+		const client = new VercelClient(inputs.token, inputs.teamId);
+
+		const { store } = await client.post<VercelStoreResponse>(
+			"/v1/storage/stores/integration/direct",
+			body,
 		);
-
-		if (!response.ok) {
-			throw new Error(
-				`Vercel store provisioning failed (${response.status}): ${await response.text()}`,
-			);
-		}
-
-		const data = (await response.json()) as VercelStoreResponse;
-		const { store } = data;
 
 		// externalId is the idempotency key; Pulumi state normally prevents re-create.
 		// If a store with this externalId already exists out-of-band and Vercel does not
@@ -188,7 +173,8 @@ class VercelMarketplaceResourceResource extends pulumi.dynamic.Resource {
 				externalResourceId: undefined,
 				status: undefined,
 			},
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

@@ -85,6 +85,56 @@ describe("RailwayProjectTokenResourceProvider", () => {
 		).rejects.toThrow(/Could not resolve token id/);
 	});
 
+	describe("delete", () => {
+		const props = {
+			token: "provider-tok",
+			projectId: "proj-1",
+			environmentId: "env-staging",
+			name: "pulumi-staging",
+			value: "minted-tok",
+			tokenId: "tok-id-1",
+		};
+
+		it("revokes the token by its stored id", async () => {
+			mockQuery.mockResolvedValueOnce({ projectTokenDelete: true });
+
+			await new RailwayProjectTokenResourceProvider().delete(
+				"proj-1:pulumi-staging",
+				props,
+			);
+
+			const [mutation, vars] = mockQuery.mock.calls[0];
+			expect(mutation).toContain("projectTokenDelete");
+			expect(vars).toEqual({ id: "tok-id-1" });
+		});
+
+		it("resolves when the token is already revoked (rotation cleanup deleted it first)", async () => {
+			mockQuery.mockRejectedValueOnce(
+				new Error("Railway API error: ProjectToken not found"),
+			);
+
+			await expect(
+				new RailwayProjectTokenResourceProvider().delete(
+					"proj-1:pulumi-staging",
+					props,
+				),
+			).resolves.toBeUndefined();
+		});
+
+		it("rethrows errors other than not-found", async () => {
+			mockQuery.mockRejectedValueOnce(
+				new Error("Railway API error: Not authorized"),
+			);
+
+			await expect(
+				new RailwayProjectTokenResourceProvider().delete(
+					"proj-1:pulumi-staging",
+					props,
+				),
+			).rejects.toThrow("Not authorized");
+		});
+	});
+
 	describe("diff (rotation)", () => {
 		const olds = {
 			token: "provider-tok",

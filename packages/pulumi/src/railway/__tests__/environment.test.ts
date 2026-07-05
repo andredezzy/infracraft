@@ -109,6 +109,46 @@ describe("RailwayEnvironmentResourceProvider", () => {
 		});
 	});
 
+	describe("read", () => {
+		it("returns a blank ReadResult when the environment is gone (deleted out of band)", async () => {
+			mockQuery.mockResolvedValue({ project: { environments: { edges: [] } } });
+
+			const result = await new RailwayEnvironmentResourceProvider().read(
+				"env-staging-uuid",
+				{
+					token: "tok",
+					projectId: "proj-123",
+					name: "staging",
+					environmentId: "env-staging-uuid",
+				},
+			);
+
+			expect(result).toEqual({});
+		});
+
+		it("refreshes the environment id when it still exists", async () => {
+			mockQuery.mockResolvedValue({
+				project: {
+					environments: {
+						edges: [{ node: { id: "env-staging-uuid", name: "staging" } }],
+					},
+				},
+			});
+
+			const result = await new RailwayEnvironmentResourceProvider().read(
+				"env-staging-uuid",
+				{
+					token: "tok",
+					projectId: "proj-123",
+					name: "staging",
+					environmentId: "env-staging-uuid",
+				},
+			);
+
+			expect(result.id).toBe("env-staging-uuid");
+		});
+	});
+
 	describe("delete", () => {
 		it("deletes the environment via environmentDelete", async () => {
 			mockQuery.mockResolvedValue({});

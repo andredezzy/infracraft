@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
@@ -100,7 +101,20 @@ class FlySecretResourceProvider implements pulumi.dynamic.ResourceProvider {
 			values[key] = null;
 		}
 
-		await applySecrets(client, props.appName, values);
+		try {
+			await applySecrets(client, props.appName, values);
+		} catch (error) {
+			// App (and its secrets) already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(
+					`Fly app "${props.appName}" already deleted — nothing to unset`,
+				);
+
+				return;
+			}
+
+			throw error;
+		}
 	}
 
 	async diff(
@@ -146,7 +160,8 @@ class FlySecretResource extends pulumi.dynamic.Resource {
 			new FlySecretResourceProvider(),
 			name,
 			{ ...args, version: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

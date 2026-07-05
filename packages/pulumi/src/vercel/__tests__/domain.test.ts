@@ -128,13 +128,30 @@ describe("VercelDomainResourceProvider", () => {
 		it("throws on a non-404 error status", async () => {
 			mockFetch.mockResolvedValue({
 				ok: false,
-				status: 500,
-				text: async () => "internal error",
+				status: 400,
+				text: async () => "bad request",
 			});
 
 			await expect(
 				new VercelDomainResourceProvider().create(inputs()),
-			).rejects.toThrow(/Vercel API error fetching domain/);
+			).rejects.toThrow(/Vercel API error \(400\)/);
+		});
+	});
+
+	describe("read", () => {
+		it("returns a blank ReadResult when the domain is gone (deleted out of band)", async () => {
+			mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+			const result = await new VercelDomainResourceProvider().read(
+				"prj_1/app.example.com",
+				{
+					...inputs(),
+					verified: true,
+					cnameTarget: "cname.vercel-dns.com",
+				},
+			);
+
+			expect(result).toEqual({});
 		});
 	});
 

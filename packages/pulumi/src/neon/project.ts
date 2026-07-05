@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { NeonClient } from "./client";
 import type { NeonProvider } from "./provider";
 
@@ -85,16 +86,25 @@ class NeonProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
 	): Promise<pulumi.dynamic.ReadResult> {
 		const client = new NeonClient(props.apiKey);
 
-		const result = await client.get<ProjectReadResponse>(`/projects/${id}`);
+		try {
+			const result = await client.get<ProjectReadResponse>(`/projects/${id}`);
 
-		return {
-			id: result.project.id,
-			props: {
-				...props,
-				name: result.project.name,
-				projectId: result.project.id,
-			},
-		};
+			return {
+				id: result.project.id,
+				props: {
+					...props,
+					name: result.project.name,
+					projectId: result.project.id,
+				},
+			};
+		} catch (error) {
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			if (error instanceof ApiNotFoundError) {
+				return {};
+			}
+
+			throw error;
+		}
 	}
 
 	async update(
@@ -158,7 +168,8 @@ class NeonProjectResource extends pulumi.dynamic.Resource {
 			new NeonProjectResourceProvider(),
 			name,
 			{ ...args, projectId: undefined },
-			opts,
+			// The API key flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["apiKey"] },
 		);
 	}
 }

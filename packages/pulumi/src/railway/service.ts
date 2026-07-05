@@ -389,7 +389,8 @@ export class RailwayServiceResourceProvider
 				{ serviceId: id },
 			);
 		} catch {
-			throw new Error(`Railway service "${props.name}" (${id}) not found`);
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
 		}
 
 		return { id, props: { ...props, serviceId: id } };
@@ -499,7 +500,8 @@ class RailwayServiceResource extends pulumi.dynamic.Resource {
 			new RailwayServiceResourceProvider(),
 			name,
 			{ ...args, serviceId: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

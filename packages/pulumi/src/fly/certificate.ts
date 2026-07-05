@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
@@ -90,7 +91,8 @@ class FlyCertificateResourceProvider
 		);
 
 		if (!cert) {
-			throw new Error(`Fly certificate "${id}" not found during refresh`);
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
 		}
 
 		return {
@@ -117,9 +119,20 @@ class FlyCertificateResourceProvider
 	async delete(id: string, props: FlyCertificateOutputs): Promise<void> {
 		const client = new FlyClient(props.token);
 
-		await client.delete(
-			`/v1/apps/${props.appName}/certificates/${encodeURIComponent(id)}`,
-		);
+		try {
+			await client.delete(
+				`/v1/apps/${props.appName}/certificates/${encodeURIComponent(id)}`,
+			);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Fly certificate "${id}" already deleted`);
+
+				return;
+			}
+
+			throw error;
+		}
 	}
 
 	async diff(
@@ -163,7 +176,8 @@ class FlyCertificateResource extends pulumi.dynamic.Resource {
 			new FlyCertificateResourceProvider(),
 			name,
 			{ ...args, configured: undefined, dnsRequirements: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

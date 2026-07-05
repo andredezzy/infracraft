@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
 import { NeonClient } from "./client";
 import type { NeonProject } from "./project";
@@ -157,20 +158,29 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 	): Promise<pulumi.dynamic.ReadResult> {
 		const client = new NeonClient(props.apiKey);
 
-		const result = await client.get<EndpointResponse>(
-			`/projects/${props.projectId}/endpoints/${id}`,
-		);
+		try {
+			const result = await client.get<EndpointResponse>(
+				`/projects/${props.projectId}/endpoints/${id}`,
+			);
 
-		return {
-			id: result.endpoint.id,
-			props: {
-				...props,
-				host: result.endpoint.host,
-				minCu: result.endpoint.autoscaling_limit_min_cu,
-				maxCu: result.endpoint.autoscaling_limit_max_cu,
-				suspendTimeout: result.endpoint.suspend_timeout_seconds,
-			},
-		};
+			return {
+				id: result.endpoint.id,
+				props: {
+					...props,
+					host: result.endpoint.host,
+					minCu: result.endpoint.autoscaling_limit_min_cu,
+					maxCu: result.endpoint.autoscaling_limit_max_cu,
+					suspendTimeout: result.endpoint.suspend_timeout_seconds,
+				},
+			};
+		} catch (error) {
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			if (error instanceof ApiNotFoundError) {
+				return {};
+			}
+
+			throw error;
+		}
 	}
 
 	async delete(id: string, props: NeonEndpointOutputs): Promise<void> {
@@ -230,7 +240,8 @@ class NeonEndpointResource extends pulumi.dynamic.Resource {
 			new NeonEndpointResourceProvider(),
 			name,
 			{ ...args, host: undefined },
-			opts,
+			// The API key flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["apiKey"] },
 		);
 	}
 }

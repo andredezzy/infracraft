@@ -75,7 +75,7 @@ describe("pickProductionDomain", () => {
 	});
 });
 
-describe("VercelProjectResourceProvider.delete", () => {
+describe("VercelProjectResourceProvider", () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
@@ -94,13 +94,52 @@ describe("VercelProjectResourceProvider.delete", () => {
 		projectId: "prj_1",
 	});
 
-	it("deletes the project via the projects API", async () => {
-		mockFetch.mockResolvedValue({ ok: true, status: 204 });
+	describe("read", () => {
+		it("returns a blank ReadResult when the project is gone (deleted out of band)", async () => {
+			mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
-		await new VercelProjectResourceProvider().delete("prj_1", props());
+			const result = await new VercelProjectResourceProvider().read(
+				"prj_1",
+				props(),
+			);
 
-		const [url, init] = mockFetch.mock.calls[0];
-		expect(url).toContain("/v9/projects/prj_1");
-		expect(init.method).toBe("DELETE");
+			expect(result).toEqual({});
+		});
+
+		it("refreshes props when the project still exists", async () => {
+			mockFetch.mockResolvedValue({
+				ok: true,
+				status: 200,
+				json: () => Promise.resolve({ id: "prj_1", name: "renamed-nexus" }),
+			});
+
+			const result = await new VercelProjectResourceProvider().read(
+				"prj_1",
+				props(),
+			);
+
+			expect(result.id).toBe("prj_1");
+			expect(result.props?.name).toBe("renamed-nexus");
+		});
+	});
+
+	describe("delete", () => {
+		it("deletes the project via the projects API", async () => {
+			mockFetch.mockResolvedValue({ ok: true, status: 204 });
+
+			await new VercelProjectResourceProvider().delete("prj_1", props());
+
+			const [url, init] = mockFetch.mock.calls[0];
+			expect(url).toContain("/v9/projects/prj_1");
+			expect(init.method).toBe("DELETE");
+		});
+
+		it("tolerates a 404 (already gone)", async () => {
+			mockFetch.mockResolvedValue({ ok: false, status: 404 });
+
+			await expect(
+				new VercelProjectResourceProvider().delete("prj_1", props()),
+			).resolves.toBeUndefined();
+		});
 	});
 });

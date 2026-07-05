@@ -24,7 +24,7 @@ describe("VercelResourceConnectionProvider", () => {
 				.mockResolvedValueOnce({
 					ok: true,
 					status: 201,
-					text: () => Promise.resolve(""),
+					json: () => Promise.resolve({}),
 				});
 
 			const provider = new VercelResourceConnectionProvider();

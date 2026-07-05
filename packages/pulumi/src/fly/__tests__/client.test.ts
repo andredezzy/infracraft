@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import { ApiNotFoundError } from "../../errors/api-not-found-error";
 import { FlyClient } from "../client";
 
 describe("FlyClient", () => {
@@ -36,14 +37,29 @@ describe("FlyClient", () => {
 			})
 			.mockResolvedValueOnce({
 				ok: false,
-				status: 500,
-				text: () => Promise.resolve("boom"),
+				status: 403,
+				text: () => Promise.resolve("forbidden"),
 			});
 
 		const client = new FlyClient("test-token");
 
 		await expect(client.tryGet("/v1/apps/missing")).resolves.toBeNull();
-		await expect(client.tryGet("/v1/apps/broken")).rejects.toThrow("500");
+		await expect(client.tryGet("/v1/apps/broken")).rejects.toThrow("403");
+	});
+
+	it("get throws ApiNotFoundError on 404", async () => {
+		globalThis.fetch = vi.fn().mockResolvedValue({
+			ok: false,
+			status: 404,
+			text: () => Promise.resolve("nope"),
+		});
+
+		const client = new FlyClient("test-token");
+		const error = await client.get("/v1/apps/missing").catch((e) => e);
+
+		expect(error).toBeInstanceOf(ApiNotFoundError);
+		expect(error.provider).toBe("fly");
+		expect(error.path).toBe("/v1/apps/missing");
 	});
 
 	it("sends POST with a JSON body", async () => {

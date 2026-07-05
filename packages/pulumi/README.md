@@ -14,6 +14,15 @@
 
 Native Pulumi providers with adopt-or-create semantics and deploy orchestration. No Terraform bridge.
 
+## Design principles
+
+- **Resources model single API objects.** Each resource wraps exactly one platform API object, and argument names mirror the platform API's field names.
+- **Adopt-or-create IS the import principle.** `pulumi import` is unimplemented for dynamic providers, so `create()` looks the object up by name and adopts it before creating a new one.
+- **Reads reconcile drift.** A resource deleted out of band returns blank on `pulumi refresh` and gets recreated on the next `up`. Write-once secrets and env-var batches are deliberate pass-throughs — their stored state is the source of truth.
+- **Deletes are conservative — and idempotent.** Shared containers (projects, project-level services) are never deleted by Pulumi; volumes retain; deleting an already-gone resource succeeds instead of stranding state.
+- **One resilient transport.** All HTTP goes through a single fetch wrapper with a per-attempt timeout, bounded retries on transient failures (network errors, 5xx, 429), and `Retry-After` support.
+- **Secrets stay secret.** Provider credentials and minted values are marked secret in Pulumi state, and deploy tokens travel via stdin — never in command text.
+
 ## Providers
 
 | | Provider | Import | What it does |

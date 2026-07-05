@@ -179,7 +179,13 @@ class RailwayVariableResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new RailwayVariableResourceProvider(), name, { ...args }, opts);
+		super(
+			new RailwayVariableResourceProvider(),
+			name,
+			{ ...args },
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
+		);
 	}
 }
 

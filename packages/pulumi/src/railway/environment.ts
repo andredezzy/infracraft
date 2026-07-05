@@ -161,9 +161,8 @@ export class RailwayEnvironmentResourceProvider
 		);
 
 		if (!environmentId) {
-			throw new Error(
-				`Railway environment "${props.name}" not found during refresh`,
-			);
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
 		}
 
 		return { id: environmentId, props: { ...props, environmentId } };
@@ -258,7 +257,8 @@ class RailwayEnvironmentResource extends pulumi.dynamic.Resource {
 				...args,
 				environmentId: undefined,
 			},
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

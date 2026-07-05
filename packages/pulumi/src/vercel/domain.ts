@@ -1,8 +1,8 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
+import { VercelClient } from "./client";
 import type { VercelProject } from "./project";
 import type { VercelProvider } from "./provider";
-
-const VERCEL_API_URL = "https://api.vercel.com";
 
 /**
  * Fallback CNAME target, used only when Vercel's domain-config endpoint returns no
@@ -56,24 +56,12 @@ interface VercelRecommendedCname {
  * (logged, since that's an unusual state worth noticing rather than silently accepting).
  */
 async function fetchCnameTarget(
-	token: string,
-	teamId: string,
+	client: VercelClient,
 	name: string,
 ): Promise<string> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v6/domains/${encodeURIComponent(name)}/config?teamId=${teamId}`,
-		{ headers: { Authorization: `Bearer ${token}` } },
-	);
-
-	if (!response.ok) {
-		throw new Error(
-			`Vercel API error fetching domain config for "${name}" (${response.status}): ${await response.text()}`,
-		);
-	}
-
-	const { recommendedCNAME = [] } = (await response.json()) as {
+	const { recommendedCNAME = [] } = await client.get<{
 		recommendedCNAME?: VercelRecommendedCname[];
-	};
+	}>(`/v6/domains/${encodeURIComponent(name)}/config`);
 
 	const preferred = [...recommendedCNAME].sort((a, b) => a.rank - b.rank)[0];
 
@@ -92,27 +80,13 @@ async function fetchCnameTarget(
  * Fetches a project domain by name. Returns `null` if not attached (404).
  */
 async function fetchDomain(
-	token: string,
-	teamId: string,
+	client: VercelClient,
 	projectId: string,
 	name: string,
 ): Promise<VercelDomainResponse | null> {
-	const response = await fetch(
-		`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(projectId)}/domains/${encodeURIComponent(name)}?teamId=${teamId}`,
-		{ headers: { Authorization: `Bearer ${token}` } },
+	return client.tryGet<VercelDomainResponse>(
+		`/v9/projects/${encodeURIComponent(projectId)}/domains/${encodeURIComponent(name)}`,
 	);
-
-	if (response.status === 404) {
-		return null;
-	}
-
-	if (!response.ok) {
-		throw new Error(
-			`Vercel API error fetching domain "${name}" (${response.status}): ${await response.text()}`,
-		);
-	}
-
-	return (await response.json()) as VercelDomainResponse;
 }
 
 /**
@@ -129,12 +103,8 @@ export class VercelDomainResourceProvider
 	async create(
 		inputs: VercelDomainInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const existing = await fetchDomain(
-			inputs.token,
-			inputs.teamId,
-			inputs.projectId,
-			inputs.name,
-		);
+		const client = new VercelClient(inputs.token, inputs.teamId);
+		const existing = await fetchDomain(client, inputs.projectId, inputs.name);
 
 		if (existing) {
 			pulumi.log.info(
@@ -144,44 +114,21 @@ export class VercelDomainResourceProvider
 			const outs: VercelDomainOutputs = {
 				...inputs,
 				verified: existing.verified,
-				cnameTarget: await fetchCnameTarget(
-					inputs.token,
-					inputs.teamId,
-					inputs.name,
-				),
+				cnameTarget: await fetchCnameTarget(client, inputs.name),
 			};
 
 			return { id: `${inputs.projectId}/${inputs.name}`, outs };
 		}
 
-		const response = await fetch(
-			`${VERCEL_API_URL}/v10/projects/${encodeURIComponent(inputs.projectId)}/domains?teamId=${inputs.teamId}`,
-			{
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${inputs.token}`,
-					"Content-Type": "application/json",
-				},
-				body: JSON.stringify({ name: inputs.name }),
-			},
+		const created = await client.post<VercelDomainResponse>(
+			`/v10/projects/${encodeURIComponent(inputs.projectId)}/domains`,
+			{ name: inputs.name },
 		);
-
-		if (!response.ok) {
-			throw new Error(
-				`Vercel API error creating domain "${inputs.name}" (${response.status}): ${await response.text()}`,
-			);
-		}
-
-		const created = (await response.json()) as VercelDomainResponse;
 
 		const outs: VercelDomainOutputs = {
 			...inputs,
 			verified: created.verified,
-			cnameTarget: await fetchCnameTarget(
-				inputs.token,
-				inputs.teamId,
-				inputs.name,
-			),
+			cnameTarget: await fetchCnameTarget(client, inputs.name),
 		};
 
 		return { id: `${inputs.projectId}/${inputs.name}`, outs };
@@ -191,17 +138,12 @@ export class VercelDomainResourceProvider
 		_id: string,
 		props: VercelDomainOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const domain = await fetchDomain(
-			props.token,
-			props.teamId,
-			props.projectId,
-			props.name,
-		);
+		const client = new VercelClient(props.token, props.teamId);
+		const domain = await fetchDomain(client, props.projectId, props.name);
 
 		if (!domain) {
-			throw new Error(
-				`Vercel domain "${props.name}" not found on project ${props.projectId}`,
-			);
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
 		}
 
 		return {
@@ -209,11 +151,7 @@ export class VercelDomainResourceProvider
 			props: {
 				...props,
 				verified: domain.verified,
-				cnameTarget: await fetchCnameTarget(
-					props.token,
-					props.teamId,
-					props.name,
-				),
+				cnameTarget: await fetchCnameTarget(client, props.name),
 			},
 		};
 	}
@@ -230,26 +168,23 @@ export class VercelDomainResourceProvider
 	}
 
 	async delete(_id: string, props: VercelDomainOutputs): Promise<void> {
-		const response = await fetch(
-			`${VERCEL_API_URL}/v9/projects/${encodeURIComponent(props.projectId)}/domains/${encodeURIComponent(props.name)}?teamId=${props.teamId}`,
-			{
-				method: "DELETE",
-				headers: { Authorization: `Bearer ${props.token}` },
-			},
-		);
+		const client = new VercelClient(props.token, props.teamId);
 
-		if (response.status === 404) {
-			pulumi.log.warn(
-				`Vercel domain "${props.name}" already gone from project ${props.projectId}`,
+		try {
+			await client.delete(
+				`/v9/projects/${encodeURIComponent(props.projectId)}/domains/${encodeURIComponent(props.name)}`,
 			);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(
+					`Vercel domain "${props.name}" already gone from project ${props.projectId}`,
+				);
 
-			return;
-		}
+				return;
+			}
 
-		if (!response.ok) {
-			throw new Error(
-				`Vercel API error deleting domain "${props.name}" (${response.status}): ${await response.text()}`,
-			);
+			throw error;
 		}
 
 		pulumi.log.info(
@@ -308,7 +243,8 @@ class VercelDomainResource extends pulumi.dynamic.Resource {
 			new VercelDomainResourceProvider(),
 			name,
 			{ ...args, verified: undefined, cnameTarget: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

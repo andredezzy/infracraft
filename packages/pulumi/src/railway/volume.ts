@@ -260,7 +260,8 @@ class RailwayVolumeResource extends pulumi.dynamic.Resource {
 			new RailwayVolumeResourceProvider(),
 			name,
 			{ ...args, volumeId: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }

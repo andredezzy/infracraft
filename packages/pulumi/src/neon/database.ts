@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
 import { NeonClient } from "./client";
 import type { NeonProject } from "./project";
@@ -100,14 +101,23 @@ class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
 	): Promise<pulumi.dynamic.ReadResult> {
 		const client = new NeonClient(props.apiKey);
 
-		const result = await client.get<DatabaseResponse>(
-			`/projects/${props.projectId}/branches/${props.branchId}/databases/${props.name}`,
-		);
+		try {
+			const result = await client.get<DatabaseResponse>(
+				`/projects/${props.projectId}/branches/${props.branchId}/databases/${props.name}`,
+			);
 
-		return {
-			id,
-			props: { ...props, ownerName: result.database.owner_name },
-		};
+			return {
+				id,
+				props: { ...props, ownerName: result.database.owner_name },
+			};
+		} catch (error) {
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			if (error instanceof ApiNotFoundError) {
+				return {};
+			}
+
+			throw error;
+		}
 	}
 
 	async delete(_id: string, props: NeonDatabaseOutputs): Promise<void> {
@@ -164,7 +174,13 @@ class NeonDatabaseResource extends pulumi.dynamic.Resource {
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
-		super(new NeonDatabaseResourceProvider(), name, { ...args }, opts);
+		super(
+			new NeonDatabaseResourceProvider(),
+			name,
+			{ ...args },
+			// The API key flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["apiKey"] },
+		);
 	}
 }
 

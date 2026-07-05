@@ -1,7 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
+import { VercelClient } from "./client";
 import type { VercelProvider } from "./provider";
-
-const VERCEL_API_URL = "https://api.vercel.com";
 
 /** Resolved inputs for the Vercel integration dynamic provider. */
 interface VercelIntegrationInputs {
@@ -27,6 +26,11 @@ interface VercelIntegrationConfiguration {
 	slug: string;
 }
 
+/** Response of `GET /v1/integrations/configurations` — a top-level array, sometimes wrapped. */
+type VercelIntegrationConfigurationsResponse =
+	| VercelIntegrationConfiguration[]
+	| { configurations: VercelIntegrationConfiguration[] };
+
 /**
  * Dynamic provider that resolves an installed Vercel marketplace integration
  * by its slug to its configuration ID (`icfg_…`).
@@ -39,23 +43,14 @@ export class VercelIntegrationResourceProvider
 	async create(
 		inputs: VercelIntegrationInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
+		const client = new VercelClient(inputs.token, inputs.teamId);
+
 		// `view=account` is required by the configurations endpoint (a missing view returns 400).
-		const response = await fetch(
-			`${VERCEL_API_URL}/v1/integrations/configurations?view=account&teamId=${inputs.teamId}`,
-			{ headers: { Authorization: `Bearer ${inputs.token}` } },
+		const data = await client.get<VercelIntegrationConfigurationsResponse>(
+			"/v1/integrations/configurations?view=account",
 		);
 
-		if (!response.ok) {
-			throw new Error(
-				`Vercel API error fetching integrations (${response.status}): ${await response.text()}`,
-			);
-		}
-
 		// The endpoint returns a top-level array; some responses wrap it in { configurations: [...] }.
-		const data = (await response.json()) as
-			| VercelIntegrationConfiguration[]
-			| { configurations: VercelIntegrationConfiguration[] };
-
 		const configurations = Array.isArray(data) ? data : data.configurations;
 
 		const config = configurations.find((c) => c.slug === inputs.slug);
@@ -133,7 +128,8 @@ class VercelIntegrationResource extends pulumi.dynamic.Resource {
 			new VercelIntegrationResourceProvider(),
 			name,
 			{ ...args, configurationId: undefined },
-			opts,
+			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
+			{ ...opts, additionalSecretOutputs: ["token"] },
 		);
 	}
 }
