@@ -67,6 +67,7 @@
       "devDependencies": {
         "@infracraft/config-test": "workspace:*",
         "@infracraft/config-tsdown": "workspace:*",
+        "@infracraft/sandbox": "workspace:*",
         "@infracraft/typescript-config": "workspace:*",
         "@types/bun": "1.3.14",
         "typescript": "6.0.3",
