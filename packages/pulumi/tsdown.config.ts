@@ -7,8 +7,6 @@ export default library({
 		"src/railway/bin/monitor-deployment.ts",
 		"src/neon/index.ts",
 		"src/vercel/index.ts",
-		// Standalone runnable: `node dist/vercel/bin/apply-env.mjs` (invoked by VercelDeploy when `variables` are set).
-		"src/vercel/bin/apply-env.ts",
 		"src/fly/index.ts",
 		"src/agents/index.ts",
 		"src/hash.ts",

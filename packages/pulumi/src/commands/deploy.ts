@@ -29,7 +29,7 @@ export interface CreateDeployCommandArgs {
 
 export interface CreateDeployCommandResult {
 	command: command.local.Command;
-	/** The deploy CLI's final stdout line (the production URL for Vercel/Fly). */
+	/** The last http(s) URL the deploy CLI printed to stdout (its production URL). */
 	deploymentUrl: pulumi.Output<string>;
 }
 
@@ -95,11 +95,18 @@ export function createDeployCommand(
 		opts,
 	);
 
-	// stdout is undefined when the command never ran or errored before emitting
-	// output — guard it so a real failure isn't masked by a TypeError on trim.
-	const deploymentUrl = cmd.stdout.apply(
-		(out) => (out ?? "").trim().split("\n").pop() ?? "",
-	);
+	// The deploy CLI prints its URL somewhere in stdout, but not always as the
+	// final line — Vercel, for one, follows it with pretty-printed JSON whose
+	// closing brace would win a naive last-line grab. Take the last whitespace-
+	// delimited token that is an http(s) URL instead; "" when there is none (the
+	// command never ran, errored early, or emitted no URL).
+	const deploymentUrl = cmd.stdout.apply((out) => {
+		const urls = (out ?? "")
+			.split(/\s+/)
+			.filter((token) => /^https?:\/\//.test(token));
+
+		return urls.at(-1) ?? "";
+	});
 
 	return { command: cmd, deploymentUrl };
 }

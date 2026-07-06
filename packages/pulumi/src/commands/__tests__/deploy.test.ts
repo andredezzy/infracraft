@@ -13,7 +13,11 @@ vi.mock("@pulumi/command", () => ({
 	local: {
 		Command: class {
 			stdout = {
-				apply: (fn: (out: string) => string) => fn("build\nhttps://x.app"),
+				// A URL mid-stream, then trailing non-URL lines (Vercel prints
+				// pretty JSON after the deployment URL) — the last line is "}",
+				// not the URL, so a naive last-line grab would return the brace.
+				apply: (fn: (out: string) => string) =>
+					fn('Deploying…\nhttps://x.app\n{\n  "id": "dpl_1"\n}'),
 			};
 			constructor(
 				public name: string,
@@ -133,12 +137,14 @@ describe("createDeployCommand", () => {
 		).toThrow(/GitGuard.*DeploySandbox/i);
 	});
 
-	it("derives deploymentUrl from the cli's last stdout line", () => {
+	it("extracts the deploymentUrl from stdout even when non-URL lines trail it", () => {
 		const { deploymentUrl } = createDeployCommand(
 			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
 
+		// The URL is followed by pretty-printed JSON whose closing "}" is the
+		// final line; the last http(s) token, not the last line, is the URL.
 		expect(deploymentUrl).toBe("https://x.app");
 	});
 

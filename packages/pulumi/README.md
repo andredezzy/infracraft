@@ -21,8 +21,8 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 - **Adopt-or-create IS the import principle.** `pulumi import` is unimplemented for dynamic providers, so `create()` looks the object up by name and adopts it before creating a new one. Run `pulumi up` against a pre-existing project and it just works.
 - **Reads reconcile drift.** A resource deleted out of band returns blank on `pulumi refresh` and gets recreated on the next `up`. Write-once secrets and env-var batches are deliberate pass-throughs — their stored state is the source of truth.
 - **Deletes are conservative — and idempotent.** Shared containers (Railway/Neon projects, Railway services, Fly apps) and data stores (Vercel marketplace resources) are never deleted by Pulumi; deleting an already-gone resource succeeds instead of stranding state. Guard everything else that is shared or production-grade with `protect: true`; volumes honor `retainOnDelete`.
-- **Inputs fail at plan time.** `check()` rejects locally decidable mistakes during preview with the offending property named: `RailwayVolume.mountPath` (must be absolute), `RailwayService.source.image` / `RailwayProjectToken.name` / `NeonBranch.name` / `NeonRole.name` (non-empty), `VercelProject.name` (Vercel's published naming rule), `FlyVolume.sizeGb` (positive integer). Preview-unknown inputs are skipped, never failed.
-- **Previews stay faithful.** Identity outputs that provably survive an in-place update are declared stable (`RailwayProject.id`, `RailwayService.id`, `NeonProject.id`, `NeonEndpoint.host`, `NeonRole`'s identity, `VercelProject.id`, `FlyVolume.id`), so dependents keep known values during preview instead of showing phantom replaces. `NeonRole.password` is deliberately not stable — a rotation must cascade.
+- **Inputs fail at plan time.** `check()` rejects locally decidable mistakes during preview with the offending property named: `RailwayVolume.mountPath` (must be absolute), `RailwayService.source.image` / `RailwayProjectToken.name` / `NeonBranch.name` / `NeonRole.name` (non-empty), `FlyVolume.sizeGb` (positive integer). Preview-unknown inputs are skipped, never failed.
+- **Previews stay faithful.** Identity outputs that provably survive an in-place update are declared stable (`RailwayProject.id`, `RailwayService.id`, `NeonProject.id`, `NeonEndpoint.host`, `NeonRole`'s identity, `FlyVolume.id`), so dependents keep known values during preview instead of showing phantom replaces. `NeonRole.password` is deliberately not stable — a rotation must cascade.
 - **One resilient transport.** All HTTP goes through a single fetch wrapper with a per-attempt timeout, bounded retries on transient failures (network errors, 5xx, 429), and `Retry-After` support. See [Transport & errors](#transport--errors).
 - **Secrets stay secret.** Provider credentials and minted values are marked secret in Pulumi state, and deploy tokens travel via stdin — never in command text. Better yet, credentials can stay out of state entirely: every provider accepts the credential as an env var *name* instead of a value — see [Provider credentials](#provider-credentials).
 - **Consumer-controlled triggers and protection.** Deploy resources accept a `triggers` array — hash source directories, env values, or anything else; you decide what causes a redeploy. Use `protect: true` on shared/production resources to prevent accidental deletion.
@@ -33,7 +33,7 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 |---|---|---|---|
 | 🚂 | **Railway** | `@infracraft/pulumi/railway` | The only Pulumi provider for Railway. Projects, environments, services, variables, volumes, domains, deploy tokens, deploys. |
 | 🐘 | **Neon** | `@infracraft/pulumi/neon` | Adopt-or-create layer for Neon Postgres. Projects, branches, endpoints, roles, databases. |
-| ▲ | **Vercel** | `@infracraft/pulumi/vercel` | Projects with adopt-or-create, deploy orchestration with deploy-integrated env vars, custom domains, and marketplace resources. |
+| ▲ | **Vercel** | `@infracraft/pulumi/vercel` | CLI deploy orchestration (`VercelDeploy`) and marketplace resources. Projects, domains, and env vars belong to the official `@pulumiverse/vercel` provider. |
 | 🎯 | **Fly.io** | `@infracraft/pulumi/fly` | App, Secret, Volume, Certificate, IP, and Deploy resources via the Machines REST API and Fly GraphQL API. |
 | 🤖 | **Agents** | `@infracraft/pulumi/agents` | Emit operating hints for AI coding agents working on the stack. |
 | #️⃣ | **Hash** | `@infracraft/pulumi/hash` | Deterministic directory/env-var/app hashing for deploy triggers. |
@@ -66,7 +66,7 @@ const fly = new FlyProvider("fly", { tokenEnvVar: "FLY_API_TOKEN" })
 
 Prefer the env-var form. It keeps the credential out of dynamic-resource inputs and per-resource state entirely, which removes the substrate for [pulumi/pulumi#16041](https://github.com/pulumi/pulumi/issues/16041) ("Unexpected struct type": secret Outputs in dynamic-provider inputs intermittently fail engine serialization — closed not-planned upstream) and matches how first-class provider configuration handles credentials. Dynamic-provider operations execute in the Pulumi CLI's plugin process, which inherits the program's environment — so variables provided by the shell or by an ESC environment's `environmentVariables` block reach them.
 
-The deploy components that feed the credential to a CLI (`VercelDeploy`, `FlyDeploy`) and program-runtime lookups (`VercelProject.url`) resolve the env var at program runtime into a secret Output, so the command env still receives the actual value without it ever becoming a dynamic-resource input.
+The deploy components that feed the credential to a CLI (`VercelDeploy`, `FlyDeploy`) resolve the env var at program runtime into a secret Output, so the command env still receives the actual value without it ever becoming a dynamic-resource input.
 
 ## Railway
 
@@ -228,46 +228,49 @@ Leave the version unset until the first rotation is needed. Identity changes (na
 
 ## Vercel
 
+Use the official [`@pulumiverse/vercel`](https://www.pulumi.com/registry/packages/vercel/) provider for the project itself (`vercel.Project`), its custom domains (`vercel.ProjectDomain`), and its environment variables (`vercel.ProjectEnvironmentVariables`). infracraft adds only what that provider does not cover: CLI-based production deploys with consumer-controlled triggers and sandbox isolation (`VercelDeploy`), and marketplace resource provisioning.
+
 ```typescript
+import * as vercel from "@pulumiverse/vercel"
 import {
   VercelProvider,
-  VercelProject,
   VercelDeploy,
-  VercelDomain,
   VercelIntegration,
   VercelMarketplaceResource,
   VercelResourceConnection,
 } from "@infracraft/pulumi/vercel"
 import { hash } from "@infracraft/pulumi/hash"
 
+// Project, custom domain, and env vars: the official provider.
+const project = new vercel.Project("web", {
+  name: "my-web-app",
+  framework: "nextjs",
+  rootDirectory: "apps/web",
+})
+
+new vercel.ProjectDomain("web-domain", {
+  projectId: project.id,
+  domain: "app.example.com",
+})
+
+new vercel.ProjectEnvironmentVariables("web-env", {
+  projectId: project.id,
+  variables: [
+    { key: "NEXT_PUBLIC_API_URL", value: apiUrl, target: ["production", "preview"] },
+  ],
+})
+
+// CLI deploy + marketplace resources: infracraft.
 const provider = new VercelProvider("vercel", {
   tokenEnvVar: "VERCEL_TOKEN",   // or token: config.requireSecret("vercelToken")
   teamId: "team_xxx",
 })
 
-const project = new VercelProject("web", {
-  name: "my-web-app",
-  framework: "nextjs",
-  rootDirectory: "apps/web",
-}, { provider })
-
-// project.url is a full https:// URL — custom domain or <name>.vercel.app
-export const url = project.url
-
-// Env vars are applied by the deploy command itself, right before
-// `vercel deploy` — see "Deploy-integrated env vars" below. A change to any
-// variable redeploys automatically (a non-secret digest joins the triggers).
+// project.id sources the deploy target; hash the source so edits redeploy.
 new VercelDeploy("web-deploy", {
-  variables: { NEXT_PUBLIC_API_URL: apiUrl },
+  projectId: project.id,
   triggers: [hash("apps/web")],
-}, { provider, project })
-
-// Custom domain: point the domain's DNS CNAME at `cnameTarget`
-const domain = new VercelDomain("web-domain", {
-  name: "app.example.com",
-}, { provider, project })
-
-export const cnameTarget = domain.cnameTarget
+}, { provider })
 
 // Marketplace example: provision an Upstash KV store
 const integration = new VercelIntegration("upstash", {
@@ -293,26 +296,11 @@ new VercelResourceConnection("kv-conn", {
 | Class | Key outputs | Notes |
 |---|---|---|
 | `VercelProvider` | — | `token` or `tokenEnvVar` (see [Provider credentials](#provider-credentials)) + `teamId` |
-| `VercelProject` | `.id`, `.url` | `.url` is a full `https://` URL; prefers the custom production domain over `<name>.vercel.app`. Deletes the project on destroy — `protect: true` production projects |
-| `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes`; optional `variables` map is upserted (production + preview + development) by the deploy command itself right before the deploy, and hashed into the triggers so variable changes redeploy |
-| `VercelDomain` | `.name`, `.verified`, `.cnameTarget` | Attaches a custom domain to a project (adopt-or-create); `.cnameTarget` is Vercel's own DNS recommendation for that specific domain |
+| `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes` from an optional [sandbox](#sandbox--git-guard); `projectId` sources the deploy target (e.g. `@pulumiverse/vercel`'s `vercel.Project.id`). `.deploymentUrl` is the last http(s) URL the CLI printed |
 | `VercelIntegration` | `.configurationId` (`icfg_…`) | Resolves an installed marketplace integration by slug (install it once via the dashboard first) |
 | `VercelMarketplaceResource` | `.id`, `.externalResourceId`, `.status` | Provisions a marketplace store; `type` is the integration product ID or slug |
 | `VercelResourceConnection` | — | Wires a store to a project; injects env vars into target environments (`makeEnvVarsSensitive` defaults to `true` — then `targets` must not include `development`) |
-| `VercelClient` | — | Typed REST client behind every Vercel resource (`get` / `tryGet` / `post` / `patch` / `delete`); appends `teamId` to every request and rides the resilient transport |
-
-**Helpers:** `VERCEL_FRAMEWORKS` (const array), `VercelFramework` (derived union type)
-
-### Deploy-integrated env vars
-
-`VercelDeploy.variables` applies env vars inside the deploy command flow instead of as a Pulumi resource, because a dynamic-resource path for env vars hits a Pulumi engine-internal stateful bug on clean-slate first creates: "Unexpected struct type", strictly alternating pass/fail across identical from-zero runs, reproduced with plain-literal inputs — zero Outputs or secrets — on matched CLI/SDK versions, with four structural theories falsified by bisection. No input shape avoids an engine-internal bug, so the fix is architectural: keep env vars off the dynamic-provider marshal path entirely, the same way `RailwayDeploy`'s monitor bin owns Railway's imperative deploy steps.
-
-When `variables` is set, the deploy command runs a standalone applier bin (`node dist/vercel/bin/apply-env.mjs`) before `vercel deploy --prod --yes`:
-
-- Each entry is upserted for production + preview + development — created, or updated in place when the key already exists (ENV_CONFLICT) — via the shared `env-var-api` REST logic.
-- The key→value payload travels as a secret JSON value in the command environment (`IC_VC_ENV_JSON`), masked in state and never present in the script text pulumi-command echoes on failure. Values must be known at preview (config-derived) — the same class as the token the command env already carries.
-- A non-secret digest of the variables joins the command triggers automatically, so any variable change redeploys.
-- The applier logs one line per applied key (names only, never values) and exits non-zero on the first failed key — the deploy never runs against a half-applied environment.
+| `VercelClient` | — | Typed REST client behind the marketplace resources (`get` / `tryGet` / `post` / `patch` / `delete`); appends `teamId` to every request and rides the resilient transport |
 
 ## Fly.io
 
@@ -471,9 +459,10 @@ const guard = new GitGuard("git-guard")
 
 // Runs `vercel deploy` from an isolated copy with a stub `.git`
 new VercelDeploy("web-deploy", {
+  projectId: project.id,
   triggers: [hash("apps/web")],
   excludePaths: ["apps/docs"],   // drop other apps from the upload (stub mode only)
-}, { provider, project, dependsOn: [sandbox, guard] })
+}, { provider, dependsOn: [sandbox, guard] })
 ```
 
 | `dependsOn` markers | Working copy | `.git` sent to the platform |
@@ -507,7 +496,7 @@ Every provider client (`RailwayClient`, `NeonClient`, `VercelClient`, `FlyClient
 |---|---|---|
 | Railway | Nothing. Zero Pulumi providers exist. | **We are the Railway Pulumi provider.** |
 | Neon | Bridged TF provider; fails on pre-existing resources | Adopt-or-create without manual `import` blocks |
-| Vercel | `@pulumiverse/vercel`; no adopt-or-create, no CLI deploys | Adopt-or-create projects + consumer-controlled deploy triggers |
+| Vercel | `@pulumiverse/vercel` covers projects, domains, and env vars — but has no CLI deploy or marketplace provisioning | CLI deploys with consumer-controlled triggers and sandbox isolation, plus marketplace resource provisioning |
 | Fly.io | `@ediri/pulumi-fly`; bridges a Terraform provider Fly archived March 2024, no secrets support | Hand-rolled `dynamic` resources matching every other provider: secrets, adopt-or-create, consumer-controlled deploys; no unmaintained upstream |
 
 ## Release history

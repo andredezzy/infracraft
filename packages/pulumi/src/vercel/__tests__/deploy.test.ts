@@ -1,4 +1,3 @@
-// src/vercel/__tests__/deploy.test.ts  (replace entire file)
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { commandCalls } = vi.hoisted(() => ({
@@ -77,17 +76,6 @@ beforeEach(() => {
 });
 
 describe("VercelDeploy", () => {
-	it("throws when neither projectId nor project is provided", () => {
-		expect(
-			() =>
-				new VercelDeploy(
-					"nexus",
-					{ triggers: [] },
-					{ provider, dependsOn: [sandbox] },
-				),
-		).toThrow(/projectId.*project/i);
-	});
-
 	it("wires the seam with the Vercel cli and env, no monorepoRoot/dir", () => {
 		new VercelDeploy(
 			"nexus",
@@ -123,54 +111,7 @@ describe("VercelDeploy", () => {
 		expect(deploy.deploymentUrl).toBe("https://nexus.vercel.app");
 	});
 
-	it("runs the env applier bin before `vercel deploy` when variables are given", () => {
-		new VercelDeploy(
-			"nexus",
-			{
-				projectId: "prj_1",
-				triggers: ["h"],
-				variables: { NEXT_PUBLIC_API_URL: "https://api.internal" },
-			},
-			{ provider, dependsOn: [sandbox] },
-		);
-
-		const { args } = commandCalls[0];
-
-		const create = (
-			args.create as { apply: (f: (s: string) => string) => string }
-		).apply((s) => s);
-
-		// Applier first, deploy second, short-circuited on applier failure.
-		expect(create).toContain('node "');
-		expect(create).toContain("bin/apply-env.mjs");
-		expect(create).toContain('apply-env.mjs" && vercel deploy --prod --yes');
-
-		expect(create.indexOf("apply-env.mjs")).toBeLessThan(
-			create.indexOf("vercel deploy --prod --yes"),
-		);
-
-		// Values travel via the command environment (secret JSON payload),
-		// never in the script text pulumi-command echoes on failure.
-		expect(create).not.toContain("https://api.internal");
-
-		const environment = args.environment as Record<string, unknown>;
-
-		expect(JSON.parse(environment.IC_VC_ENV_JSON as string)).toEqual({
-			NEXT_PUBLIC_API_URL: "https://api.internal",
-		});
-
-		// A non-secret digest of the variables joins the consumer triggers so
-		// any variable change redeploys.
-		const triggers = (
-			args.triggers as { apply: (f: (t: unknown[]) => unknown[]) => unknown[] }
-		).apply((t) => t);
-
-		expect(triggers).toHaveLength(2);
-		expect(triggers[0]).toBe("h");
-		expect(triggers[1]).toMatch(/^[0-9a-f]{64}$/);
-	});
-
-	it("leaves cli, environment, and triggers untouched without variables", () => {
+	it("passes triggers through unchanged and adds no env-applier step", () => {
 		new VercelDeploy(
 			"nexus",
 			{ projectId: "prj_1", triggers: ["h"] },
@@ -183,7 +124,7 @@ describe("VercelDeploy", () => {
 			args.create as { apply: (f: (s: string) => string) => string }
 		).apply((s) => s);
 
-		expect(create).not.toContain("apply-env.mjs");
+		expect(create).not.toContain("apply-env");
 		expect(args.environment).not.toHaveProperty("IC_VC_ENV_JSON");
 		expect(args.triggers).toEqual(["h"]);
 	});
