@@ -486,6 +486,40 @@ new VercelDeploy("web-deploy", {
 
 `DeploySandbox` runs the preflight for the core POSIX set (`git`, `rsync`, `awk`, `mktemp`) automatically, so a broken host fails fast instead of midway through a deploy script. Call `assertHostBinaries(["railway"])` / `["vercel"]` / `["fly"]` at program start to preflight the platform CLIs your deploys use — see [`@infracraft/sandbox`](../sandbox) for the full doctor.
 
+## Preflight checks
+
+Opt-in guards to run at the top of a Pulumi program, before constructing resources — each one turns a failure that would otherwise surface mid-`up` into a clear, actionable message at program start. None is invoked automatically (the sole exception: `DeploySandbox` runs the host-binary check for its own POSIX toolchain); you call the ones your stack needs.
+
+```typescript
+import { assertHostBinaries } from "@infracraft/pulumi/sandbox"
+import {
+  assertPulumiVersionMatch,
+  assertCloudflareTokenScopes,
+} from "@infracraft/pulumi/preflight"
+
+// 1. Platform CLIs your deploys shell out to are installed.
+assertHostBinaries(["fly", "vercel"])
+
+// 2. The Pulumi CLI and the @pulumi/pulumi SDK agree on major.minor.
+assertPulumiVersionMatch()
+
+// 3. The Cloudflare token is valid and active before any DNS/zone change.
+await assertCloudflareTokenScopes({
+  token: process.env.CLOUDFLARE_API_TOKEN ?? "",
+  requiredPermissionGroups: ["Zone Settings Write", "DNS Write"], // advisory — see below
+})
+```
+
+| Guard | Import | Catches | On failure |
+|---|---|---|---|
+| `assertHostBinaries(binaries)` | `@infracraft/pulumi/sandbox` | A platform CLI (`fly` / `vercel` / `railway` …) missing from `PATH` | Throws one error naming ALL missing binaries, with an install hint for each known one |
+| `assertPulumiVersionMatch(options?)` | `@infracraft/pulumi/preflight` | A skew between the running Pulumi CLI (Go engine) and the installed `@pulumi/pulumi` SDK (Node serializer) — the cause of intermittent "Unexpected struct type" marshal failures on dynamic resources | Throws (or warns, with `mode: "warn"`) naming both versions and the pin-the-CLI fix. Best-effort: warns and skips when the SDK can't be resolved from the program's working directory |
+| `assertCloudflareTokenScopes(options)` | `@infracraft/pulumi/preflight` | An invalid, revoked, disabled, or expired Cloudflare API token — so a mid-`up` 403 (e.g. a DNS-only token lacking `Zone Settings:Edit`) becomes a plan-time error | Throws when the token is empty, rejected (401/403), or not `active` |
+
+**`assertPulumiVersionMatch` options:** `mode: "throw"` (default) or `"warn"`, plus injectable `readCliVersion` / `readSdkVersion` readers for testing. It compares major.minor (patch and pre-release suffixes are ignored).
+
+**`assertCloudflareTokenScopes` — validity, not scope.** The Cloudflare verify endpoint (`GET /user/tokens/verify`) confirms a token is valid and active but returns only `{ id, status }` — it does **not** enumerate the token's permission groups (reading those needs the token id and a separate account-scoped call). So this guard verifies active-status only; `requiredPermissionGroups`, when supplied, is echoed back as a manual-confirmation reminder rather than enforced — it never claims to verify a scope it cannot. A future follow-up could probe a concrete permission by attempting a no-op setting write.
+
 ## Transport & errors
 
 Every provider client (`RailwayClient`, `NeonClient`, `VercelClient`, `FlyClient`) routes its HTTP through one resilient fetch wrapper: a 15s per-attempt timeout, up to 3 attempts on transient failures (network errors, 5xx, 429), a numeric `Retry-After` honored on 429 (capped at 30s), and exponential backoff otherwise (1s/2s/4s, capped at 20s) — everything else, including non-429 4xx, returns to the caller untouched. The REST clients turn a 404 into a typed `ApiNotFoundError` (carrying the provider and path), and catch sites test `instanceof` rather than matching message strings: adopt-or-create lookups turn it into "create", `read()` turns it into a blank result so `pulumi refresh` reconciles out-of-band deletions, and `delete()` turns it into an idempotent no-op.

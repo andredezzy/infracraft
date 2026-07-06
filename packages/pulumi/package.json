@@ -41,6 +41,10 @@
 		"./sandbox": {
 			"types": "./dist/sandbox.d.mts",
 			"default": "./dist/sandbox.mjs"
+		},
+		"./preflight": {
+			"types": "./dist/preflight/index.d.mts",
+			"default": "./dist/preflight/index.mjs"
 		}
 	},
 	"files": [

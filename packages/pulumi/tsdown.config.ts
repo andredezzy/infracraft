@@ -9,6 +9,7 @@ export default library({
 		"src/vercel/index.ts",
 		"src/fly/index.ts",
 		"src/agents/index.ts",
+		"src/preflight/index.ts",
 		"src/hash.ts",
 		"src/git-guard.ts",
 		"src/sandbox.ts",
