@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ensurePulumiVersionMatch } from "../preflight/assert-pulumi-version-match";
 
 /**
  * Args for NeonProvider. Exactly one of `apiKey` and `apiKeyEnvVar` must be set.
@@ -62,6 +63,8 @@ export class NeonProvider extends pulumi.ComponentResource {
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:neon:Provider", name, {}, opts);
+
+		ensurePulumiVersionMatch();
 
 		if ((args.apiKey === undefined) === (args.apiKeyEnvVar === undefined)) {
 			throw new Error(

@@ -494,23 +494,17 @@ new VercelDeploy("web-deploy", {
 
 ## Preflight checks
 
-Opt-in guards to run at the top of a Pulumi program, before constructing resources — each one turns a failure that would otherwise surface mid-`up` into a clear, actionable message at program start. None is invoked automatically (the sole exception: `DeploySandbox` runs the host-binary check for its own POSIX toolchain); you call the ones your stack needs.
+Guards that turn a failure that would otherwise surface mid-`up` into a clear, actionable message at program start. Two run themselves — zero ceremony:
+
+- **Host binaries** — `DeploySandbox` checks its own POSIX toolchain; `assertHostBinaries(["fly", "vercel"])` remains available for platform CLIs your program shells out to.
+- **Pulumi CLI/SDK version match** — every infracraft provider constructor runs the memoized `ensurePulumiVersionMatch()`, so any program constructing a provider gets the skew guard automatically. Call `assertPulumiVersionMatch()` directly only to check earlier than the first provider or to opt into `WARN` mode.
+
+The Cloudflare guard stays explicit, for a structural reason: infracraft owns no Cloudflare resources (DNS goes through the official `@pulumi/cloudflare` provider), so no infracraft component can run it for you.
 
 ```typescript
-import { assertHostBinaries } from "@infracraft/pulumi/sandbox"
-import {
-  assertPulumiVersionMatch,
-  assertCloudflareZoneAccess,
-  PulumiVersionMismatchMode,
-} from "@infracraft/pulumi/preflight"
+import { assertCloudflareZoneAccess } from "@infracraft/pulumi/preflight"
 
-// 1. Platform CLIs your deploys shell out to are installed.
-assertHostBinaries(["fly", "vercel"])
-
-// 2. The Pulumi CLI and the @pulumi/pulumi SDK agree on major.minor.
-assertPulumiVersionMatch()
-
-// 3. The Cloudflare token can read the target zone before any DNS/zone change.
+// The Cloudflare token can read the target zone before any DNS/zone change.
 await assertCloudflareZoneAccess({
   token: process.env.CLOUDFLARE_API_TOKEN ?? "",
   zoneId: process.env.CLOUDFLARE_ZONE_ID ?? "",
@@ -520,7 +514,7 @@ await assertCloudflareZoneAccess({
 | Guard | Import | Catches | On failure |
 |---|---|---|---|
 | `assertHostBinaries(binaries)` | `@infracraft/pulumi/sandbox` | A platform CLI (`fly` / `vercel` / `railway` …) missing from `PATH` | Throws one error naming ALL missing binaries, with an install hint for each known one |
-| `assertPulumiVersionMatch(options?)` | `@infracraft/pulumi/preflight` | A skew between the running Pulumi CLI (Go engine) and the installed `@pulumi/pulumi` SDK (Node serializer) — the cause of intermittent "Unexpected struct type" marshal failures on dynamic resources | Throws (or warns, with `mode: PulumiVersionMismatchMode.WARN`) naming both versions and the pin-the-CLI fix. Best-effort: warns and skips when the SDK can't be resolved from the program's working directory |
+| `ensurePulumiVersionMatch()` / `assertPulumiVersionMatch(options?)` | `@infracraft/pulumi/preflight` (`ensure` runs automatically in every provider constructor) | A skew between the running Pulumi CLI (Go engine) and the installed `@pulumi/pulumi` SDK (Node serializer) — the cause of intermittent "Unexpected struct type" marshal failures on dynamic resources | Throws (or warns, with `mode: PulumiVersionMismatchMode.WARN`) naming both versions and the pin-the-CLI fix. Best-effort: warns and skips when the SDK can't be resolved from the program's working directory, or (`ensure` only) when the `pulumi` binary itself can't run |
 | `assertCloudflareZoneAccess(options)` | `@infracraft/pulumi/preflight` | A Cloudflare API token that cannot read the target zone (invalid, revoked, or not scoped to it) — so a mid-`up` 403/404 becomes a plan-time error | Throws naming the status (401/403/404/other) and the fix, when the zone read is not 2xx |
 
 **`assertPulumiVersionMatch` options:** `mode: PulumiVersionMismatchMode.THROW` (default) or `.WARN`, plus injectable `readCliVersion` / `readSdkVersion` readers for testing. It compares major.minor (patch and pre-release suffixes are ignored).

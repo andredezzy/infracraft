@@ -4,6 +4,7 @@ export {
 } from "./assert-cloudflare-zone-access";
 export {
 	assertPulumiVersionMatch,
+	ensurePulumiVersionMatch,
 	type PulumiVersionMatchOptions,
 	PulumiVersionMismatchMode,
 } from "./assert-pulumi-version-match";

@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ensurePulumiVersionMatch } from "../preflight/assert-pulumi-version-match";
 
 /**
  * Args for RailwayProvider. Exactly one of `token` and `tokenEnvVar` must be set.
@@ -55,6 +56,8 @@ export class RailwayProvider extends pulumi.ComponentResource {
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:railway:Provider", name, {}, opts);
+
+		ensurePulumiVersionMatch();
 
 		if ((args.token === undefined) === (args.tokenEnvVar === undefined)) {
 			throw new Error(

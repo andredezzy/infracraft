@@ -106,8 +106,10 @@ function majorMinor(version: string): string {
  * working directory (e.g. it is not installed as a direct dependency), the
  * check warns and returns rather than throwing — there is nothing to compare.
  *
- * Opt-in — call it near the top of a Pulumi program; it is not invoked
- * automatically by any deploy path.
+ * Runs automatically: every infracraft provider constructor calls the
+ * memoized {@link ensurePulumiVersionMatch}, so programs need no explicit
+ * call. Call this directly only to run the check earlier than the first
+ * provider, or to opt into `WARN` mode.
  *
  * @param options Mode override and injectable readers (see
  *   {@link PulumiVersionMatchOptions}).
@@ -160,4 +162,50 @@ export function assertPulumiVersionMatch(
 	}
 
 	throw new Error(message);
+}
+
+let versionMatchEnsured = false;
+
+/**
+ * Memoized, best-effort {@link assertPulumiVersionMatch} — runs the check at
+ * most once per process. Every infracraft provider constructor calls this, so
+ * consuming programs get the CLI/SDK skew guard with zero ceremony; there is
+ * no need to call anything at the top of a program.
+ *
+ * Best-effort beyond the SDK side: when the `pulumi` binary itself cannot be
+ * run (not installed — e.g. a unit-test or CI environment that never touches
+ * a real stack), the check warns and skips rather than failing provider
+ * construction. A RESOLVED major.minor mismatch still throws.
+ */
+export function ensurePulumiVersionMatch(): void {
+	if (versionMatchEnsured) {
+		return;
+	}
+
+	// Only a real `pulumi up`/`preview` serializes resources through the
+	// engine, and only there can a CLI/SDK skew corrupt the wire format. The
+	// Node language host sets this env var when it launches the program;
+	// outside it (unit tests, plain scripts) there is nothing to guard, and
+	// throwing would couple test suites to the host machine's CLI.
+	if (process.env.PULUMI_NODEJS_MONITOR === undefined) {
+		return;
+	}
+
+	versionMatchEnsured = true;
+
+	let cliVersion: string;
+
+	try {
+		cliVersion = spawnPulumiVersion();
+	} catch (error) {
+		const detail = error instanceof Error ? error.message : String(error);
+
+		console.warn(
+			`[infracraft] Skipping Pulumi CLI/SDK version check — could not run \`pulumi version\`: ${detail}`,
+		);
+
+		return;
+	}
+
+	assertPulumiVersionMatch({ readCliVersion: () => cliVersion });
 }

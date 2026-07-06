@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import type { SpawnSyncReturns } from "node:child_process";
+import { createRequire } from "node:module";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import {
 	assertPulumiVersionMatch,
@@ -68,5 +70,87 @@ describe("assertPulumiVersionMatch", () => {
 		expect(warn).toHaveBeenCalledOnce();
 		expect(warn.mock.calls[0][0]).toContain("@pulumi/pulumi");
 		expect(readCliVersion).not.toHaveBeenCalled();
+	});
+});
+
+describe("ensurePulumiVersionMatch", () => {
+	/** The workspace's real SDK version — the default reader resolves this. */
+	const sdkVersion = createRequire(import.meta.url)(
+		"@pulumi/pulumi/package.json",
+	).version as string;
+
+	beforeEach(() => {
+		vi.resetModules();
+		vi.stubEnv("PULUMI_NODEJS_MONITOR", "127.0.0.1:1");
+	});
+
+	afterEach(() => {
+		vi.doUnmock("node:child_process");
+		vi.unstubAllEnvs();
+		vi.restoreAllMocks();
+	});
+
+	/** Imports a fresh module instance whose `pulumi version` returns `result`. */
+	async function importWithCli(result: Partial<SpawnSyncReturns<string>>) {
+		const spawnSync = vi.fn(() => result);
+
+		vi.doMock("node:child_process", () => ({ spawnSync }));
+
+		const module = await import("../assert-pulumi-version-match");
+
+		return { module, spawnSync };
+	}
+
+	it("runs the check once and memoizes subsequent calls", async () => {
+		const { module, spawnSync } = await importWithCli({
+			status: 0,
+			stdout: `v${sdkVersion}\n`,
+			stderr: "",
+		});
+
+		module.ensurePulumiVersionMatch();
+		module.ensurePulumiVersionMatch();
+		module.ensurePulumiVersionMatch();
+
+		expect(spawnSync).toHaveBeenCalledTimes(1);
+	});
+
+	it("warns and skips when the pulumi binary cannot run, instead of throwing", async () => {
+		const { module } = await importWithCli({
+			error: new Error("spawn pulumi ENOENT"),
+		});
+
+		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+		expect(() => module.ensurePulumiVersionMatch()).not.toThrow();
+
+		expect(warn).toHaveBeenCalledWith(
+			expect.stringContaining("could not run `pulumi version`"),
+		);
+	});
+
+	it("still throws on a resolved major.minor mismatch", async () => {
+		const { module } = await importWithCli({
+			status: 0,
+			stdout: "v0.1.0\n",
+			stderr: "",
+		});
+
+		expect(() => module.ensurePulumiVersionMatch()).toThrow(
+			/major\.minor version/,
+		);
+	});
+
+	it("no-ops outside a real Pulumi run (engine env absent)", async () => {
+		vi.unstubAllEnvs();
+
+		const { module, spawnSync } = await importWithCli({
+			status: 0,
+			stdout: "v0.1.0\n",
+			stderr: "",
+		});
+
+		expect(() => module.ensurePulumiVersionMatch()).not.toThrow();
+		expect(spawnSync).not.toHaveBeenCalled();
 	});
 });

@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { ensurePulumiVersionMatch } from "../preflight/assert-pulumi-version-match";
 
 /**
  * Args for VercelProvider. Exactly one of `token` and `tokenEnvVar` must be set.
@@ -65,6 +66,8 @@ export class VercelProvider extends pulumi.ComponentResource {
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:vercel:Provider", name, {}, opts);
+
+		ensurePulumiVersionMatch();
 
 		if ((args.token === undefined) === (args.tokenEnvVar === undefined)) {
 			throw new Error(
