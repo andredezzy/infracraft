@@ -116,17 +116,6 @@ export class FlyCertificateResourceProvider
 		};
 	}
 
-	async update(
-		_id: string,
-		_olds: FlyCertificateOutputs,
-		news: FlyCertificateInputs,
-	): Promise<pulumi.dynamic.UpdateResult> {
-		// Hostname/app changes force replacement (see diff); nothing else is updatable.
-		return {
-			outs: { ...news, configured: false, dnsRequirements: {} },
-		};
-	}
-
 	async delete(id: string, props: FlyCertificateOutputs): Promise<void> {
 		const client = new FlyClient(
 			resolveCredential(props.token, props.tokenEnvVar),

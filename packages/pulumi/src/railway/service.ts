@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
+import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -224,7 +225,7 @@ async function ensureServiceInstance(
 
 			return Boolean(result.serviceInstance);
 		} catch (error) {
-			if (error instanceof Error && /not found/i.test(error.message)) {
+			if (isGraphqlNotFoundError(error)) {
 				return false;
 			}
 

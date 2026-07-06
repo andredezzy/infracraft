@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
+import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
 import { RailwayClient } from "./client";
 import type { RailwayProject } from "./project";
 import type { RailwayProvider } from "./provider";
@@ -176,30 +177,6 @@ export class RailwayEnvironmentResourceProvider
 		return { id: environmentId, props: { ...props, environmentId } };
 	}
 
-	async update(
-		_id: string,
-		_olds: RailwayEnvironmentOutputs,
-		news: RailwayEnvironmentInputs,
-	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(
-			resolveCredential(news.token, news.tokenEnvVar),
-		);
-
-		const environmentId = await findEnvironmentId(
-			client,
-			news.projectId,
-			news.name,
-		);
-
-		if (!environmentId) {
-			throw new Error(
-				`Railway environment "${news.name}" not found in project ${news.projectId}`,
-			);
-		}
-
-		return { outs: { ...news, environmentId } };
-	}
-
 	/**
 	 * Deletes the environment (which cascades its per-environment service instances).
 	 * Protection of the shared production environment is the consumer's responsibility
@@ -218,10 +195,15 @@ export class RailwayEnvironmentResourceProvider
 			pulumi.log.info(
 				`Deleted Railway environment "${props.name}" (${props.environmentId})`,
 			);
-		} catch {
-			pulumi.log.warn(
-				`Failed to delete Railway environment "${props.name}" (may already be deleted)`,
-			);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (isGraphqlNotFoundError(error)) {
+				pulumi.log.warn(`Railway environment "${props.name}" already deleted`);
+
+				return;
+			}
+
+			throw error;
 		}
 	}
 

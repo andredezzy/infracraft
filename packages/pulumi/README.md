@@ -300,7 +300,7 @@ new VercelResourceConnection("kv-conn", {
 | `VercelIntegration` | `.configurationId` (`icfg_…`) | Resolves an installed marketplace integration by slug (install it once via the dashboard first) |
 | `VercelMarketplaceResource` | `.id`, `.externalResourceId`, `.status` | Provisions a marketplace store; `type` is the integration product ID or slug |
 | `VercelResourceConnection` | — | Wires a store to a project; injects env vars into target environments (`makeEnvVarsSensitive` defaults to `true` — then `targets` must not include `development`) |
-| `VercelClient` | — | Typed REST client behind the marketplace resources (`get` / `tryGet` / `post` / `patch` / `delete`); appends `teamId` to every request and rides the resilient transport |
+| `VercelClient` | — | Typed REST client behind the marketplace resources (`get` / `tryGet` / `post`); appends `teamId` to every request and rides the resilient transport |
 
 ## Fly.io
 
@@ -402,7 +402,7 @@ agents.hint({
     "Production branch is `main`; never destroy it.",
     "All Railway services share one project; only environments are per-feature.",
   ],
-  // channel: "stderr" (default) | "pulumi-log"
+  // channel: AgentHintChannel.STDERR (default) | AgentHintChannel.PULUMI_LOG
 })
 ```
 
@@ -413,7 +413,8 @@ Hints are emitted inside a `<infracraft-hint>` block with infracraft defaults (a
 | Export | Kind | Notes |
 |---|---|---|
 | `hint(options?)` | function | Emits the hint block; no-op outside agent context |
-| `AgentHintOptions` | type | `project?` (string[]), `enabled?` (boolean), `channel?` (`"stderr"` or `"pulumi-log"`) |
+| `AgentHintOptions` | type | `project?` (string[]), `enabled?` (boolean), `channel?` (`AgentHintChannel`) |
+| `AgentHintChannel` | enum | `STDERR` (default), `PULUMI_LOG` |
 
 ## Hash
 
@@ -494,7 +495,8 @@ Opt-in guards to run at the top of a Pulumi program, before constructing resourc
 import { assertHostBinaries } from "@infracraft/pulumi/sandbox"
 import {
   assertPulumiVersionMatch,
-  assertCloudflareTokenScopes,
+  assertCloudflareZoneAccess,
+  PulumiVersionMismatchMode,
 } from "@infracraft/pulumi/preflight"
 
 // 1. Platform CLIs your deploys shell out to are installed.
@@ -503,22 +505,22 @@ assertHostBinaries(["fly", "vercel"])
 // 2. The Pulumi CLI and the @pulumi/pulumi SDK agree on major.minor.
 assertPulumiVersionMatch()
 
-// 3. The Cloudflare token is valid and active before any DNS/zone change.
-await assertCloudflareTokenScopes({
+// 3. The Cloudflare token can read the target zone before any DNS/zone change.
+await assertCloudflareZoneAccess({
   token: process.env.CLOUDFLARE_API_TOKEN ?? "",
-  requiredPermissionGroups: ["Zone Settings Write", "DNS Write"], // advisory — see below
+  zoneId: process.env.CLOUDFLARE_ZONE_ID ?? "",
 })
 ```
 
 | Guard | Import | Catches | On failure |
 |---|---|---|---|
 | `assertHostBinaries(binaries)` | `@infracraft/pulumi/sandbox` | A platform CLI (`fly` / `vercel` / `railway` …) missing from `PATH` | Throws one error naming ALL missing binaries, with an install hint for each known one |
-| `assertPulumiVersionMatch(options?)` | `@infracraft/pulumi/preflight` | A skew between the running Pulumi CLI (Go engine) and the installed `@pulumi/pulumi` SDK (Node serializer) — the cause of intermittent "Unexpected struct type" marshal failures on dynamic resources | Throws (or warns, with `mode: "warn"`) naming both versions and the pin-the-CLI fix. Best-effort: warns and skips when the SDK can't be resolved from the program's working directory |
-| `assertCloudflareTokenScopes(options)` | `@infracraft/pulumi/preflight` | An invalid, revoked, disabled, or expired Cloudflare API token — so a mid-`up` 403 (e.g. a DNS-only token lacking `Zone Settings:Edit`) becomes a plan-time error | Throws when the token is empty, rejected (401/403), or not `active` |
+| `assertPulumiVersionMatch(options?)` | `@infracraft/pulumi/preflight` | A skew between the running Pulumi CLI (Go engine) and the installed `@pulumi/pulumi` SDK (Node serializer) — the cause of intermittent "Unexpected struct type" marshal failures on dynamic resources | Throws (or warns, with `mode: PulumiVersionMismatchMode.WARN`) naming both versions and the pin-the-CLI fix. Best-effort: warns and skips when the SDK can't be resolved from the program's working directory |
+| `assertCloudflareZoneAccess(options)` | `@infracraft/pulumi/preflight` | A Cloudflare API token that cannot read the target zone (invalid, revoked, or not scoped to it) — so a mid-`up` 403/404 becomes a plan-time error | Throws naming the status (401/403/404/other) and the fix, when the zone read is not 2xx |
 
-**`assertPulumiVersionMatch` options:** `mode: "throw"` (default) or `"warn"`, plus injectable `readCliVersion` / `readSdkVersion` readers for testing. It compares major.minor (patch and pre-release suffixes are ignored).
+**`assertPulumiVersionMatch` options:** `mode: PulumiVersionMismatchMode.THROW` (default) or `.WARN`, plus injectable `readCliVersion` / `readSdkVersion` readers for testing. It compares major.minor (patch and pre-release suffixes are ignored).
 
-**`assertCloudflareTokenScopes` — validity, not scope.** The Cloudflare verify endpoint (`GET /user/tokens/verify`) confirms a token is valid and active but returns only `{ id, status }` — it does **not** enumerate the token's permission groups (reading those needs the token id and a separate account-scoped call). So this guard verifies active-status only; `requiredPermissionGroups`, when supplied, is echoed back as a manual-confirmation reminder rather than enforced — it never claims to verify a scope it cannot. A future follow-up could probe a concrete permission by attempting a no-op setting write.
+**`assertCloudflareZoneAccess` — a zone read, not the token verify endpoint.** This guard calls `GET /zones/{zone_id}`, deliberately NOT `GET /user/tokens/verify`: the verify endpoint only accepts USER-owned tokens and 401s on an ACCOUNT-owned token (the kind minted for scoped automation) even when that token is perfectly valid — proven live 2026-07-06 against a token that returned 200 on the zone read and 401 on verify. A zone read also proves the more relevant capability: that the token can reach the SPECIFIC zone this program mutates, not merely that it's valid somewhere on the account. LIMITATION: a successful read proves `Zone:Read`, not `Zone Settings:Edit` or `DNS:Edit` — Cloudflare has no read-only endpoint that exercises those without a real mutation, so a read-only token can still 403 mid-`up` on an actual write.
 
 ## Transport & errors
 

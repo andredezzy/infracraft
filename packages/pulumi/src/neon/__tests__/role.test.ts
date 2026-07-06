@@ -297,4 +297,53 @@ describe("NeonRoleResourceProvider", () => {
 			expect(diff.stables).toEqual([]);
 		});
 	});
+
+	describe("delete", () => {
+		const props = {
+			apiKey: "key",
+			projectId: "proj-abc",
+			branchId: "br-main",
+			name: "neondb_owner",
+			resetPassword: false,
+			password: "pw",
+		};
+
+		it("deletes the role", async () => {
+			const mockDelete = vi
+				.spyOn(NeonClient.prototype, "delete")
+				.mockResolvedValue(undefined);
+
+			await new NeonRoleResourceProvider().delete(
+				"br-main/neondb_owner",
+				props,
+			);
+
+			expect(mockDelete).toHaveBeenCalledWith(
+				"/projects/proj-abc/branches/br-main/roles/neondb_owner",
+			);
+		});
+
+		it("tolerates an already-deleted role (not-found)", async () => {
+			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+				new ApiNotFoundError(
+					"neon",
+					"/projects/proj-abc/branches/br-main/roles/neondb_owner",
+				),
+			);
+
+			await expect(
+				new NeonRoleResourceProvider().delete("br-main/neondb_owner", props),
+			).resolves.toBeUndefined();
+		});
+
+		it("rethrows a real error", async () => {
+			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+				new Error("Neon API error (403): forbidden"),
+			);
+
+			await expect(
+				new NeonRoleResourceProvider().delete("br-main/neondb_owner", props),
+			).rejects.toThrow("403");
+		});
+	});
 });

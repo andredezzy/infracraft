@@ -1,4 +1,3 @@
-// src/commands/deploy.ts
 import * as command from "@pulumi/command";
 import * as pulumi from "@pulumi/pulumi";
 

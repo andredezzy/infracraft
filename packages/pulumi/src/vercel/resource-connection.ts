@@ -75,7 +75,7 @@ export class VercelResourceConnectionProvider
 	): Promise<pulumi.dynamic.CreateResult> {
 		if (inputs.makeEnvVarsSensitive && inputs.targets.includes("development")) {
 			throw new Error(
-				"VercelResourceConnection: Vercel rejects sensitive env vars on the 'development' target. " +
+				"VercelResourceConnection disallows sensitive env vars on the 'development' target (Vercel itself rejects them there). " +
 					"Either drop 'development' from targets or set makeEnvVarsSensitive to false.",
 			);
 		}
@@ -208,24 +208,25 @@ type VercelResourceConnectionOptions = Omit<
 export interface VercelResourceConnectionArgs {
 	/**
 	 * The Vercel store ID of the provisioned marketplace resource (e.g. `"store_…"`).
-	 * Obtain this from {@link VercelMarketplaceResource.id}.
+	 * Obtain this from {@link VercelMarketplaceResource.id}. Replaces on change.
 	 */
 	storeId: pulumi.Input<string>;
 
-	/** The Vercel project ID to connect the store to. */
+	/** The Vercel project ID to connect the store to. Replaces on change. */
 	projectId: pulumi.Input<string>;
 
 	/**
 	 * Deployment environments into which the store's env vars will be injected.
 	 * Typical values: `["production", "preview"]`. Note that `development`
 	 * cannot be combined with `makeEnvVarsSensitive: true` (Vercel rejects it).
-	 * Maps to the request body field `envVarEnvironments`.
+	 * Maps to the request body field `envVarEnvironments`. Replaces on change.
 	 */
 	targets: pulumi.Input<string[]>;
 
 	/**
 	 * Whether the injected env vars are marked sensitive (hidden after creation).
 	 * Defaults to `true`. When `true`, `targets` must not include `development`.
+	 * Replaces on change.
 	 */
 	makeEnvVarsSensitive?: pulumi.Input<boolean>;
 }

@@ -113,8 +113,10 @@ async function fetchProjectEnvironments(
  *
  * Deletion is a no-op (with a warning) to prevent accidental project removal.
  * Name changes trigger replacement.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class RailwayProjectResourceProvider
+export class RailwayProjectResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	async create(
@@ -263,7 +265,6 @@ class RailwayProjectResourceProvider
 		olds: RailwayProjectOutputs,
 		news: RailwayProjectInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
-		const replaces: string[] = [];
 		const changes: string[] = [];
 
 		if (olds.name !== news.name) {
@@ -275,8 +276,8 @@ class RailwayProjectResourceProvider
 		}
 
 		return {
-			changes: replaces.length > 0 || changes.length > 0,
-			replaces,
+			changes: changes.length > 0,
+			replaces: [],
 			// projectId survives every in-place update (nothing replaces this
 			// resource), so dependents keep a known projectId during preview.
 			// productionEnvironmentId is deliberately NOT declared stable — update()

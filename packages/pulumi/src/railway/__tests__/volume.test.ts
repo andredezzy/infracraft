@@ -276,3 +276,32 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 		expect(result.props?.volumeId).toBe("vol-existing");
 	});
 });
+
+describe("RailwayVolumeResourceProvider.delete", () => {
+	let mockQuery: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockQuery = vi.fn();
+		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	it("tolerates an already-deleted volume (not-found)", async () => {
+		mockQuery.mockRejectedValueOnce(new Error("Volume not found"));
+
+		await expect(
+			new RailwayVolumeResourceProvider().delete("vol-existing", props),
+		).resolves.toBeUndefined();
+	});
+
+	it("rethrows a real error", async () => {
+		mockQuery.mockRejectedValueOnce(new Error("forbidden"));
+
+		await expect(
+			new RailwayVolumeResourceProvider().delete("vol-existing", props),
+		).rejects.toThrow("forbidden");
+	});
+});

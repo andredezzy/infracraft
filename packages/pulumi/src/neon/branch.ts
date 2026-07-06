@@ -36,6 +36,8 @@ interface BranchResponse {
 		id: string;
 		name: string;
 		project_id: string;
+		/** Whether this is the project's default branch (Neon refuses to delete it). */
+		default: boolean;
 	};
 }
 
@@ -79,8 +81,9 @@ async function findBranchByName(
  * Uses adopt-or-create on `create()`: finds an existing branch by name
  * before creating a new one. When `parentName` is supplied, resolves it
  * to a `parent_id` and includes it in the POST body.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-/** @internal Exported only for unit testing; not part of the public API surface. */
 export class NeonBranchResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
@@ -186,6 +189,22 @@ export class NeonBranchResourceProvider
 		}
 	}
 
+	async update(
+		id: string,
+		_olds: NeonBranchOutputs,
+		news: NeonBranchInputs,
+	): Promise<pulumi.dynamic.UpdateResult> {
+		const client = new NeonClient(
+			resolveCredential(news.apiKey, news.apiKeyEnvVar),
+		);
+
+		await client.patch(`/projects/${news.projectId}/branches/${id}`, {
+			branch: { name: news.name },
+		});
+
+		return { outs: { ...news } };
+	}
+
 	/**
 	 * Deletes the branch. Protection of shared/production branches is the consumer's
 	 * responsibility via the `protect` resource option, not provider logic.
@@ -195,10 +214,43 @@ export class NeonBranchResourceProvider
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
 		);
 
+		// Neon refuses to delete a project's default branch (live-proven API
+		// truth). Checked via a GET rather than matching the refusal's error
+		// message (brittle) — the default branch's lifecycle belongs to the
+		// project, not this resource, so skipping it here is deliberate.
+		try {
+			const current = await client.get<BranchResponse>(
+				`/projects/${props.projectId}/branches/${id}`,
+			);
+
+			if (current.branch.default) {
+				pulumi.log.warn(
+					`Neon branch "${id}" is the project's default branch — Neon refuses to delete it; skipping (its lifecycle belongs to the project, not this resource)`,
+				);
+
+				return;
+			}
+		} catch (error) {
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Neon branch "${id}" already deleted`);
+
+				return;
+			}
+
+			throw error;
+		}
+
 		try {
 			await client.delete(`/projects/${props.projectId}/branches/${id}`);
-		} catch {
-			pulumi.log.warn(`Failed to delete Neon branch (may already be deleted)`);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Neon branch "${id}" already deleted`);
+
+				return;
+			}
+
+			throw error;
 		}
 	}
 

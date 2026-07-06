@@ -1,9 +1,9 @@
 import * as pulumi from "@pulumi/pulumi";
-
 import { createDeployCommand } from "../commands/deploy";
 import { resolveCredentialOutput } from "../dynamic/resolve-credential";
 import type { VercelProvider } from "./provider";
 
+/** Options type for VercelDeploy — replaces Pulumi's native `provider` field. */
 type VercelDeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Vercel authentication context. */
 	provider: VercelProvider;

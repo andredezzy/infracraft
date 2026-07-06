@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiNotFoundError } from "../../errors/api-not-found-error";
 import { NeonBranchResourceProvider } from "../branch";
 import { NeonClient } from "../client";
 
@@ -6,11 +7,15 @@ describe("NeonBranchResourceProvider", () => {
 	let mockGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 
+	let mockPatch: ReturnType<typeof vi.fn>;
+
 	beforeEach(() => {
 		mockGet = vi.fn();
 		mockPost = vi.fn();
+		mockPatch = vi.fn();
 		vi.spyOn(NeonClient.prototype, "get").mockImplementation(mockGet);
 		vi.spyOn(NeonClient.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(NeonClient.prototype, "patch").mockImplementation(mockPatch);
 	});
 
 	afterEach(() => {
@@ -100,6 +105,38 @@ describe("NeonBranchResourceProvider", () => {
 
 			expect(result.replaces).toContain("parentName");
 		});
+
+		it("flags an in-place change (no replace) when only name changes", async () => {
+			const provider = new NeonBranchResourceProvider();
+
+			const result = await provider.diff(
+				"br-staging",
+				{ apiKey: "k", projectId: "p", name: "staging" },
+				{ apiKey: "k", projectId: "p", name: "staging-renamed" },
+			);
+
+			expect(result.changes).toBe(true);
+			expect(result.replaces).toEqual([]);
+		});
+	});
+
+	describe("update", () => {
+		it("PATCHes the branch name and agrees with diff's in-place case", async () => {
+			const provider = new NeonBranchResourceProvider();
+
+			const result = await provider.update(
+				"br-staging",
+				{ apiKey: "key", projectId: "proj-abc", name: "staging" },
+				{ apiKey: "key", projectId: "proj-abc", name: "staging-renamed" },
+			);
+
+			expect(mockPatch).toHaveBeenCalledWith(
+				"/projects/proj-abc/branches/br-staging",
+				{ branch: { name: "staging-renamed" } },
+			);
+
+			expect(result.outs?.name).toBe("staging-renamed");
+		});
 	});
 
 	describe("check", () => {
@@ -138,7 +175,37 @@ describe("NeonBranchResourceProvider", () => {
 	});
 
 	describe("delete", () => {
-		it("deletes the branch", async () => {
+		it("skips a default branch without attempting DELETE", async () => {
+			mockGet.mockResolvedValueOnce({
+				branch: {
+					id: "br-main",
+					name: "main",
+					project_id: "proj-abc",
+					default: true,
+				},
+			});
+
+			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+
+			await new NeonBranchResourceProvider().delete("br-main", {
+				apiKey: "key",
+				projectId: "proj-abc",
+				name: "main",
+			});
+
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+
+		it("deletes a non-default branch", async () => {
+			mockGet.mockResolvedValueOnce({
+				branch: {
+					id: "br-feature",
+					name: "feature",
+					project_id: "proj-abc",
+					default: false,
+				},
+			});
+
 			const mockDelete = vi
 				.spyOn(NeonClient.prototype, "delete")
 				.mockResolvedValue(undefined);
@@ -152,6 +219,59 @@ describe("NeonBranchResourceProvider", () => {
 			expect(mockDelete).toHaveBeenCalledWith(
 				"/projects/proj-abc/branches/br-feature",
 			);
+		});
+
+		it("tolerates an already-deleted branch (pre-delete GET 404)", async () => {
+			mockGet.mockRejectedValueOnce(
+				new ApiNotFoundError("neon", "/projects/proj-abc/branches/br-gone"),
+			);
+
+			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+
+			await expect(
+				new NeonBranchResourceProvider().delete("br-gone", {
+					apiKey: "key",
+					projectId: "proj-abc",
+					name: "gone",
+				}),
+			).resolves.toBeUndefined();
+
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+
+		it("rethrows a real error from the pre-delete GET", async () => {
+			mockGet.mockRejectedValueOnce(new Error("Neon API error (500): boom"));
+
+			await expect(
+				new NeonBranchResourceProvider().delete("br-feature", {
+					apiKey: "key",
+					projectId: "proj-abc",
+					name: "feature",
+				}),
+			).rejects.toThrow("500");
+		});
+
+		it("rethrows a real error from DELETE itself", async () => {
+			mockGet.mockResolvedValueOnce({
+				branch: {
+					id: "br-feature",
+					name: "feature",
+					project_id: "proj-abc",
+					default: false,
+				},
+			});
+
+			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+				new Error("Neon API error (403): forbidden"),
+			);
+
+			await expect(
+				new NeonBranchResourceProvider().delete("br-feature", {
+					apiKey: "key",
+					projectId: "proj-abc",
+					name: "feature",
+				}),
+			).rejects.toThrow("403");
 		});
 	});
 });

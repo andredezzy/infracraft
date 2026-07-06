@@ -1,8 +1,12 @@
+import * as pulumi from "@pulumi/pulumi";
+import { MockMonitor } from "@pulumi/pulumi/runtime/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
+import { FlyApp } from "../app";
 import { FlyClient } from "../client";
-import { FlySecretResourceProvider } from "../secret";
+import { FlyProvider } from "../provider";
+import { FlySecret, FlySecretResourceProvider } from "../secret";
 
 describe("FlySecretResourceProvider", () => {
 	let mockPost: ReturnType<typeof vi.fn>;
@@ -152,5 +156,52 @@ describe("FlySecretResourceProvider", () => {
 
 			expect(diff.changes).toBe(false);
 		});
+	});
+});
+
+describe("FlySecret component", () => {
+	let capturedAdditionalSecretOutputs: Map<string, string[]>;
+	let originalRegisterResource: typeof MockMonitor.prototype.registerResource;
+
+	beforeEach(async () => {
+		capturedAdditionalSecretOutputs = new Map();
+		originalRegisterResource = MockMonitor.prototype.registerResource;
+
+		MockMonitor.prototype.registerResource = function (req, callback) {
+			if (req.getType() === "pulumi-nodejs:dynamic:Resource") {
+				capturedAdditionalSecretOutputs.set(
+					req.getName(),
+					req.getAdditionalsecretoutputsList(),
+				);
+			}
+
+			return originalRegisterResource.call(this, req, callback);
+		};
+
+		await pulumi.runtime.setMocks({
+			newResource: (args) => ({ id: `${args.name}-id`, state: args.inputs }),
+			call: (args) => args.inputs,
+		});
+	});
+
+	afterEach(() => {
+		MockMonitor.prototype.registerResource = originalRegisterResource;
+	});
+
+	it("marks both token and secrets as additionalSecretOutputs on the underlying dynamic resource", async () => {
+		const provider = new FlyProvider("fly", { tokenEnvVar: "FLY_API_TOKEN" });
+		const app = new FlyApp("app", { name: "my-app" }, { provider });
+
+		new FlySecret(
+			"api-secrets",
+			{ secrets: { JWT_SECRET: "abc" } },
+			{ provider, app },
+		);
+
+		await new Promise((resolve) => setImmediate(resolve));
+
+		expect(capturedAdditionalSecretOutputs.get("api-secrets-resource")).toEqual(
+			expect.arrayContaining(["token", "secrets"]),
+		);
 	});
 });

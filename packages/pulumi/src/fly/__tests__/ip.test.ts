@@ -127,11 +127,25 @@ describe("FlyIpResourceProvider", () => {
 	});
 
 	describe("read", () => {
-		it("passes persisted state through (allocations have no reliable point read)", async () => {
+		it("returns the current state when the IP is still allocated", async () => {
+			mockGraphql.mockResolvedValueOnce(
+				listResult([
+					{ id: "ip_1", address: "1.2.3.4", type: "v4", region: "global" },
+				]),
+			);
+
 			const result = await new FlyIpResourceProvider().read("1.2.3.4", props);
 
-			expect(result).toEqual({ id: "1.2.3.4", props });
-			expect(mockGraphql).not.toHaveBeenCalled();
+			expect(result.id).toBe("1.2.3.4");
+			expect(result.props?.ipAddressId).toBe("ip_1");
+		});
+
+		it("returns a blank result when the IP is gone (drift reconciled on refresh)", async () => {
+			mockGraphql.mockResolvedValueOnce(listResult([]));
+
+			const result = await new FlyIpResourceProvider().read("1.2.3.4", props);
+
+			expect(result).toEqual({});
 		});
 	});
 

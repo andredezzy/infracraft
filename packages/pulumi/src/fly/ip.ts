@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 
 import { resolveCredential } from "../dynamic/resolve-credential";
+import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
 import type { FlyApp } from "./app";
 import { FlyClient } from "./client";
 import type { FlyProvider } from "./provider";
@@ -149,10 +150,28 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	async read(
-		id: string,
+		_id: string,
 		props: FlyIpOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		return { id, props };
+		const client = new FlyClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
+
+		const existing = await this.findExisting(client, props);
+
+		if (!existing) {
+			// Resource gone → blank id lets refresh reconcile the deletion.
+			return {};
+		}
+
+		return {
+			id: existing.address,
+			props: {
+				...props,
+				address: existing.address,
+				ipAddressId: existing.ipAddressId,
+			},
+		};
 	}
 
 	async delete(_id: string, props: FlyIpOutputs): Promise<void> {
@@ -173,10 +192,7 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 		} catch (error) {
 			// Fly reports an already-released IP as a GraphQL "not found" error —
 			// deletion is idempotent, so tolerate it.
-			if (
-				error instanceof Error &&
-				/not found|could not find/i.test(error.message)
-			) {
+			if (isGraphqlNotFoundError(error)) {
 				pulumi.log.warn(`Fly IP "${props.address}" already released`);
 
 				return;

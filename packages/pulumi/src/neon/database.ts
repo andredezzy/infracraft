@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import type { NeonBranch } from "./branch";
@@ -70,8 +71,32 @@ async function findDatabaseByName(
  *
  * Uses adopt-or-create on `create()`: checks if the database already exists
  * before creating a new one.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class NeonDatabaseResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
+	/**
+	 * Validates inputs at plan time. An empty database name would otherwise
+	 * fail deep inside the Neon API call — and never match on the adopt lookup.
+	 */
+	async check(
+		_olds: NeonDatabaseInputs,
+		news: NeonDatabaseInputs,
+	): Promise<pulumi.dynamic.CheckResult<NeonDatabaseInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.name) && news.name.trim().length === 0) {
+			failures.push({
+				property: "name",
+				reason: 'name must be a non-empty database name (e.g. "neondb")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(
 		inputs: NeonDatabaseInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -128,6 +153,23 @@ class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
 		}
 	}
 
+	async update(
+		_id: string,
+		_olds: NeonDatabaseOutputs,
+		news: NeonDatabaseInputs,
+	): Promise<pulumi.dynamic.UpdateResult> {
+		const client = new NeonClient(
+			resolveCredential(news.apiKey, news.apiKeyEnvVar),
+		);
+
+		await client.patch(
+			`/projects/${news.projectId}/branches/${news.branchId}/databases/${news.name}`,
+			{ database: { owner_name: news.ownerName } },
+		);
+
+		return { outs: { ...news } };
+	}
+
 	async delete(_id: string, props: NeonDatabaseOutputs): Promise<void> {
 		const client = new NeonClient(
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
@@ -137,10 +179,15 @@ class NeonDatabaseResourceProvider implements pulumi.dynamic.ResourceProvider {
 			await client.delete(
 				`/projects/${props.projectId}/branches/${props.branchId}/databases/${props.name}`,
 			);
-		} catch {
-			pulumi.log.warn(
-				`Failed to delete Neon database "${props.name}" (may already be deleted)`,
-			);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Neon database "${props.name}" already deleted`);
+
+				return;
+			}
+
+			throw error;
 		}
 	}
 

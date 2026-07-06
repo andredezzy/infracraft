@@ -22,12 +22,18 @@ export interface RailwayDeployArgs {
 	/** Railpack configuration written to `railpack.json` before deploy. */
 	railpackConfig?: Record<string, unknown>;
 	/**
-	 * HTTP path polled for health checks (e.g. `"/health-check"`), applied by
+	 * HTTP path polled for health checks (e.g. `"/healthcheck"`), applied by
 	 * the deploy monitor once the deployment is live. Railway rejects
 	 * healthcheck fields on a fresh instance with no deployment ("Invalid
 	 * input"), so a code service's healthcheck can only land post-deploy —
 	 * pass it here (mirroring `RailwayServiceArgs.healthcheckPath`) and the
-	 * monitor applies it, failing loudly instead of silently dropping it.
+	 * monitor applies it via `serviceInstanceUpdate`, failing loudly instead
+	 * of silently dropping it.
+	 *
+	 * This is the SAME Railway field `RailwayServiceArgs.healthcheckPath`
+	 * validates, just applied later (post-first-deploy): Railway rejects ANY
+	 * hyphen in the value with "Invalid input" (undocumented; proven by live
+	 * probe matrix 2026-07-06). A hyphenated value throws here at preview time.
 	 */
 	healthcheckPath?: pulumi.Input<string>;
 	/** Seconds to wait for a healthy response; applied alongside `healthcheckPath`. */
@@ -59,6 +65,10 @@ const MONITOR_BIN = fileURLToPath(
 /**
  * Deploys a Railway service and waits for a terminal status. Isolation/git are the
  * seam's job (list a `DeploySandbox` and optionally a `GitGuard` in `dependsOn`).
+ *
+ * Recommended preflight: `assertHostBinaries(["railway"])` (from
+ * `@infracraft/pulumi/sandbox`) at program start, so a missing CLI fails fast
+ * with an install hint instead of mid-deploy.
  *
  * @example
  * ```typescript
@@ -118,6 +128,16 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 				const bindings: string[] = [];
 
 				if (path) {
+					// Same field service.ts's check() validates — the monitor applies
+					// this via serviceInstanceUpdate, so a hyphenated value would 403
+					// mid-deploy just as it would at initial creation. Caught here at
+					// preview time instead.
+					if (path.includes("-")) {
+						throw new Error(
+							'Railway rejects any healthcheckPath containing a hyphen with "Invalid input" (undocumented; proven by live probe matrix 2026-07-06) — use a hyphen-free path like "/healthcheck"',
+						);
+					}
+
 					bindings.push(`IC_HC_PATH='${path.replace(/'/g, "'\\''")}'`);
 				}
 

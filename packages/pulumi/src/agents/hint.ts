@@ -10,6 +10,18 @@ const INFRACRAFT_DEFAULTS = [
 	"Mark shared/production resources protect:true — pulumi destroy aborts on protected resources",
 ];
 
+/**
+ * Where {@link hint} writes its output. A closed set, so it is an enum rather
+ * than a string union (matches the `SandboxMode` precedent).
+ */
+export enum AgentHintChannel {
+	/** Prints prominently the instant the program loads, before Pulumi's own
+	 * output — modeled on how the Vercel CLI surfaces agent guidance. Default. */
+	STDERR = "STDERR",
+	/** Routes through `pulumi.log.info` (lands in the Diagnostics section instead). */
+	PULUMI_LOG = "PULUMI_LOG",
+}
+
 /** Options for {@link agentHint}. */
 export interface AgentHintOptions {
 	/** Project-specific reminders appended after the infracraft defaults. */
@@ -21,13 +33,8 @@ export interface AgentHintOptions {
 	 */
 	enabled?: boolean;
 
-	/**
-	 * Where to write the hint. `"stderr"` (default) prints it prominently the
-	 * instant the program loads, before Pulumi's own output — modeled on how the
-	 * Vercel CLI surfaces agent guidance. `"pulumi-log"` routes it through
-	 * `pulumi.log.info` (lands in the Diagnostics section instead).
-	 */
-	channel?: "stderr" | "pulumi-log";
+	/** Where to write the hint (see {@link AgentHintChannel}). Defaults to `STDERR`. */
+	channel?: AgentHintChannel;
 }
 
 /**
@@ -70,7 +77,7 @@ export function hint(options: AgentHintOptions = {}): void {
 		"</infracraft-hint>",
 	].join("\n");
 
-	if (options.channel === "pulumi-log") {
+	if (options.channel === AgentHintChannel.PULUMI_LOG) {
 		pulumi.log.info(block);
 	} else {
 		process.stderr.write(`${block}\n`);

@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
+import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -8,7 +9,7 @@ import type { RailwayProvider } from "./provider";
 import type { RailwayService } from "./service";
 
 /** Resolved inputs for the Railway volume dynamic provider. */
-export interface RailwayVolumeInputs {
+interface RailwayVolumeInputs {
 	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
@@ -246,10 +247,15 @@ export class RailwayVolumeResourceProvider
 
 		try {
 			await client.query(VOLUME_DELETE, { volumeId: id });
-		} catch {
-			pulumi.log.warn(
-				"Failed to delete Railway volume (may already be deleted)",
-			);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (isGraphqlNotFoundError(error)) {
+				pulumi.log.warn(`Railway volume "${id}" already deleted`);
+
+				return;
+			}
+
+			throw error;
 		}
 	}
 

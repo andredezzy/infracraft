@@ -80,8 +80,12 @@ async function findEndpointByBranch(
  *
  * Uses adopt-or-create on `create()`: finds an existing read-write endpoint
  * on the target branch before creating a new one.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class NeonEndpointResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
 	async create(
 		inputs: NeonEndpointInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -200,10 +204,15 @@ class NeonEndpointResourceProvider implements pulumi.dynamic.ResourceProvider {
 
 		try {
 			await client.delete(`/projects/${props.projectId}/endpoints/${id}`);
-		} catch {
-			pulumi.log.warn(
-				`Failed to delete Neon endpoint (may already be deleted)`,
-			);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Neon endpoint "${id}" already deleted`);
+
+				return;
+			}
+
+			throw error;
 		}
 	}
 

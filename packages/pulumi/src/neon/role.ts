@@ -52,10 +52,14 @@ interface PasswordResponse {
 	password: string;
 }
 
-/** Neon API response for the reset_password endpoint (nested under `role`). */
+/**
+ * Neon API response for the reset_password endpoint. Verified against Neon's
+ * current docs (2026-07-06): the password is always nested under `role`, the
+ * same shape as the create-role and list-roles responses — there is no
+ * top-level `password` field.
+ */
 interface ResetPasswordResponse {
-	role?: { password?: string };
-	password?: string;
+	role: { password: string };
 }
 
 /** Neon API response for listing roles. */
@@ -112,7 +116,7 @@ async function resetRolePassword(
 		{},
 	);
 
-	const password = result.role?.password ?? result.password;
+	const password = result.role.password;
 
 	if (!password) {
 		throw new Error(
@@ -239,10 +243,15 @@ export class NeonRoleResourceProvider
 			await client.delete(
 				`/projects/${props.projectId}/branches/${props.branchId}/roles/${props.name}`,
 			);
-		} catch {
-			pulumi.log.warn(
-				`Failed to delete Neon role "${props.name}" (may already be deleted)`,
-			);
+		} catch (error) {
+			// Already gone — deletion is idempotent.
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Neon role "${props.name}" already deleted`);
+
+				return;
+			}
+
+			throw error;
 		}
 	}
 

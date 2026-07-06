@@ -1,4 +1,4 @@
-// The typed not-found this provider's client throws — consumers catch by instanceof.
+// The typed not-found error this provider's client throws — consumers catch by instanceof.
 export { ApiNotFoundError } from "../errors/api-not-found-error";
 export { VercelClient } from "./client";
 export type { VercelDeployArgs } from "./deploy";

@@ -6,14 +6,22 @@ import * as path from "node:path";
 /** The Node SDK whose version must track the running Pulumi CLI. */
 const SDK_PACKAGE = "@pulumi/pulumi";
 
-/** Outcome when the CLI and SDK versions disagree — `throw` (default) or `warn`. */
-export type PulumiVersionMismatchMode = "throw" | "warn";
+/**
+ * Outcome when the CLI and SDK versions disagree. A closed set, so it is an
+ * enum rather than a string union (matches the `SandboxMode` precedent).
+ */
+export enum PulumiVersionMismatchMode {
+	/** Fails the program at preflight (default). */
+	THROW = "THROW",
+	/** Logs and continues. */
+	WARN = "WARN",
+}
 
 /** Options for {@link assertPulumiVersionMatch}. */
 export interface PulumiVersionMatchOptions {
 	/**
-	 * What to do on a major.minor mismatch. `"throw"` (default) fails the program
-	 * at preflight; `"warn"` logs and continues.
+	 * What to do on a major.minor mismatch. `THROW` (default) fails the program
+	 * at preflight; `WARN` logs and continues.
 	 */
 	mode?: PulumiVersionMismatchMode;
 
@@ -103,7 +111,7 @@ function majorMinor(version: string): string {
  *
  * @param options Mode override and injectable readers (see
  *   {@link PulumiVersionMatchOptions}).
- * @throws {Error} When the versions differ and `mode` is `"throw"` (the default).
+ * @throws {Error} When the versions differ and `mode` is `THROW` (the default).
  * @example
  * ```typescript
  * import { assertPulumiVersionMatch } from "@infracraft/pulumi/preflight";
@@ -114,7 +122,7 @@ function majorMinor(version: string): string {
 export function assertPulumiVersionMatch(
 	options: PulumiVersionMatchOptions = {},
 ): void {
-	const mode = options.mode ?? "throw";
+	const mode = options.mode ?? PulumiVersionMismatchMode.THROW;
 	const readCliVersion = options.readCliVersion ?? spawnPulumiVersion;
 	const readSdkVersion = options.readSdkVersion ?? resolveSdkVersion;
 
@@ -138,14 +146,14 @@ export function assertPulumiVersionMatch(
 	const sdkClean = sdkVersion.trim().replace(/^v/, "");
 
 	const message =
-		`Pulumi CLI/SDK version mismatch: the \`pulumi\` CLI is ${cliClean} but ` +
-		`the installed \`${SDK_PACKAGE}\` SDK is ${sdkClean}. The Go engine (CLI) ` +
-		`and the Node serializer (SDK) must agree on major.minor — a skew causes ` +
-		`intermittent "Unexpected struct type" marshal failures on dynamic ` +
-		`resources. Align them, e.g. pin the CLI to the SDK version:\n` +
+		`Pulumi version preflight: the \`pulumi\` CLI is ${cliClean} but ` +
+		`the installed \`${SDK_PACKAGE}\` SDK is ${sdkClean} — a major.minor version ` +
+		`mismatch. The Go engine (CLI) and the Node serializer (SDK) must agree — a ` +
+		`skew causes intermittent "Unexpected struct type" marshal failures on ` +
+		`dynamic resources. Align them, e.g. pin the CLI to the SDK version:\n` +
 		`  curl -fsSL https://get.pulumi.com | sh -s -- --version ${sdkClean}`;
 
-	if (mode === "warn") {
+	if (mode === PulumiVersionMismatchMode.WARN) {
 		console.warn(`[infracraft] ${message}`);
 
 		return;

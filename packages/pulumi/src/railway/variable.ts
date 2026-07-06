@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
+import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -149,10 +150,15 @@ export class RailwayVariableResourceProvider
 						name: key,
 					},
 				});
-			} catch {
-				pulumi.log.warn(
-					`Failed to delete Railway variable "${key}" (may already be deleted)`,
-				);
+			} catch (error) {
+				// Already gone — deletion is idempotent.
+				if (isGraphqlNotFoundError(error)) {
+					pulumi.log.warn(`Railway variable "${key}" already deleted`);
+
+					continue;
+				}
+
+				throw error;
 			}
 		}
 	}

@@ -67,7 +67,7 @@ export class VercelIntegrationResourceProvider
 				configurations.map((c) => c.slug).join(", ") || "(none)";
 
 			throw new Error(
-				`Vercel integration "${inputs.slug}" is not installed on this team (available: ${available})`,
+				`VercelIntegration "${inputs.slug}" is not installed on this team (available: ${available})`,
 			);
 		}
 
@@ -158,6 +158,7 @@ export interface VercelIntegrationArgs {
 	/**
 	 * Marketplace integration slug (e.g. `"upstash"`, `"neon"`).
 	 * The integration must already be installed on the team via the Vercel dashboard.
+	 * Replaces on change.
 	 */
 	slug: pulumi.Input<string>;
 }

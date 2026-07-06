@@ -122,18 +122,4 @@ describe("VercelClient", () => {
 			"Vercel API error (401): Unauthorized",
 		);
 	});
-
-	it("returns undefined for DELETE without parsing a body", async () => {
-		globalThis.fetch = vi.fn().mockResolvedValue({
-			ok: true,
-			status: 204,
-		});
-
-		const client = new VercelClient("test-token", "team_1");
-
-		await expect(client.delete("/v9/projects/prj_1")).resolves.toBeUndefined();
-
-		const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
-		expect(call[1].method).toBe("DELETE");
-	});
 });

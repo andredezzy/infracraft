@@ -91,14 +91,6 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 		return { id, props: { ...props, name: app.name, appId: app.name } };
 	}
 
-	async update(
-		id: string,
-		_olds: FlyAppOutputs,
-		news: FlyAppInputs,
-	): Promise<pulumi.dynamic.UpdateResult> {
-		return { outs: { ...news, appId: id } };
-	}
-
 	async delete(): Promise<void> {
 		pulumi.log.warn(
 			"Fly app deletion skipped — apps are not deleted by Pulumi (would destroy all contained resources)",

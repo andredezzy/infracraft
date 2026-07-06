@@ -296,4 +296,28 @@ describe("RailwayDomainResourceProvider", () => {
 			expect(deleteVars).toEqual({ id: "dom-api-uuid" });
 		});
 	});
+
+	describe("delete", () => {
+		const props = {
+			...inputs(),
+			domainId: "dom-uuid",
+			fqdn: "api.example.com",
+		};
+
+		it("tolerates an already-deleted domain (not-found)", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("Domain not found"));
+
+			await expect(
+				new RailwayDomainResourceProvider().delete("api.example.com", props),
+			).resolves.toBeUndefined();
+		});
+
+		it("rethrows a real error", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("forbidden"));
+
+			await expect(
+				new RailwayDomainResourceProvider().delete("api.example.com", props),
+			).rejects.toThrow("forbidden");
+		});
+	});
 });

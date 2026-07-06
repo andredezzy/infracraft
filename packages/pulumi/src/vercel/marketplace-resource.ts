@@ -89,9 +89,10 @@ export class VercelMarketplaceResourceProvider
 			body,
 		);
 
-		// externalId is the idempotency key; Pulumi state normally prevents re-create.
-		// If a store with this externalId already exists out-of-band and Vercel does not
-		// dedupe, this could create a duplicate — adopt-by-list is a follow-up.
+		// externalId is the idempotency key; Pulumi state normally prevents re-create. If a
+		// store with this externalId already exists out-of-band (created outside Pulumi) and
+		// Vercel does not dedupe server-side, this creates a duplicate — unlike the other
+		// adopt-or-create providers in this package, there is no adopt-by-list lookup here.
 		const outs: VercelMarketplaceResourceOutputs = {
 			...inputs,
 			storeId: store.id,
@@ -106,7 +107,8 @@ export class VercelMarketplaceResourceProvider
 		id: string,
 		props: VercelMarketplaceResourceOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		// The store read endpoint was not pinned in this phase; drift is not refreshed here.
+		// Pass-through read: Vercel's store-read endpoint isn't wired up here, so
+		// out-of-band store changes are not detected — this returns stored state as-is.
 		return { id, props };
 	}
 
@@ -152,7 +154,7 @@ export class VercelMarketplaceResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class VercelMarketplaceResourceResource extends pulumi.dynamic.Resource {
+class VercelMarketplaceStoreResource extends pulumi.dynamic.Resource {
 	public declare readonly storeId: pulumi.Output<string>;
 	public declare readonly externalResourceId: pulumi.Output<string>;
 	public declare readonly status: pulumi.Output<string>;
@@ -203,10 +205,11 @@ export interface VercelMarketplaceResourceArgs {
 	/**
 	 * Integration configuration ID (e.g. `"icfg_…"`).
 	 * Obtain this from {@link VercelIntegration.configurationId}.
+	 * Replaces on change.
 	 */
 	integrationConfigurationId: pulumi.Input<string>;
 
-	/** Display name for the store. */
+	/** Display name for the store. Replaces on change. */
 	name: pulumi.Input<string>;
 
 	/**
@@ -275,7 +278,7 @@ export class VercelMarketplaceResource extends pulumi.ComponentResource {
 
 		super("infracraft:vercel:MarketplaceResource", name, {}, pulumiOpts);
 
-		const resource = new VercelMarketplaceResourceResource(
+		const resource = new VercelMarketplaceStoreResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

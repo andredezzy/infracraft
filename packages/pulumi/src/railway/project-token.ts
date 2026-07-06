@@ -1,6 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
+import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
 import { RailwayClient } from "./client";
 import type { RailwayEnvironment } from "./environment";
 import type { RailwayProject } from "./project";
@@ -206,7 +207,7 @@ export class RailwayProjectTokenResourceProvider
 		} catch (error) {
 			// Railway reports an already-revoked token as a GraphQL "not found"
 			// error (no HTTP 404, so no ApiNotFoundError path exists here).
-			if (error instanceof Error && /not found/i.test(error.message)) {
+			if (isGraphqlNotFoundError(error)) {
 				pulumi.log.info(
 					`Railway project token "${props.name}" already revoked (rotation cleanup) — nothing to delete`,
 				);

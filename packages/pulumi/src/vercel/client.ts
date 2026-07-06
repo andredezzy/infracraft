@@ -76,30 +76,6 @@ export class VercelClient {
 		return this.request<T>("POST", path, body);
 	}
 
-	/**
-	 * Performs a PATCH request against the Vercel API.
-	 *
-	 * @param path API path
-	 * @param body Request body (will be JSON-serialized)
-	 * @returns Typed JSON response body
-	 * @throws {ApiNotFoundError} On 404
-	 * @throws {Error} On any other non-2xx HTTP status
-	 */
-	async patch<T>(path: string, body?: unknown): Promise<T> {
-		return this.request<T>("PATCH", path, body);
-	}
-
-	/**
-	 * Performs a DELETE request against the Vercel API.
-	 *
-	 * @param path API path
-	 * @throws {ApiNotFoundError} On 404
-	 * @throws {Error} On any other non-2xx HTTP status
-	 */
-	async delete(path: string): Promise<void> {
-		await this.request<void>("DELETE", path);
-	}
-
 	private url(path: string): string {
 		if (!this.teamId) {
 			return `${VERCEL_API_URL}${path}`;
@@ -132,10 +108,6 @@ export class VercelClient {
 			const errorText = await response.text();
 
 			throw new Error(`Vercel API error (${response.status}): ${errorText}`);
-		}
-
-		if (method === "DELETE") {
-			return undefined as T;
 		}
 
 		return (await response.json()) as T;

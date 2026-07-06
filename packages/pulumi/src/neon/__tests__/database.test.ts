@@ -1,0 +1,222 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ApiNotFoundError } from "../../errors/api-not-found-error";
+import { NeonClient } from "../client";
+import { NeonDatabaseResourceProvider } from "../database";
+
+describe("NeonDatabaseResourceProvider", () => {
+	let mockGet: ReturnType<typeof vi.fn>;
+	let mockPost: ReturnType<typeof vi.fn>;
+	let mockPatch: ReturnType<typeof vi.fn>;
+
+	beforeEach(() => {
+		mockGet = vi.fn();
+		mockPost = vi.fn();
+		mockPatch = vi.fn();
+		vi.spyOn(NeonClient.prototype, "get").mockImplementation(mockGet);
+		vi.spyOn(NeonClient.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(NeonClient.prototype, "patch").mockImplementation(mockPatch);
+	});
+
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
+	describe("check", () => {
+		it("fails an empty database name, naming the property", async () => {
+			const invalid = {
+				apiKey: "key",
+				projectId: "proj-abc",
+				branchId: "br-main",
+				name: "  ",
+				ownerName: "neondb_owner",
+			};
+
+			const result = await new NeonDatabaseResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+			expect(result.failures?.[0].reason).toContain("non-empty");
+		});
+	});
+
+	describe("create", () => {
+		it("creates the database when it doesn't already exist", async () => {
+			mockGet.mockResolvedValue({ databases: [] });
+
+			const provider = new NeonDatabaseResourceProvider();
+
+			const result = await provider.create({
+				apiKey: "key",
+				projectId: "proj-abc",
+				branchId: "br-main",
+				name: "neondb",
+				ownerName: "neondb_owner",
+			});
+
+			expect(mockPost).toHaveBeenCalledWith(
+				"/projects/proj-abc/branches/br-main/databases",
+				{ database: { name: "neondb", owner_name: "neondb_owner" } },
+			);
+
+			expect(result.id).toBe("br-main/neondb");
+		});
+
+		it("adopts an existing database without POSTing", async () => {
+			mockGet.mockResolvedValue({
+				databases: [{ id: 1, name: "neondb", owner_name: "neondb_owner" }],
+			});
+
+			const provider = new NeonDatabaseResourceProvider();
+
+			await provider.create({
+				apiKey: "key",
+				projectId: "proj-abc",
+				branchId: "br-main",
+				name: "neondb",
+				ownerName: "neondb_owner",
+			});
+
+			expect(mockPost).not.toHaveBeenCalled();
+		});
+	});
+
+	describe("diff", () => {
+		it("marks name as replace when the database name changes", async () => {
+			const provider = new NeonDatabaseResourceProvider();
+
+			const result = await provider.diff(
+				"br-main/neondb",
+				{
+					apiKey: "k",
+					projectId: "p",
+					branchId: "br-main",
+					name: "neondb",
+					ownerName: "neondb_owner",
+				},
+				{
+					apiKey: "k",
+					projectId: "p",
+					branchId: "br-main",
+					name: "other",
+					ownerName: "neondb_owner",
+				},
+			);
+
+			expect(result.replaces).toContain("name");
+		});
+
+		it("flags an in-place change (no replace) when only ownerName changes", async () => {
+			const provider = new NeonDatabaseResourceProvider();
+
+			const result = await provider.diff(
+				"br-main/neondb",
+				{
+					apiKey: "k",
+					projectId: "p",
+					branchId: "br-main",
+					name: "neondb",
+					ownerName: "neondb_owner",
+				},
+				{
+					apiKey: "k",
+					projectId: "p",
+					branchId: "br-main",
+					name: "neondb",
+					ownerName: "other_owner",
+				},
+			);
+
+			expect(result.changes).toBe(true);
+			expect(result.replaces).toEqual([]);
+		});
+	});
+
+	describe("update", () => {
+		it("PATCHes the owner name and agrees with diff's in-place case", async () => {
+			const provider = new NeonDatabaseResourceProvider();
+
+			const result = await provider.update(
+				"br-main/neondb",
+				{
+					apiKey: "key",
+					projectId: "proj-abc",
+					branchId: "br-main",
+					name: "neondb",
+					ownerName: "neondb_owner",
+				},
+				{
+					apiKey: "key",
+					projectId: "proj-abc",
+					branchId: "br-main",
+					name: "neondb",
+					ownerName: "other_owner",
+				},
+			);
+
+			expect(mockPatch).toHaveBeenCalledWith(
+				"/projects/proj-abc/branches/br-main/databases/neondb",
+				{ database: { owner_name: "other_owner" } },
+			);
+
+			expect(result.outs?.ownerName).toBe("other_owner");
+		});
+	});
+
+	describe("delete", () => {
+		it("deletes the database", async () => {
+			const mockDelete = vi
+				.spyOn(NeonClient.prototype, "delete")
+				.mockResolvedValue(undefined);
+
+			await new NeonDatabaseResourceProvider().delete("br-main/neondb", {
+				apiKey: "key",
+				projectId: "proj-abc",
+				branchId: "br-main",
+				name: "neondb",
+				ownerName: "neondb_owner",
+			});
+
+			expect(mockDelete).toHaveBeenCalledWith(
+				"/projects/proj-abc/branches/br-main/databases/neondb",
+			);
+		});
+
+		it("tolerates an already-deleted database (not-found)", async () => {
+			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+				new ApiNotFoundError(
+					"neon",
+					"/projects/proj-abc/branches/br-main/databases/neondb",
+				),
+			);
+
+			await expect(
+				new NeonDatabaseResourceProvider().delete("br-main/neondb", {
+					apiKey: "key",
+					projectId: "proj-abc",
+					branchId: "br-main",
+					name: "neondb",
+					ownerName: "neondb_owner",
+				}),
+			).resolves.toBeUndefined();
+		});
+
+		it("rethrows a real error", async () => {
+			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+				new Error("Neon API error (403): forbidden"),
+			);
+
+			await expect(
+				new NeonDatabaseResourceProvider().delete("br-main/neondb", {
+					apiKey: "key",
+					projectId: "proj-abc",
+					branchId: "br-main",
+					name: "neondb",
+					ownerName: "neondb_owner",
+				}),
+			).rejects.toThrow("403");
+		});
+	});
+});

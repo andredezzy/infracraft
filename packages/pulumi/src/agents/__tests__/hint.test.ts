@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { hint } from "../hint";
+import { AgentHintChannel, hint } from "../hint";
 
 describe("hint", () => {
 	let write: ReturnType<typeof vi.fn>;
@@ -25,8 +25,8 @@ describe("hint", () => {
 		expect(out).toContain("- Production is protected"); // an appended project line
 	});
 
-	it("routes through pulumi.log when channel is pulumi-log", () => {
-		hint({ enabled: true, channel: "pulumi-log" });
+	it("routes through pulumi.log when channel is PULUMI_LOG", () => {
+		hint({ enabled: true, channel: AgentHintChannel.PULUMI_LOG });
 		expect(write).not.toHaveBeenCalled();
 	});
 

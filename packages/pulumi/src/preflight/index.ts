@@ -1,10 +1,9 @@
 export {
+	assertCloudflareZoneAccess,
+	type CloudflareZoneAccessOptions,
+} from "./assert-cloudflare-zone-access";
+export {
 	assertPulumiVersionMatch,
 	type PulumiVersionMatchOptions,
-	type PulumiVersionMismatchMode,
-} from "./assert-cli-sdk-version-match";
-
-export {
-	assertCloudflareTokenScopes,
-	type CloudflareTokenScopesOptions,
-} from "./assert-cloudflare-token-scopes";
+	PulumiVersionMismatchMode,
+} from "./assert-pulumi-version-match";

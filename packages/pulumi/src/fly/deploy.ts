@@ -26,7 +26,7 @@ export interface FlyDeployArgs {
 
 /**
  * Deploys a Fly app via `fly deploy --remote-only` from a generated fly.toml.
- * Isolation/git are the seam's job (list a `DeploySandbox`, optionally a `GitGuard`).
+ * Isolation/git are the seam's job (e.g. a `DeploySandbox`, optionally a `GitGuard`).
  *
  * Recommended preflight: `assertHostBinaries(["fly"])` (from
  * `@infracraft/pulumi/sandbox`) at program start, so a missing CLI fails fast

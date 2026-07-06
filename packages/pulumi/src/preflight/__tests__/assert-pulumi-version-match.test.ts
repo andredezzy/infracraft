@@ -1,6 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { assertPulumiVersionMatch } from "../assert-cli-sdk-version-match";
+import {
+	assertPulumiVersionMatch,
+	PulumiVersionMismatchMode,
+} from "../assert-pulumi-version-match";
 
 describe("assertPulumiVersionMatch", () => {
 	afterEach(() => {
@@ -36,12 +39,12 @@ describe("assertPulumiVersionMatch", () => {
 		);
 	});
 
-	it("warns instead of throwing on a mismatch when mode is 'warn'", () => {
+	it("warns instead of throwing on a mismatch when mode is WARN", () => {
 		const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
 
 		expect(() =>
 			assertPulumiVersionMatch({
-				mode: "warn",
+				mode: PulumiVersionMismatchMode.WARN,
 				readCliVersion: () => "v3.250.0",
 				readSdkVersion: () => "3.243.0",
 			}),

@@ -134,7 +134,7 @@ describe("RailwayDeploy", () => {
 			"mesh",
 			{
 				triggers: [],
-				healthcheckPath: "/health-check",
+				healthcheckPath: "/healthcheck",
 				healthcheckTimeout: 300,
 			},
 			{ ...ctx, dependsOn: [sandbox, gitGuard] },
@@ -146,8 +146,19 @@ describe("RailwayDeploy", () => {
 			}
 		).apply((s) => s);
 
-		expect(create).toContain("IC_HC_PATH='/health-check'");
+		expect(create).toContain("IC_HC_PATH='/healthcheck'");
 		expect(create).toContain("IC_HC_TIMEOUT=300");
+	});
+
+	it("throws when healthcheckPath contains a hyphen (same Railway field service.ts validates)", () => {
+		expect(
+			() =>
+				new RailwayDeploy(
+					"mesh",
+					{ triggers: [], healthcheckPath: "/health-check" },
+					{ ...ctx, dependsOn: [sandbox, gitGuard] },
+				),
+		).toThrow(/hyphen/);
 	});
 
 	it("escapes railpackConfig values containing an apostrophe (POSIX single-quote)", () => {

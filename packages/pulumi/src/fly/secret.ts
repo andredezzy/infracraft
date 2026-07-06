@@ -176,8 +176,9 @@ class FlySecretResource extends pulumi.dynamic.Resource {
 			new FlySecretResourceProvider(),
 			name,
 			{ ...args, version: undefined },
-			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
-			{ ...opts, additionalSecretOutputs: ["token"] },
+			// The API token AND the secret values themselves flow into dynamic-provider
+			// state with the outputs — mark both secret there.
+			{ ...opts, additionalSecretOutputs: ["token", "secrets"] },
 		);
 	}
 }

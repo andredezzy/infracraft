@@ -119,7 +119,7 @@ describe("VercelIntegrationResourceProvider", () => {
 			await expect(
 				provider.create({ token: "tok", teamId: "team_xyz", slug: "upstash" }),
 			).rejects.toThrow(
-				'Vercel integration "upstash" is not installed on this team',
+				'VercelIntegration "upstash" is not installed on this team',
 			);
 		});
 	});

@@ -165,5 +165,31 @@ describe("RailwayEnvironmentResourceProvider", () => {
 			expect(mutation).toContain("environmentDelete");
 			expect(vars).toEqual({ id: "env-feature" });
 		});
+
+		it("tolerates an already-deleted environment (not-found)", async () => {
+			mockQuery.mockRejectedValue(new Error("Environment not found"));
+
+			await expect(
+				new RailwayEnvironmentResourceProvider().delete("env-feature", {
+					token: "tok",
+					projectId: "proj-123",
+					name: "feature",
+					environmentId: "env-feature",
+				}),
+			).resolves.toBeUndefined();
+		});
+
+		it("rethrows a real error", async () => {
+			mockQuery.mockRejectedValue(new Error("forbidden"));
+
+			await expect(
+				new RailwayEnvironmentResourceProvider().delete("env-feature", {
+					token: "tok",
+					projectId: "proj-123",
+					name: "feature",
+					environmentId: "env-feature",
+				}),
+			).rejects.toThrow("forbidden");
+		});
 	});
 });

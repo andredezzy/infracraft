@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
 import { NeonClient } from "./client";
@@ -46,8 +47,32 @@ interface ProjectReadResponse {
  * On `create()`, queries `GET /projects` and performs an exact name match.
  * If found, adopts the existing project. If not, creates a new one via
  * `POST /projects`. Deletion is a no-op to protect production databases.
+ *
+ * @internal Exported only for unit testing; not part of the public API surface.
  */
-class NeonProjectResourceProvider implements pulumi.dynamic.ResourceProvider {
+export class NeonProjectResourceProvider
+	implements pulumi.dynamic.ResourceProvider
+{
+	/**
+	 * Validates inputs at plan time. An empty project name would otherwise
+	 * fail deep inside the Neon API call — and never match on the adopt lookup.
+	 */
+	async check(
+		_olds: NeonProjectInputs,
+		news: NeonProjectInputs,
+	): Promise<pulumi.dynamic.CheckResult<NeonProjectInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.name) && news.name.trim().length === 0) {
+			failures.push({
+				property: "name",
+				reason: 'name must be a non-empty project name (e.g. "my-app")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(
 		inputs: NeonProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {

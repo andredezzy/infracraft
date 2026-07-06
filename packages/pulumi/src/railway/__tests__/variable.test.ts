@@ -116,9 +116,9 @@ describe("RailwayVariableResourceProvider", () => {
 			expect(deletedNames).toEqual(["DATABASE_URL", "NODE_ENV"]);
 		});
 
-		it("keeps deleting the remaining keys when one deletion fails", async () => {
+		it("keeps deleting the remaining keys when one is already deleted (not-found)", async () => {
 			mockQuery
-				.mockRejectedValueOnce(new Error("already deleted"))
+				.mockRejectedValueOnce(new Error("Variable not found"))
 				.mockResolvedValueOnce({});
 
 			await expect(
@@ -126,6 +126,16 @@ describe("RailwayVariableResourceProvider", () => {
 			).resolves.toBeUndefined();
 
 			expect(mockQuery).toHaveBeenCalledTimes(2);
+		});
+
+		it("rethrows a real error and stops deleting the remaining keys", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("forbidden"));
+
+			await expect(
+				new RailwayVariableResourceProvider().delete("svc-1:variables", props),
+			).rejects.toThrow("forbidden");
+
+			expect(mockQuery).toHaveBeenCalledTimes(1);
 		});
 	});
 
