@@ -11,8 +11,7 @@
 				"STOP",
 				"SUSPEND",
 				"CONNECTIONS",
-				"PRIVATE_V6",
-				"STDERR"
+				"PRIVATE_V6"
 			]
 		},
 		"packages/sandbox": {},

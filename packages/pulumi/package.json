@@ -26,10 +26,6 @@
 			"types": "./dist/fly/index.d.mts",
 			"default": "./dist/fly/index.mjs"
 		},
-		"./agents": {
-			"types": "./dist/agents/index.d.mts",
-			"default": "./dist/agents/index.mjs"
-		},
 		"./hash": {
 			"types": "./dist/hash.d.mts",
 			"default": "./dist/hash.mjs"

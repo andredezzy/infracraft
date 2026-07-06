@@ -35,7 +35,6 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 | 🐘 | **Neon** | `@infracraft/pulumi/neon` | Adopt-or-create layer for Neon Postgres. Projects, branches, endpoints, roles, databases. |
 | ▲ | **Vercel** | `@infracraft/pulumi/vercel` | CLI deploy orchestration (`VercelDeploy`) and marketplace resources. Projects, domains, and env vars belong to the official `@pulumiverse/vercel` provider. |
 | 🎯 | **Fly.io** | `@infracraft/pulumi/fly` | App, Secret, Volume, Certificate, IP, and Deploy resources via the Machines REST API and Fly GraphQL API. |
-| 🤖 | **Agents** | `@infracraft/pulumi/agents` | Emit operating hints for AI coding agents working on the stack. |
 | #️⃣ | **Hash** | `@infracraft/pulumi/hash` | Deterministic directory/env-var/app hashing for deploy triggers. |
 | 📦 | **Sandbox** | `@infracraft/pulumi/sandbox` | Isolated `/tmp` working copies for CLI deploys. Opt in via `dependsOn`. |
 | 🔒 | **Git Guard** | `@infracraft/pulumi/git-guard` | Swaps a sandboxed deploy's `.git` for a fresh stub. Opt in via `dependsOn`. |
@@ -392,31 +391,6 @@ new FlyDeploy("api-deploy", {
 
 **Helper:** `generateFlyToml(config)` serializes a `FlyTomlConfig` to fly.toml text (camelCase to snake_case, deterministic output).
 
-## Agents
-
-Emit operating reminders for AI coding agents (Claude Code, Copilot, etc.) working on the stack. Auto-detects an agent via `CLAUDECODE` / `AI_AGENT` env vars; a no-op for humans unless `enabled` is forced.
-
-```typescript
-import * as agents from "@infracraft/pulumi/agents"
-
-agents.hint({
-  project: [
-    "Production branch is `main`; never destroy it.",
-    "All Railway services share one project; only environments are per-feature.",
-  ],
-  // channel: AgentHintChannel.STDERR (default) | AgentHintChannel.PULUMI_LOG
-})
-```
-
-Hints are emitted inside a `<infracraft-hint>` block with infracraft defaults (adopt-or-create, no-op deletes for shared resources, protect-for-shared) plus caller-supplied `project` reminders.
-
-### Agents API surface
-
-| Export | Kind | Notes |
-|---|---|---|
-| `hint(options?)` | function | Emits the hint block; no-op outside agent context |
-| `AgentHintOptions` | type | `project?` (string[]), `enabled?` (boolean), `channel?` (`AgentHintChannel`) |
-| `AgentHintChannel` | enum | `STDERR` (default), `PULUMI_LOG` |
 
 ## Hash
 
