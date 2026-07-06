@@ -1,17 +1,17 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
-import type { NeonBranch } from "./branch";
-import { NeonClient } from "./client";
-import type { NeonProject } from "./project";
-import type { NeonProvider } from "./provider";
+import type { Branch } from "./branch";
+import { Client } from "./client";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Neon endpoint dynamic provider. */
-interface NeonEndpointInputs {
+interface EndpointInputs {
 	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
 	apiKey?: string;
 
-	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	/** Env var name resolved to the API key when `apiKey` is absent (see `ProviderArgs.apiKeyEnvVar`). */
 	apiKeyEnvVar?: string;
 
 	/** Neon project ID. */
@@ -31,7 +31,7 @@ interface NeonEndpointInputs {
 }
 
 /** Persisted state for the Neon endpoint. */
-interface NeonEndpointOutputs extends NeonEndpointInputs {
+interface EndpointOutputs extends EndpointInputs {
 	/** Endpoint hostname (e.g. `"ep-delicate-union-ah0ekn7n.us-east-1.aws.neon.tech"`). */
 	host: string;
 }
@@ -62,7 +62,7 @@ interface EndpointListResponse {
  * Finds an existing read-write endpoint for a branch.
  */
 async function findEndpointByBranch(
-	client: NeonClient,
+	client: Client,
 	projectId: string,
 	branchId: string,
 ): Promise<{ id: string; host: string } | undefined> {
@@ -83,7 +83,7 @@ async function findEndpointByBranch(
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class NeonEndpointResourceProvider
+export class EndpointResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -91,9 +91,9 @@ export class NeonEndpointResourceProvider
 	 * deep inside the Neon API call with an opaque error.
 	 */
 	async check(
-		_olds: NeonEndpointInputs,
-		news: NeonEndpointInputs,
-	): Promise<pulumi.dynamic.CheckResult<NeonEndpointInputs>> {
+		_olds: EndpointInputs,
+		news: EndpointInputs,
+	): Promise<pulumi.dynamic.CheckResult<EndpointInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (
@@ -110,10 +110,8 @@ export class NeonEndpointResourceProvider
 		return { inputs: news, failures };
 	}
 
-	async create(
-		inputs: NeonEndpointInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(
+	async create(inputs: EndpointInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
 		);
 
@@ -167,10 +165,10 @@ export class NeonEndpointResourceProvider
 
 	async update(
 		id: string,
-		_olds: NeonEndpointOutputs,
-		news: NeonEndpointInputs,
+		_olds: EndpointOutputs,
+		news: EndpointInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new NeonClient(
+		const client = new Client(
 			resolveCredential(news.apiKey, news.apiKeyEnvVar),
 		);
 
@@ -190,9 +188,9 @@ export class NeonEndpointResourceProvider
 
 	async read(
 		id: string,
-		props: NeonEndpointOutputs,
+		props: EndpointOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(
+		const client = new Client(
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
 		);
 
@@ -221,8 +219,8 @@ export class NeonEndpointResourceProvider
 		}
 	}
 
-	async delete(id: string, props: NeonEndpointOutputs): Promise<void> {
-		const client = new NeonClient(
+	async delete(id: string, props: EndpointOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
 		);
 
@@ -242,8 +240,8 @@ export class NeonEndpointResourceProvider
 
 	async diff(
 		_id: string,
-		olds: NeonEndpointOutputs,
-		news: NeonEndpointInputs,
+		olds: EndpointOutputs,
+		news: EndpointInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -274,7 +272,7 @@ export class NeonEndpointResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class NeonEndpointResource extends pulumi.dynamic.Resource {
+class EndpointResource extends pulumi.dynamic.Resource {
 	public declare readonly host: pulumi.Output<string>;
 
 	constructor(
@@ -291,7 +289,7 @@ class NeonEndpointResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new NeonEndpointResourceProvider(),
+			new EndpointResourceProvider(),
 			name,
 			{ ...args, host: undefined },
 			// The API key flows into dynamic-provider state with the outputs — mark it secret there.
@@ -300,20 +298,20 @@ class NeonEndpointResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for NeonEndpoint — replaces Pulumi's native `provider` field. */
-type NeonEndpointOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for Endpoint — replaces Pulumi's native `provider` field. */
+type EndpointOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Neon authentication context. */
-	provider: NeonProvider;
+	provider: Provider;
 
 	/** Neon project context. */
-	project: NeonProject;
+	project: Project;
 
 	/** Neon branch context. */
-	branch: NeonBranch;
+	branch: Branch;
 };
 
-/** Args for NeonEndpoint. */
-export interface NeonEndpointArgs {
+/** Args for Endpoint. */
+export interface EndpointArgs {
 	/** Minimum compute units. Maps to the Neon API field `endpoint.autoscaling_limit_min_cu`. */
 	minCu: pulumi.Input<number>;
 
@@ -330,23 +328,23 @@ export interface NeonEndpointArgs {
  *
  * @example
  * ```typescript
- * const endpoint = new NeonEndpoint("production", {
+ * const endpoint = new neon.Endpoint("production", {
  *   minCu: 0.25,
  *   maxCu: 1,
  *   suspendTimeout: 0,
  * }, { provider, project, branch });
  * ```
  */
-export class NeonEndpoint extends pulumi.ComponentResource {
+export class Endpoint extends pulumi.ComponentResource {
 	/** Endpoint hostname for connection strings. */
 	public readonly host: pulumi.Output<string>;
 
-	constructor(name: string, args: NeonEndpointArgs, opts: NeonEndpointOptions) {
+	constructor(name: string, args: EndpointArgs, opts: EndpointOptions) {
 		const { provider, project, branch, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Endpoint", name, {}, pulumiOpts);
 
-		const resource = new NeonEndpointResource(
+		const resource = new EndpointResource(
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,

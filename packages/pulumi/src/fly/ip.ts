@@ -2,15 +2,15 @@ import * as pulumi from "@pulumi/pulumi";
 
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
-import type { FlyApp } from "./app";
-import { FlyClient } from "./client";
-import type { FlyProvider } from "./provider";
+import type { App } from "./app";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /**
  * Fly IP address type. Enum keys UPPERCASE; values are Fly's GraphQL enum
  * literals (lowercase wire format).
  */
-export enum FlyIpType {
+export enum IpType {
 	V4 = "v4",
 	V6 = "v6",
 	SHARED_V4 = "shared_v4",
@@ -18,25 +18,25 @@ export enum FlyIpType {
 }
 
 /** Resolved inputs for the Fly IP dynamic provider. */
-interface FlyIpInputs {
+interface IpInputs {
 	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** App name (used as GraphQL appId). */
 	appName: string;
 
 	/** IP address type. */
-	type: FlyIpType;
+	type: IpType;
 
 	/** Region (IATA code); omit for global. */
 	region?: string;
 }
 
 /** Persisted state for the Fly IP. */
-interface FlyIpOutputs extends FlyIpInputs {
+interface IpOutputs extends IpInputs {
 	/** Allocated IP address (also the `.id`). */
 	address: string;
 
@@ -99,9 +99,9 @@ interface AllocateResult {
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
-	async create(inputs: FlyIpInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(
+export class IpResourceProvider implements pulumi.dynamic.ResourceProvider {
+	async create(inputs: IpInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -133,7 +133,7 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 		const node = result.allocateIpAddress.ipAddress;
 
 		const address =
-			inputs.type === FlyIpType.SHARED_V4
+			inputs.type === IpType.SHARED_V4
 				? (result.allocateIpAddress.app.sharedIpAddress ?? "")
 				: (node?.address ?? "");
 
@@ -151,9 +151,9 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 
 	async read(
 		_id: string,
-		props: FlyIpOutputs,
+		props: IpOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new FlyClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -174,8 +174,8 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 		};
 	}
 
-	async delete(_id: string, props: FlyIpOutputs): Promise<void> {
-		const client = new FlyClient(
+	async delete(_id: string, props: IpOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -204,8 +204,8 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 
 	async diff(
 		_id: string,
-		olds: FlyIpOutputs,
-		news: FlyIpInputs,
+		olds: IpOutputs,
+		news: IpInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -229,14 +229,14 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 	}
 
 	private async findExisting(
-		client: FlyClient,
-		inputs: FlyIpInputs,
+		client: Client,
+		inputs: IpInputs,
 	): Promise<{ address: string; ipAddressId?: string } | null> {
 		const result = await client.graphql<ListIpsResult>(LIST_IPS, {
 			appName: inputs.appName,
 		});
 
-		if (inputs.type === FlyIpType.SHARED_V4) {
+		if (inputs.type === IpType.SHARED_V4) {
 			const shared = result.app.sharedIpAddress;
 
 			return shared ? { address: shared } : null;
@@ -253,7 +253,7 @@ export class FlyIpResourceProvider implements pulumi.dynamic.ResourceProvider {
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class FlyIpResource extends pulumi.dynamic.Resource {
+class IpResource extends pulumi.dynamic.Resource {
 	public declare readonly address: pulumi.Output<string>;
 
 	constructor(
@@ -262,13 +262,13 @@ class FlyIpResource extends pulumi.dynamic.Resource {
 			token?: pulumi.Input<string>;
 			tokenEnvVar?: pulumi.Input<string>;
 			appName: pulumi.Input<string>;
-			type: pulumi.Input<FlyIpType>;
+			type: pulumi.Input<IpType>;
 			region?: pulumi.Input<string>;
 		},
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new FlyIpResourceProvider(),
+			new IpResourceProvider(),
 			name,
 			{ ...args, address: undefined, ipAddressId: undefined },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -277,19 +277,19 @@ class FlyIpResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for FlyIp. */
-type FlyIpOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for Ip. */
+type IpOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Fly authentication context. */
-	provider: FlyProvider;
+	provider: Provider;
 
 	/** App the IP belongs to. */
-	app: FlyApp;
+	app: App;
 };
 
-/** Args for FlyIp. */
-export interface FlyIpArgs {
+/** Args for Ip. */
+export interface IpArgs {
 	/** IP address type. */
-	type: pulumi.Input<FlyIpType>;
+	type: pulumi.Input<IpType>;
 
 	/** Region (IATA code); omit for a global address. */
 	region?: pulumi.Input<string>;
@@ -300,19 +300,19 @@ export interface FlyIpArgs {
  *
  * @example
  * ```typescript
- * const ip = new FlyIp("api-ip", { type: FlyIpType.SHARED_V4 }, { provider, app });
+ * const ip = new fly.Ip("api-ip", { type: fly.IpType.SHARED_V4 }, { provider, app });
  * ```
  */
-export class FlyIp extends pulumi.ComponentResource {
+export class Ip extends pulumi.ComponentResource {
 	/** Allocated IP address. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(name: string, args: FlyIpArgs, opts: FlyIpOptions) {
+	constructor(name: string, args: IpArgs, opts: IpOptions) {
 		const { provider, app, ...pulumiOpts } = opts;
 
 		super("infracraft:fly:Ip", name, {}, pulumiOpts);
 
-		const resource = new FlyIpResource(
+		const resource = new IpResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

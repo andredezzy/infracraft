@@ -4,7 +4,7 @@
  * Note: 'canary' requires more than one machine; falls back to 'rolling' when
  * max-per-region is 1. Default is 'rolling'.
  */
-export enum FlyDeployStrategy {
+export enum DeployStrategy {
 	ROLLING = "rolling",
 	IMMEDIATE = "immediate",
 	CANARY = "canary",
@@ -12,7 +12,7 @@ export enum FlyDeployStrategy {
 }
 
 /** Machine restart policy. Default is 'on-failure'. */
-export enum FlyRestartPolicy {
+export enum RestartPolicy {
 	ALWAYS = "always",
 	ON_FAILURE = "on-failure",
 	NEVER = "never",
@@ -23,7 +23,7 @@ export enum FlyRestartPolicy {
  * 'stop' is equivalent to boolean true, but 'suspend' cannot be expressed
  * as a boolean. Default is 'off'.
  */
-export enum FlyAutoStopMachines {
+export enum AutoStopMachines {
 	OFF = "off",
 	STOP = "stop",
 	SUSPEND = "suspend",
@@ -33,19 +33,19 @@ export enum FlyAutoStopMachines {
  * Concurrency limit unit. 'connections' is the default. For HTTP apps,
  * 'requests' is recommended because the proxy can pool connections.
  */
-export enum FlyConcurrencyType {
+export enum ConcurrencyType {
 	CONNECTIONS = "connections",
 	REQUESTS = "requests",
 }
 
 /** Raw service protocol. When 'udp', handlers must be left unset. */
-export enum FlyServiceProtocol {
+export enum ServiceProtocol {
 	TCP = "tcp",
 	UDP = "udp",
 }
 
 /** Port handler. Only valid for TCP services; omit entirely for UDP services. */
-export enum FlyPortHandler {
+export enum PortHandler {
 	HTTP = "http",
 	TLS = "tls",
 	PG_TLS = "pg_tls",
@@ -54,13 +54,13 @@ export enum FlyPortHandler {
 }
 
 /** VM CPU kind. */
-export enum FlyCpuKind {
+export enum CpuKind {
 	SHARED = "shared",
 	PERFORMANCE = "performance",
 }
 
 /** Health-check type. */
-export enum FlyCheckType {
+export enum CheckType {
 	HTTP = "http",
 	TCP = "tcp",
 }
@@ -109,7 +109,7 @@ export const FLY_REGIONS = [
  * Fly region code (IATA). Derived from {@link FLY_REGIONS} — single source of truth.
  * When Fly adds a new region, update {@link FLY_REGIONS} and release a new version.
  */
-export type FlyRegion = (typeof FLY_REGIONS)[number];
+export type Region = (typeof FLY_REGIONS)[number];
 
 /**
  * Authoritative list of Fly machine size presets.
@@ -145,18 +145,18 @@ export const FLY_VM_SIZES = [
  * When Fly adds a new size, update {@link FLY_VM_SIZES} and release a new version.
  * Pass the raw string directly — e.g. "shared-cpu-1x".
  */
-export type FlyVmSize = (typeof FLY_VM_SIZES)[number];
+export type VmSize = (typeof FLY_VM_SIZES)[number];
 
 /**
  * Number of CPUs for a [[vm]] entry. Valid values depend on the chosen
  * cpu_kind — not all counts are available for both shared and performance
  * CPU kinds. The union covers the full documented permitted set.
  */
-export type FlyCpuCount = 1 | 2 | 4 | 8 | 16;
+export type CpuCount = 1 | 2 | 4 | 8 | 16;
 
 /** A single health check. */
-export interface FlyCheck {
-	type?: FlyCheckType;
+export interface Check {
+	type?: CheckType;
 	port?: number;
 	method?: string;
 	path?: string;
@@ -178,51 +178,51 @@ export interface FlyCheck {
 }
 
 /** Concurrency configuration for a service. */
-export interface FlyConcurrency {
-	type: FlyConcurrencyType;
+export interface Concurrency {
+	type: ConcurrencyType;
 	softLimit: number;
 	hardLimit: number;
 }
 
 /** `[build]` section. */
-export interface FlyBuildConfig {
+export interface BuildConfig {
 	dockerfile?: string;
 	image?: string;
 }
 
 /** `[http_service]` section. */
-export interface FlyHttpService {
+export interface HttpService {
 	internalPort: number;
 	forceHttps?: boolean;
-	autoStopMachines?: FlyAutoStopMachines;
+	autoStopMachines?: AutoStopMachines;
 	autoStartMachines?: boolean;
 	minMachinesRunning?: number;
 	processes?: string[];
-	concurrency?: FlyConcurrency;
-	checks?: FlyCheck[];
+	concurrency?: Concurrency;
+	checks?: Check[];
 }
 
 /** A `[[services.ports]]` entry. */
-export interface FlyServicePort {
+export interface ServicePort {
 	port: number;
-	handlers?: FlyPortHandler[];
+	handlers?: PortHandler[];
 }
 
 /** A `[[services]]` entry. */
-export interface FlyService {
+export interface Service {
 	internalPort: number;
-	protocol: FlyServiceProtocol;
-	autoStopMachines?: FlyAutoStopMachines;
+	protocol: ServiceProtocol;
+	autoStopMachines?: AutoStopMachines;
 	autoStartMachines?: boolean;
 	minMachinesRunning?: number;
 	processes?: string[];
-	ports: FlyServicePort[];
-	concurrency?: FlyConcurrency;
-	checks?: FlyCheck[];
+	ports: ServicePort[];
+	concurrency?: Concurrency;
+	checks?: Check[];
 }
 
 /** A `[[mounts]]` entry. */
-export interface FlyMount {
+export interface Mount {
 	source: string;
 	destination: string;
 	processes?: string[];
@@ -230,29 +230,29 @@ export interface FlyMount {
 }
 
 /** A `[[vm]]` entry. `count` is intentionally absent — machine count is set via `fly scale`. */
-export interface FlyVm {
-	size?: FlyVmSize;
+export interface Vm {
+	size?: VmSize;
 	/**
 	 * Memory allocation. Accepts a bare integer (interpreted as MB, e.g. 1024)
 	 * or a string with units (e.g. "512mb", "2gb"). Valid values are
 	 * hardware-tier-dependent; see https://fly.io/docs/about/pricing/.
 	 */
 	memory?: string | number;
-	cpuKind?: FlyCpuKind;
+	cpuKind?: CpuKind;
 	/** Number of CPUs. Valid values depend on the chosen `cpuKind`. */
-	cpus?: FlyCpuCount;
+	cpus?: CpuCount;
 	processes?: string[];
 }
 
 /** `[deploy]` section. */
-export interface FlyDeployConfig {
-	strategy?: FlyDeployStrategy;
+export interface DeployConfig {
+	strategy?: DeployStrategy;
 	releaseCommand?: string;
 }
 
 /** A `[[restart]]` entry. */
-export interface FlyRestartConfig {
-	policy?: FlyRestartPolicy;
+export interface RestartConfig {
+	policy?: RestartPolicy;
 	retries?: number;
 	processes?: string[];
 }
@@ -262,19 +262,19 @@ export interface FlyRestartConfig {
  * because `generateFlyToml()` runs synchronously to write the toml file — resolve
  * any `Output` before constructing this object.
  */
-export interface FlyTomlConfig {
+export interface TomlConfig {
 	app: string;
-	primaryRegion: FlyRegion;
-	build?: FlyBuildConfig;
+	primaryRegion: Region;
+	build?: BuildConfig;
 	env?: Record<string, string>;
 	processes?: Record<string, string>;
-	httpService?: FlyHttpService;
-	services?: FlyService[];
-	mounts?: FlyMount[];
-	vm?: FlyVm[];
-	deploy?: FlyDeployConfig;
-	restart?: FlyRestartConfig;
-	checks?: Record<string, FlyCheck>;
+	httpService?: HttpService;
+	services?: Service[];
+	mounts?: Mount[];
+	vm?: Vm[];
+	deploy?: DeployConfig;
+	restart?: RestartConfig;
+	checks?: Record<string, Check>;
 }
 
 function quote(value: string): string {
@@ -285,7 +285,7 @@ function array(values: string[]): string {
 	return `[${values.map((value) => quote(value)).join(", ")}]`;
 }
 
-function pushCheck(lines: string[], header: string, check: FlyCheck): void {
+function pushCheck(lines: string[], header: string, check: Check): void {
 	lines.push("", header);
 
 	if (check.type !== undefined) {
@@ -315,7 +315,7 @@ function pushCheck(lines: string[], header: string, check: FlyCheck): void {
 function pushConcurrency(
 	lines: string[],
 	header: string,
-	concurrency: FlyConcurrency,
+	concurrency: Concurrency,
 ): void {
 	lines.push("", header);
 	lines.push(`    type = ${quote(concurrency.type)}`);
@@ -324,13 +324,13 @@ function pushConcurrency(
 }
 
 /**
- * Serializes a {@link FlyTomlConfig} into fly.toml text.
+ * Serializes a {@link TomlConfig} into fly.toml text.
  *
  * Field names are camelCase on the TypeScript side and emitted as Fly's
  * snake_case toml keys. Output is deterministic (stable section ordering) so it
- * can be used directly as a `FlyDeploy` redeploy trigger.
+ * can be used directly as a `Deploy` redeploy trigger.
  */
-export function generateFlyToml(config: FlyTomlConfig): string {
+export function generateFlyToml(config: TomlConfig): string {
 	const lines: string[] = [];
 
 	lines.push(`app = ${quote(config.app)}`);

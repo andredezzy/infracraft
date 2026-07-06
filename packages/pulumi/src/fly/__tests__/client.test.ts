@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { FlyClient } from "../client";
+import { Client } from "../client";
 
-describe("FlyClient", () => {
+describe("fly.Client", () => {
 	const originalFetch = globalThis.fetch;
 
 	afterEach(() => {
@@ -17,7 +17,7 @@ describe("FlyClient", () => {
 			text: () => Promise.resolve(JSON.stringify({ name: "my-app" })),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 		const result = await client.get<{ name: string }>("/v1/apps/my-app");
 
 		expect(result.name).toBe("my-app");
@@ -41,7 +41,7 @@ describe("FlyClient", () => {
 				text: () => Promise.resolve("forbidden"),
 			});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 
 		await expect(client.tryGet("/v1/apps/missing")).resolves.toBeNull();
 		await expect(client.tryGet("/v1/apps/broken")).rejects.toThrow("403");
@@ -54,7 +54,7 @@ describe("FlyClient", () => {
 			text: () => Promise.resolve("nope"),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 		const error = await client.get("/v1/apps/missing").catch((e) => e);
 
 		expect(error).toBeInstanceOf(ApiNotFoundError);
@@ -69,7 +69,7 @@ describe("FlyClient", () => {
 			text: () => Promise.resolve(JSON.stringify({ id: "z4k69" })),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 
 		const result = await client.post<{ id: string }>("/v1/apps", {
 			app_name: "x",
@@ -94,7 +94,7 @@ describe("FlyClient", () => {
 			text: () => Promise.resolve(JSON.stringify({ needs_restart: false })),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 
 		const result = await client.put<{ needs_restart: boolean }>(
 			"/v1/apps/x/volumes/vol_123/extend",
@@ -115,7 +115,7 @@ describe("FlyClient", () => {
 			text: () => Promise.resolve(""),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 
 		await expect(
 			client.delete("/v1/apps/x/certificates/h"),
@@ -129,7 +129,7 @@ describe("FlyClient", () => {
 			text: () => Promise.resolve("Unprocessable"),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 		await expect(client.post("/v1/apps", {})).rejects.toThrow("422");
 	});
 
@@ -141,7 +141,7 @@ describe("FlyClient", () => {
 				Promise.resolve(JSON.stringify({ data: { app: { name: "a" } } })),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 
 		const data = await client.graphql<{ app: { name: string } }>(
 			"query { app { name } }",
@@ -163,7 +163,7 @@ describe("FlyClient", () => {
 				Promise.resolve(JSON.stringify({ errors: [{ message: "bad query" }] })),
 		});
 
-		const client = new FlyClient("test-token");
+		const client = new Client("test-token");
 		await expect(client.graphql("query {}", {})).rejects.toThrow("bad query");
 	});
 });

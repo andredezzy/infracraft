@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VercelIntegrationResourceProvider } from "../integration";
+import { IntegrationResourceProvider } from "../integration";
 
-describe("VercelIntegrationResourceProvider", () => {
+describe("vercel.IntegrationResourceProvider", () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
@@ -24,7 +24,7 @@ describe("VercelIntegrationResourceProvider", () => {
 					Promise.resolve([{ id: "icfg_upstash123", slug: "upstash" }]),
 			});
 
-			const provider = new VercelIntegrationResourceProvider();
+			const provider = new IntegrationResourceProvider();
 
 			await provider.create({
 				tokenEnvVar: "INFRACRAFT_TEST_VERCEL_TOKEN",
@@ -43,7 +43,7 @@ describe("VercelIntegrationResourceProvider", () => {
 		});
 
 		it("throws a loud error naming the env var when it is not set", async () => {
-			const provider = new VercelIntegrationResourceProvider();
+			const provider = new IntegrationResourceProvider();
 
 			await expect(
 				provider.create({
@@ -69,7 +69,7 @@ describe("VercelIntegrationResourceProvider", () => {
 					]),
 			});
 
-			const provider = new VercelIntegrationResourceProvider();
+			const provider = new IntegrationResourceProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -97,7 +97,7 @@ describe("VercelIntegrationResourceProvider", () => {
 					}),
 			});
 
-			const provider = new VercelIntegrationResourceProvider();
+			const provider = new IntegrationResourceProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -114,12 +114,12 @@ describe("VercelIntegrationResourceProvider", () => {
 				json: () => Promise.resolve([]),
 			});
 
-			const provider = new VercelIntegrationResourceProvider();
+			const provider = new IntegrationResourceProvider();
 
 			await expect(
 				provider.create({ token: "tok", teamId: "team_xyz", slug: "upstash" }),
 			).rejects.toThrow(
-				'VercelIntegration "upstash" is not installed on this team',
+				'vercel.Integration "upstash" is not installed on this team',
 			);
 		});
 	});

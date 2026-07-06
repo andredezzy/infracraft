@@ -1,18 +1,18 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
-import { RailwayClient } from "./client";
-import type { RailwayEnvironment } from "./environment";
-import type { RailwayProject } from "./project";
-import type { RailwayProvider } from "./provider";
-import type { RailwayService } from "./service";
+import { Client } from "./client";
+import type { Environment } from "./environment";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
+import type { Service } from "./service";
 
 /** Resolved inputs for the Railway domain dynamic provider. */
-interface RailwayDomainInputs {
+interface DomainInputs {
 	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
@@ -29,7 +29,7 @@ interface RailwayDomainInputs {
 }
 
 /** Persisted state for the Railway domain, extending inputs with Railway-assigned identifiers. */
-interface RailwayDomainOutputs extends RailwayDomainInputs {
+interface DomainOutputs extends DomainInputs {
 	/** Railway-assigned domain UUID (used for deletion API calls). */
 	domainId: string;
 
@@ -183,7 +183,7 @@ const SERVICE_DOMAIN_DELETE = `
  * Queries all existing domains (service and custom) for a Railway service.
  */
 async function findExistingDomains(
-	client: RailwayClient,
+	client: Client,
 	projectId: string,
 	serviceId: string,
 	environmentId: string,
@@ -209,13 +209,9 @@ async function findExistingDomains(
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class RailwayDomainResourceProvider
-	implements pulumi.dynamic.ResourceProvider
-{
-	async create(
-		inputs: RailwayDomainInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(
+export class DomainResourceProvider implements pulumi.dynamic.ResourceProvider {
+	async create(inputs: DomainInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -311,9 +307,9 @@ export class RailwayDomainResourceProvider
 
 	async read(
 		_id: string,
-		props: RailwayDomainOutputs,
+		props: DomainOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -362,8 +358,8 @@ export class RailwayDomainResourceProvider
 		return {};
 	}
 
-	async delete(_id: string, props: RailwayDomainOutputs): Promise<void> {
-		const client = new RailwayClient(
+	async delete(_id: string, props: DomainOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -387,8 +383,8 @@ export class RailwayDomainResourceProvider
 
 	async diff(
 		_id: string,
-		olds: RailwayDomainOutputs,
-		news: RailwayDomainInputs,
+		olds: DomainOutputs,
+		news: DomainInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -413,7 +409,7 @@ export class RailwayDomainResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class RailwayDomainResource extends pulumi.dynamic.Resource {
+class DomainResource extends pulumi.dynamic.Resource {
 	public declare readonly fqdn: pulumi.Output<string>;
 	public declare readonly cnameTarget: pulumi.Output<string | undefined>;
 	public declare readonly verificationTxtName: pulumi.Output<
@@ -436,7 +432,7 @@ class RailwayDomainResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayDomainResourceProvider(),
+			new DomainResourceProvider(),
 			name,
 			{
 				...args,
@@ -452,26 +448,23 @@ class RailwayDomainResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for RailwayDomain — replaces Pulumi's native `provider` field. */
-type RailwayDomainOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Domain — replaces Pulumi's native `provider` field. */
+type DomainOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Railway authentication context. */
-	provider: RailwayProvider;
+	provider: Provider;
 
 	/** Railway project context. */
-	project: RailwayProject;
+	project: Project;
 
 	/** Railway environment context. */
-	environment: RailwayEnvironment;
+	environment: Environment;
 
 	/** Railway service context. */
-	service: RailwayService;
+	service: Service;
 };
 
-/** Args for RailwayDomain. */
-export interface RailwayDomainArgs {
+/** Args for Domain. */
+export interface DomainArgs {
 	/**
 	 * Custom domain FQDN. Omit to create an auto-generated Railway service domain.
 	 * Maps to `CustomDomainCreateInput.domain` (named `customDomain` here to
@@ -483,15 +476,15 @@ export interface RailwayDomainArgs {
 /**
  * Manages a Railway domain (service or custom) with adopt-or-create semantics.
  *
- * A service can carry more than one custom domain — declare one `RailwayDomain` per
+ * A service can carry more than one custom domain — declare one `Domain` per
  * domain; each instance adopts, creates, and deletes only its own domain.
  *
  * @example
  * ```typescript
- * const apiDomain = new RailwayDomain("api-domain", { customDomain: "api.example.com" }, {
+ * const apiDomain = new railway.Domain("api-domain", { customDomain: "api.example.com" }, {
  *   provider, project, environment, service,
  * });
- * const wwwDomain = new RailwayDomain("www-domain", { customDomain: "www.example.com" }, {
+ * const wwwDomain = new railway.Domain("www-domain", { customDomain: "www.example.com" }, {
  *   provider, project, environment, service,
  * });
  *
@@ -500,7 +493,7 @@ export interface RailwayDomainArgs {
  * const wwwCnameTarget = wwwDomain.cnameTarget;
  * ```
  */
-export class RailwayDomain extends pulumi.ComponentResource {
+export class Domain extends pulumi.ComponentResource {
 	/** Fully qualified domain name. */
 	public readonly fqdn: pulumi.Output<string>;
 
@@ -522,16 +515,12 @@ export class RailwayDomain extends pulumi.ComponentResource {
 	/** DNS record value for the ownership-verification TXT record, ready to write as-is. */
 	public readonly verificationTxtValue: pulumi.Output<string | undefined>;
 
-	constructor(
-		name: string,
-		args: RailwayDomainArgs,
-		opts: RailwayDomainOptions,
-	) {
+	constructor(name: string, args: DomainArgs, opts: DomainOptions) {
 		const { provider, project, environment, service, ...pulumiOpts } = opts;
 
 		super("infracraft:railway:Domain", name, {}, pulumiOpts);
 
-		const resource = new RailwayDomainResource(
+		const resource = new DomainResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

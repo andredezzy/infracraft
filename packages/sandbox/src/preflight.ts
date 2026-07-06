@@ -41,7 +41,7 @@ function isOnHostPath(binary: string): boolean {
  *
  * Recommended preflight before constructing deploy resources — e.g.
  * `assertHostBinaries(["git", "rsync", "awk", "mktemp", "fly"])` at the top of
- * a Pulumi program that uses `FlyDeploy`.
+ * a Pulumi program that uses `fly.Deploy`.
  */
 export function assertHostBinaries(binaries: string[]): void {
 	const missing = binaries.filter((binary) => !isOnHostPath(binary));

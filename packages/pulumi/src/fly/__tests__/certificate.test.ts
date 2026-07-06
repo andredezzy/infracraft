@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { FlyCertificateResourceProvider } from "../certificate";
-import { FlyClient } from "../client";
+import { CertificateResourceProvider } from "../certificate";
+import { Client } from "../client";
 
-describe("FlyCertificateResourceProvider", () => {
+describe("fly.CertificateResourceProvider", () => {
 	let mockTryGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 	let mockDelete: ReturnType<typeof vi.fn>;
@@ -13,9 +13,9 @@ describe("FlyCertificateResourceProvider", () => {
 		mockTryGet = vi.fn();
 		mockPost = vi.fn();
 		mockDelete = vi.fn();
-		vi.spyOn(FlyClient.prototype, "tryGet").mockImplementation(mockTryGet);
-		vi.spyOn(FlyClient.prototype, "post").mockImplementation(mockPost);
-		vi.spyOn(FlyClient.prototype, "delete").mockImplementation(mockDelete);
+		vi.spyOn(Client.prototype, "tryGet").mockImplementation(mockTryGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "delete").mockImplementation(mockDelete);
 	});
 
 	afterEach(() => {
@@ -49,7 +49,7 @@ describe("FlyCertificateResourceProvider", () => {
 				dns_requirements: dnsRequirements,
 			});
 
-			const result = await new FlyCertificateResourceProvider().create(inputs);
+			const result = await new CertificateResourceProvider().create(inputs);
 
 			expect(result.id).toBe("api.example.com");
 			expect(result.outs.configured).toBe(true);
@@ -66,7 +66,7 @@ describe("FlyCertificateResourceProvider", () => {
 				dns_requirements: dnsRequirements,
 			});
 
-			const result = await new FlyCertificateResourceProvider().create(inputs);
+			const result = await new CertificateResourceProvider().create(inputs);
 
 			expect(result.id).toBe("api.example.com");
 			expect(result.outs.configured).toBe(false);
@@ -81,7 +81,7 @@ describe("FlyCertificateResourceProvider", () => {
 			mockTryGet.mockResolvedValueOnce(null);
 			mockPost.mockResolvedValueOnce({ hostname: "api.example.com" });
 
-			const result = await new FlyCertificateResourceProvider().create(inputs);
+			const result = await new CertificateResourceProvider().create(inputs);
 
 			expect(result.outs.configured).toBe(false);
 			expect(result.outs.dnsRequirements).toEqual({});
@@ -92,7 +92,7 @@ describe("FlyCertificateResourceProvider", () => {
 		it("returns a blank ReadResult when the certificate is gone (deleted out of band)", async () => {
 			mockTryGet.mockResolvedValueOnce(null);
 
-			const result = await new FlyCertificateResourceProvider().read(
+			const result = await new CertificateResourceProvider().read(
 				"api.example.com",
 				props,
 			);
@@ -107,7 +107,7 @@ describe("FlyCertificateResourceProvider", () => {
 				dns_requirements: dnsRequirements,
 			});
 
-			const result = await new FlyCertificateResourceProvider().read(
+			const result = await new CertificateResourceProvider().read(
 				"api.example.com",
 				props,
 			);
@@ -122,10 +122,7 @@ describe("FlyCertificateResourceProvider", () => {
 		it("deletes the certificate via the certificates API (hostname URL-encoded)", async () => {
 			mockDelete.mockResolvedValueOnce(undefined);
 
-			await new FlyCertificateResourceProvider().delete(
-				"api.example.com",
-				props,
-			);
+			await new CertificateResourceProvider().delete("api.example.com", props);
 
 			expect(mockDelete).toHaveBeenCalledWith(
 				"/v1/apps/my-app/certificates/api.example.com",
@@ -138,7 +135,7 @@ describe("FlyCertificateResourceProvider", () => {
 			);
 
 			await expect(
-				new FlyCertificateResourceProvider().delete("api.example.com", props),
+				new CertificateResourceProvider().delete("api.example.com", props),
 			).resolves.toBeUndefined();
 		});
 
@@ -148,14 +145,14 @@ describe("FlyCertificateResourceProvider", () => {
 			);
 
 			await expect(
-				new FlyCertificateResourceProvider().delete("api.example.com", props),
+				new CertificateResourceProvider().delete("api.example.com", props),
 			).rejects.toThrow("403");
 		});
 	});
 
 	describe("diff", () => {
 		it("replaces on an appName change (delete-before-replace)", async () => {
-			const diff = await new FlyCertificateResourceProvider().diff(
+			const diff = await new CertificateResourceProvider().diff(
 				"api.example.com",
 				props,
 				{ ...props, appName: "other-app" },
@@ -167,7 +164,7 @@ describe("FlyCertificateResourceProvider", () => {
 		});
 
 		it("replaces on a hostname change", async () => {
-			const diff = await new FlyCertificateResourceProvider().diff(
+			const diff = await new CertificateResourceProvider().diff(
 				"api.example.com",
 				props,
 				{ ...props, hostname: "www.example.com" },
@@ -177,7 +174,7 @@ describe("FlyCertificateResourceProvider", () => {
 		});
 
 		it("reports no changes when inputs are identical", async () => {
-			const diff = await new FlyCertificateResourceProvider().diff(
+			const diff = await new CertificateResourceProvider().diff(
 				"api.example.com",
 				props,
 				props,

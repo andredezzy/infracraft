@@ -2,17 +2,17 @@ import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
-import type { NeonBranch } from "./branch";
-import { NeonClient } from "./client";
-import type { NeonProject } from "./project";
-import type { NeonProvider } from "./provider";
+import type { Branch } from "./branch";
+import { Client } from "./client";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Neon database dynamic provider. */
-interface NeonDatabaseInputs {
+interface DatabaseInputs {
 	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
 	apiKey?: string;
 
-	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	/** Env var name resolved to the API key when `apiKey` is absent (see `ProviderArgs.apiKeyEnvVar`). */
 	apiKeyEnvVar?: string;
 
 	/** Neon project ID. */
@@ -29,7 +29,7 @@ interface NeonDatabaseInputs {
 }
 
 /** Persisted state for the Neon database. */
-interface NeonDatabaseOutputs extends NeonDatabaseInputs {}
+interface DatabaseOutputs extends DatabaseInputs {}
 
 /** Neon API response for a database. */
 interface DatabaseResponse {
@@ -54,7 +54,7 @@ interface DatabaseListResponse {
  * Checks whether a database with this name already exists on a branch.
  */
 async function databaseExists(
-	client: NeonClient,
+	client: Client,
 	projectId: string,
 	branchId: string,
 	name: string,
@@ -74,7 +74,7 @@ async function databaseExists(
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class NeonDatabaseResourceProvider
+export class DatabaseResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -82,9 +82,9 @@ export class NeonDatabaseResourceProvider
 	 * fail deep inside the Neon API call — and never match on the adopt lookup.
 	 */
 	async check(
-		_olds: NeonDatabaseInputs,
-		news: NeonDatabaseInputs,
-	): Promise<pulumi.dynamic.CheckResult<NeonDatabaseInputs>> {
+		_olds: DatabaseInputs,
+		news: DatabaseInputs,
+	): Promise<pulumi.dynamic.CheckResult<DatabaseInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (isResolvedString(news.name) && news.name.trim().length === 0) {
@@ -97,10 +97,8 @@ export class NeonDatabaseResourceProvider
 		return { inputs: news, failures };
 	}
 
-	async create(
-		inputs: NeonDatabaseInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(
+	async create(inputs: DatabaseInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
 		);
 
@@ -141,9 +139,9 @@ export class NeonDatabaseResourceProvider
 
 	async read(
 		id: string,
-		props: NeonDatabaseOutputs,
+		props: DatabaseOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(
+		const client = new Client(
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
 		);
 
@@ -168,10 +166,10 @@ export class NeonDatabaseResourceProvider
 
 	async update(
 		_id: string,
-		_olds: NeonDatabaseOutputs,
-		news: NeonDatabaseInputs,
+		_olds: DatabaseOutputs,
+		news: DatabaseInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new NeonClient(
+		const client = new Client(
 			resolveCredential(news.apiKey, news.apiKeyEnvVar),
 		);
 
@@ -183,8 +181,8 @@ export class NeonDatabaseResourceProvider
 		return { outs: { ...news } };
 	}
 
-	async delete(_id: string, props: NeonDatabaseOutputs): Promise<void> {
-		const client = new NeonClient(
+	async delete(_id: string, props: DatabaseOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
 		);
 
@@ -206,8 +204,8 @@ export class NeonDatabaseResourceProvider
 
 	async diff(
 		_id: string,
-		olds: NeonDatabaseOutputs,
-		news: NeonDatabaseInputs,
+		olds: DatabaseOutputs,
+		news: DatabaseInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -232,7 +230,7 @@ export class NeonDatabaseResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class NeonDatabaseResource extends pulumi.dynamic.Resource {
+class DatabaseResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
@@ -246,7 +244,7 @@ class NeonDatabaseResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new NeonDatabaseResourceProvider(),
+			new DatabaseResourceProvider(),
 			name,
 			{ ...args },
 			// The API key flows into dynamic-provider state with the outputs — mark it secret there.
@@ -255,20 +253,20 @@ class NeonDatabaseResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for NeonDatabase — replaces Pulumi's native `provider` field. */
-type NeonDatabaseOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for Database — replaces Pulumi's native `provider` field. */
+type DatabaseOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Neon authentication context. */
-	provider: NeonProvider;
+	provider: Provider;
 
 	/** Neon project context. */
-	project: NeonProject;
+	project: Project;
 
 	/** Neon branch context. */
-	branch: NeonBranch;
+	branch: Branch;
 };
 
-/** Args for NeonDatabase. */
-export interface NeonDatabaseArgs {
+/** Args for Database. */
+export interface DatabaseArgs {
 	/** Database name. */
 	name: pulumi.Input<string>;
 
@@ -281,19 +279,19 @@ export interface NeonDatabaseArgs {
  *
  * @example
  * ```typescript
- * new NeonDatabase("main", {
+ * new neon.Database("main", {
  *   name: "neondb",
  *   ownerName: "neondb_owner",
  * }, { provider, project, branch });
  * ```
  */
-export class NeonDatabase extends pulumi.ComponentResource {
-	constructor(name: string, args: NeonDatabaseArgs, opts: NeonDatabaseOptions) {
+export class Database extends pulumi.ComponentResource {
+	constructor(name: string, args: DatabaseArgs, opts: DatabaseOptions) {
 		const { provider, project, branch, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Database", name, {}, pulumiOpts);
 
-		new NeonDatabaseResource(
+		new DatabaseResource(
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,

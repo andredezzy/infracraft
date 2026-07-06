@@ -24,16 +24,16 @@ Each package's README is its full documentation; the sections below are orientat
 
 ## @infracraft/pulumi
 
-Pulumi providers for platforms that don't have one. Railway (the only Pulumi provider for it), Neon, Vercel, and Fly.io, plus deterministic hashing for deploy triggers, operating hints for AI coding agents, and sandbox/git-guard deploy isolation.
+Pulumi providers for platforms that don't have one. Railway (the only Pulumi provider for it), Neon, Vercel, and Fly.io, plus deterministic hashing for deploy triggers and sandbox/git-guard deploy isolation.
 
 ```bash
 npm i @infracraft/pulumi
 ```
 
 ```typescript
-import { RailwayProject } from "@infracraft/pulumi/railway"
+import * as railway from "@infracraft/pulumi/railway"
 
-const project = new RailwayProject("my-project", { name: "my-app" }, { provider })
+const project = new railway.Project("my-project", { name: "my-app" }, { provider })
 ```
 
 [Read the full docs](packages/pulumi)

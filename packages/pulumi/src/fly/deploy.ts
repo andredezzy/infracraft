@@ -2,18 +2,18 @@ import * as pulumi from "@pulumi/pulumi";
 
 import { createDeployCommand, dependsOnList } from "../commands/deploy";
 import { resolveCredentialOutput } from "../dynamic/resolve-credential";
-import type { FlyApp } from "./app";
-import type { FlyProvider } from "./provider";
-import { type FlyTomlConfig, generateFlyToml } from "./toml";
+import type { App } from "./app";
+import type { Provider } from "./provider";
+import { generateFlyToml, type TomlConfig } from "./toml";
 
-type FlyDeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
-	provider: FlyProvider;
-	app: FlyApp;
+type DeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+	provider: Provider;
+	app: App;
 };
 
-export interface FlyDeployArgs {
-	/** fly.toml configuration. `config.app` must equal the FlyApp name. */
-	config: FlyTomlConfig;
+export interface DeployArgs {
+	/** fly.toml configuration. `config.app` must equal the App name. */
+	config: TomlConfig;
 	/** Redeploy triggers; the generated toml content is appended automatically. */
 	triggers: pulumi.Input<pulumi.Input<string>[]>;
 	/** `fly deploy --wait-timeout` seconds (default 300). */
@@ -34,11 +34,11 @@ export interface FlyDeployArgs {
  * `@infracraft/pulumi/sandbox`) at program start, so a missing CLI fails fast
  * with an install hint instead of mid-deploy.
  */
-export class FlyDeploy extends pulumi.ComponentResource {
+export class Deploy extends pulumi.ComponentResource {
 	/** The last http(s) URL token found in the deploy CLI's stdout (the Fly app URL when emitted). */
 	public readonly deploymentUrl: pulumi.Output<string>;
 
-	constructor(name: string, args: FlyDeployArgs, opts: FlyDeployOptions) {
+	constructor(name: string, args: DeployArgs, opts: DeployOptions) {
 		const { provider, app, ...pulumiOpts } = opts;
 
 		super("infracraft:fly:Deploy", name, {}, pulumiOpts);

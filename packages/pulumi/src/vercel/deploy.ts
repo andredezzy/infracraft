@@ -1,15 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
 import { createDeployCommand } from "../commands/deploy";
 import { resolveCredentialOutput } from "../dynamic/resolve-credential";
-import type { VercelProvider } from "./provider";
+import type { Provider } from "./provider";
 
-/** Options type for VercelDeploy — replaces Pulumi's native `provider` field. */
-type VercelDeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for Deploy — replaces Pulumi's native `provider` field. */
+type DeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Vercel authentication context. */
-	provider: VercelProvider;
+	provider: Provider;
 };
 
-export interface VercelDeployArgs {
+export interface DeployArgs {
 	/**
 	 * Vercel project ID to deploy. Source it from the official
 	 * `@pulumiverse/vercel` provider's `vercel.Project.id`.
@@ -40,17 +40,17 @@ export interface VercelDeployArgs {
  *
  * @example
  * ```typescript
- * new VercelDeploy("web", {
+ * new vercel.Deploy("web", {
  *   projectId: project.id,
  *   triggers: [sourceHash],
- *   excludePaths: ["apps/mesh"],
+ *   excludePaths: ["apps/api"],
  * }, { provider, dependsOn: [sandbox, gitGuard] });
  * ```
  */
-export class VercelDeploy extends pulumi.ComponentResource {
+export class Deploy extends pulumi.ComponentResource {
 	public readonly deploymentUrl: pulumi.Output<string>;
 
-	constructor(name: string, args: VercelDeployArgs, opts: VercelDeployOptions) {
+	constructor(name: string, args: DeployArgs, opts: DeployOptions) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:vercel:Deploy", name, {}, pulumiOpts);

@@ -2,14 +2,14 @@ import * as pulumi from "@pulumi/pulumi";
 import { ensurePulumiVersionMatch } from "../preflight/assert-pulumi-version-match";
 
 /**
- * Args for FlyProvider. Exactly one of `token` and `tokenEnvVar` must be set.
+ * Args for Provider. Exactly one of `token` and `tokenEnvVar` must be set.
  *
  * Neither `token` nor `tokenEnvVar` is ever compared in any Fly resource's
  * `diff()` — rotating the credential (or switching between the two forms)
  * never triggers a replace or an in-place update on its own; it only changes
  * which credential the next operation authenticates with.
  */
-export interface FlyProviderArgs {
+export interface ProviderArgs {
 	/**
 	 * Fly API token (e.g. from `fly tokens create deploy`).
 	 * Mutually exclusive with `tokenEnvVar`.
@@ -31,7 +31,7 @@ export interface FlyProviderArgs {
 
 	/**
 	 * Default Fly organization slug used when creating new apps.
-	 * Can be overridden per-app via `FlyAppArgs.organization`.
+	 * Can be overridden per-app via `AppArgs.organization`.
 	 */
 	organization?: pulumi.Input<string>;
 }
@@ -42,14 +42,14 @@ export interface FlyProviderArgs {
  *
  * @example
  * ```typescript
- * const provider = new FlyProvider("fly", {
+ * const provider = new fly.Provider("fly", {
  *   tokenEnvVar: "FLY_API_TOKEN",
  *   // or: token: config.requireSecret("flyToken"),
  *   organization: "personal",
  * });
  * ```
  */
-export class FlyProvider extends pulumi.ComponentResource {
+export class Provider extends pulumi.ComponentResource {
 	/** Fly API token (secret). Set only when configured via `token`. */
 	public readonly token?: pulumi.Output<string>;
 
@@ -61,7 +61,7 @@ export class FlyProvider extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: FlyProviderArgs,
+		args: ProviderArgs,
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:fly:Provider", name, {}, opts);
@@ -70,7 +70,7 @@ export class FlyProvider extends pulumi.ComponentResource {
 
 		if ((args.token === undefined) === (args.tokenEnvVar === undefined)) {
 			throw new Error(
-				"FlyProvider requires exactly one of `token` or `tokenEnvVar`",
+				"fly.Provider requires exactly one of `token` or `tokenEnvVar`",
 			);
 		}
 

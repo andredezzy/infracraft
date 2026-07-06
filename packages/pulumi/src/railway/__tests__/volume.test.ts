@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayVolumeResourceProvider } from "../volume";
+import { Client } from "../client";
+import { VolumeResourceProvider } from "../volume";
 
 const props = {
 	token: "tok",
@@ -12,14 +12,11 @@ const props = {
 	volumeId: "vol-existing",
 };
 
-describe("RailwayVolumeResourceProvider.check", () => {
+describe("railway.VolumeResourceProvider.check", () => {
 	const { volumeId: _ignored, ...inputs } = props;
 
 	it("passes an absolute mountPath through untouched", async () => {
-		const result = await new RailwayVolumeResourceProvider().check(
-			inputs,
-			inputs,
-		);
+		const result = await new VolumeResourceProvider().check(inputs, inputs);
 
 		expect(result.inputs).toEqual(inputs);
 		expect(result.failures).toEqual([]);
@@ -28,10 +25,7 @@ describe("RailwayVolumeResourceProvider.check", () => {
 	it("fails a relative mountPath, naming the property", async () => {
 		const invalid = { ...inputs, mountPath: "data" };
 
-		const result = await new RailwayVolumeResourceProvider().check(
-			invalid,
-			invalid,
-		);
+		const result = await new VolumeResourceProvider().check(invalid, invalid);
 
 		expect(result.failures).toHaveLength(1);
 		expect(result.failures?.[0].property).toBe("mountPath");
@@ -43,7 +37,7 @@ describe("RailwayVolumeResourceProvider.check", () => {
 		// Pulumi's unknown sentinel — check() must not fail on it.
 		const unresolved = { ...inputs, mountPath: pulumi.runtime.unknownValue };
 
-		const result = await new RailwayVolumeResourceProvider().check(
+		const result = await new VolumeResourceProvider().check(
 			unresolved,
 			unresolved,
 		);
@@ -52,12 +46,12 @@ describe("RailwayVolumeResourceProvider.check", () => {
 	});
 });
 
-describe("RailwayVolumeResourceProvider.create", () => {
+describe("railway.VolumeResourceProvider.create", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -73,7 +67,7 @@ describe("RailwayVolumeResourceProvider.create", () => {
 			serviceInstanceDeployV2: "dep-3",
 		});
 
-		const provider = new RailwayVolumeResourceProvider();
+		const provider = new VolumeResourceProvider();
 		const { volumeId: _ignored, ...inputs } = props;
 
 		await provider.create(inputs);
@@ -115,7 +109,7 @@ describe("RailwayVolumeResourceProvider.create", () => {
 			},
 		});
 
-		const provider = new RailwayVolumeResourceProvider();
+		const provider = new VolumeResourceProvider();
 		const { volumeId: _ignored, ...inputs } = props;
 
 		await provider.create(inputs);
@@ -166,7 +160,7 @@ describe("RailwayVolumeResourceProvider.create", () => {
 			};
 		});
 
-		const provider = new RailwayVolumeResourceProvider();
+		const provider = new VolumeResourceProvider();
 		const { volumeId: _ignored, ...inputs } = props;
 
 		const result = await provider.create({
@@ -195,7 +189,7 @@ describe("RailwayVolumeResourceProvider.create", () => {
 			};
 		});
 
-		const provider = new RailwayVolumeResourceProvider();
+		const provider = new VolumeResourceProvider();
 		const { volumeId: _ignored, ...inputs } = props;
 
 		await expect(provider.create(inputs)).resolves.toMatchObject({
@@ -204,12 +198,12 @@ describe("RailwayVolumeResourceProvider.create", () => {
 	});
 });
 
-describe("RailwayVolumeResourceProvider.read (refresh)", () => {
+describe("railway.VolumeResourceProvider.read (refresh)", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -241,7 +235,7 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 			},
 		});
 
-		const result = await new RailwayVolumeResourceProvider().read(
+		const result = await new VolumeResourceProvider().read(
 			"vol-existing",
 			props,
 		);
@@ -257,7 +251,7 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 		// rather than silently keep stale state forever.
 		mockQuery.mockResolvedValueOnce({ project: { volumes: { edges: [] } } });
 
-		const result = await new RailwayVolumeResourceProvider().read(
+		const result = await new VolumeResourceProvider().read(
 			"vol-existing",
 			props,
 		);
@@ -268,7 +262,7 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 	it("does NOT throw when the lookup itself errors — keeps existing state", async () => {
 		mockQuery.mockRejectedValueOnce(new Error("Railway API 500"));
 
-		const result = await new RailwayVolumeResourceProvider().read(
+		const result = await new VolumeResourceProvider().read(
 			"vol-existing",
 			props,
 		);
@@ -277,12 +271,12 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 	});
 });
 
-describe("RailwayVolumeResourceProvider.delete", () => {
+describe("railway.VolumeResourceProvider.delete", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -293,7 +287,7 @@ describe("RailwayVolumeResourceProvider.delete", () => {
 		mockQuery.mockRejectedValueOnce(new Error("Volume not found"));
 
 		await expect(
-			new RailwayVolumeResourceProvider().delete("vol-existing", props),
+			new VolumeResourceProvider().delete("vol-existing", props),
 		).resolves.toBeUndefined();
 	});
 
@@ -301,7 +295,7 @@ describe("RailwayVolumeResourceProvider.delete", () => {
 		mockQuery.mockRejectedValueOnce(new Error("forbidden"));
 
 		await expect(
-			new RailwayVolumeResourceProvider().delete("vol-existing", props),
+			new VolumeResourceProvider().delete("vol-existing", props),
 		).rejects.toThrow("forbidden");
 	});
 });

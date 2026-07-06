@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayEnvironmentResourceProvider } from "../environment";
+import { Client } from "../client";
+import { EnvironmentResourceProvider } from "../environment";
 
-describe("RailwayEnvironmentResourceProvider", () => {
+describe("railway.EnvironmentResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -18,7 +18,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 		it("fails an empty environment name, naming the property", async () => {
 			const invalid = { token: "tok", projectId: "proj-abc", name: "  " };
 
-			const result = await new RailwayEnvironmentResourceProvider().check(
+			const result = await new EnvironmentResourceProvider().check(
 				invalid,
 				invalid,
 			);
@@ -31,7 +31,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 		it("passes a non-empty name through untouched", async () => {
 			const valid = { token: "tok", projectId: "proj-abc", name: "production" };
 
-			const result = await new RailwayEnvironmentResourceProvider().check(
+			const result = await new EnvironmentResourceProvider().check(
 				valid,
 				valid,
 			);
@@ -50,7 +50,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 				},
 			});
 
-			const provider = new RailwayEnvironmentResourceProvider();
+			const provider = new EnvironmentResourceProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -69,7 +69,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 					environmentCreate: { id: "env-new-uuid", name: "staging" },
 				}); // create
 
-			const provider = new RailwayEnvironmentResourceProvider();
+			const provider = new EnvironmentResourceProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -101,7 +101,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 					environmentCreate: { id: "env-staging-uuid", name: "staging" },
 				}); // create forked
 
-			const provider = new RailwayEnvironmentResourceProvider();
+			const provider = new EnvironmentResourceProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -122,7 +122,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 				.mockResolvedValueOnce({ project: { environments: { edges: [] } } }) // staging not found
 				.mockResolvedValueOnce({ project: { environments: { edges: [] } } }); // source lookup: not found
 
-			const provider = new RailwayEnvironmentResourceProvider();
+			const provider = new EnvironmentResourceProvider();
 
 			await expect(
 				provider.create({
@@ -139,7 +139,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 		it("returns a blank ReadResult when the environment is gone (deleted out of band)", async () => {
 			mockQuery.mockResolvedValue({ project: { environments: { edges: [] } } });
 
-			const result = await new RailwayEnvironmentResourceProvider().read(
+			const result = await new EnvironmentResourceProvider().read(
 				"env-staging-uuid",
 				{
 					token: "tok",
@@ -161,7 +161,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 				},
 			});
 
-			const result = await new RailwayEnvironmentResourceProvider().read(
+			const result = await new EnvironmentResourceProvider().read(
 				"env-staging-uuid",
 				{
 					token: "tok",
@@ -179,7 +179,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 		it("deletes the environment via environmentDelete", async () => {
 			mockQuery.mockResolvedValue({});
 
-			await new RailwayEnvironmentResourceProvider().delete("env-feature", {
+			await new EnvironmentResourceProvider().delete("env-feature", {
 				token: "tok",
 				projectId: "proj-123",
 				name: "feature",
@@ -196,7 +196,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 			mockQuery.mockRejectedValue(new Error("Environment not found"));
 
 			await expect(
-				new RailwayEnvironmentResourceProvider().delete("env-feature", {
+				new EnvironmentResourceProvider().delete("env-feature", {
 					token: "tok",
 					projectId: "proj-123",
 					name: "feature",
@@ -209,7 +209,7 @@ describe("RailwayEnvironmentResourceProvider", () => {
 			mockQuery.mockRejectedValue(new Error("forbidden"));
 
 			await expect(
-				new RailwayEnvironmentResourceProvider().delete("env-feature", {
+				new EnvironmentResourceProvider().delete("env-feature", {
 					token: "tok",
 					projectId: "proj-123",
 					name: "feature",

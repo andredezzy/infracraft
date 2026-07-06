@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { NeonClient } from "../client";
+import { Client } from "../client";
 
-describe("NeonClient", () => {
+describe("neon.Client", () => {
 	const originalFetch = globalThis.fetch;
 
 	afterEach(() => {
@@ -16,7 +16,7 @@ describe("NeonClient", () => {
 			json: () => Promise.resolve({ projects: [] }),
 		});
 
-		const client = new NeonClient("test-api-key");
+		const client = new Client("test-api-key");
 		const result = await client.get<{ projects: unknown[] }>("/projects");
 
 		expect(result.projects).toEqual([]);
@@ -32,7 +32,7 @@ describe("NeonClient", () => {
 			json: () => Promise.resolve({ project: { id: "proj-1" } }),
 		});
 
-		const client = new NeonClient("test-api-key");
+		const client = new Client("test-api-key");
 
 		const result = await client.post<{ project: { id: string } }>("/projects", {
 			project: { name: "test" },
@@ -53,7 +53,7 @@ describe("NeonClient", () => {
 			text: () => Promise.resolve("Unauthorized"),
 		});
 
-		const client = new NeonClient("test-api-key");
+		const client = new Client("test-api-key");
 
 		await expect(client.get("/projects/invalid")).rejects.toThrow("401");
 	});
@@ -66,7 +66,7 @@ describe("NeonClient", () => {
 			text: () => Promise.resolve("Not found"),
 		});
 
-		const client = new NeonClient("test-api-key");
+		const client = new Client("test-api-key");
 		const error = await client.get("/projects/missing").catch((e) => e);
 
 		expect(error).toBeInstanceOf(ApiNotFoundError);
@@ -75,7 +75,7 @@ describe("NeonClient", () => {
 	});
 });
 
-describe("NeonClient 423 operation-lock waiting", () => {
+describe("neon.Client 423 operation-lock waiting", () => {
 	beforeEach(() => {
 		vi.useFakeTimers();
 	});
@@ -101,7 +101,7 @@ describe("NeonClient 423 operation-lock waiting", () => {
 
 		vi.stubGlobal("fetch", fetchMock);
 
-		const client = new NeonClient("key");
+		const client = new Client("key");
 
 		const pending = client.get<{ branch: { id: string } }>(
 			"/projects/p/branches/br-1",
@@ -122,7 +122,7 @@ describe("NeonClient 423 operation-lock waiting", () => {
 
 		vi.stubGlobal("fetch", fetchMock);
 
-		const client = new NeonClient("key");
+		const client = new Client("key");
 
 		const pending = client
 			.get("/projects/p/branches/br-1")

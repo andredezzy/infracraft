@@ -11,11 +11,11 @@ const VERCEL_API_URL = "https://api.vercel.com";
  *
  * @example
  * ```typescript
- * const client = new VercelClient(token, teamId);
+ * const client = new vercel.Client(token, teamId);
  * const project = await client.tryGet<{ id: string }>("/v9/projects/my-app");
  * ```
  */
-export class VercelClient {
+export class Client {
 	/** Vercel API bearer token. */
 	private readonly token: string;
 

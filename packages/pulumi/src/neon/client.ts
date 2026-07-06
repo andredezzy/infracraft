@@ -29,13 +29,13 @@ function sleep(ms: number): Promise<void> {
  *
  * @example
  * ```typescript
- * const client = new NeonClient(apiKey);
+ * const client = new neon.Client(apiKey);
  * const branch = await client.get<{ branch: { id: string } }>(
  *   `/projects/abc/branches/br-xyz`
  * );
  * ```
  */
-export class NeonClient {
+export class Client {
 	/** Neon API key for authentication. */
 	private readonly apiKey: string;
 

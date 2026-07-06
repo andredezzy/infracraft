@@ -19,13 +19,13 @@ interface GraphQLResponse<T> {
  *
  * @example
  * ```typescript
- * const client = new RailwayClient(token);
+ * const client = new railway.Client(token);
  * const result = await client.query<{ project: { id: string } }>(
  *   `query { project(id: "abc") { id name } }`
  * );
  * ```
  */
-export class RailwayClient {
+export class Client {
 	/** Railway API token sent as `Authorization: Bearer` (account/team-scoped). */
 	private readonly token: string;
 

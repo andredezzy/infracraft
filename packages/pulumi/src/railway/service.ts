@@ -2,10 +2,10 @@ import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
-import { RailwayClient } from "./client";
-import type { RailwayEnvironment } from "./environment";
-import type { RailwayProject } from "./project";
-import type { RailwayProvider } from "./provider";
+import { Client } from "./client";
+import type { Environment } from "./environment";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
 
 /**
  * Railway build system. Enum keys are UPPERCASE per convention; values are
@@ -13,7 +13,7 @@ import type { RailwayProvider } from "./provider";
  * Note: HEROKU and PAKETO were deprecated Feb 21 2025 and auto-migrated to
  * NIXPACKS by Railway, but remain in the schema and are accepted by the API.
  */
-export enum RailwayBuilder {
+export enum Builder {
 	RAILPACK = "RAILPACK",
 	NIXPACKS = "NIXPACKS",
 	DOCKERFILE = "DOCKERFILE",
@@ -25,24 +25,24 @@ export enum RailwayBuilder {
  * Railway service restart policy. Controls when Railway restarts the service
  * container after it exits. Default is ON_FAILURE.
  */
-export enum RailwayRestartPolicy {
+export enum RestartPolicy {
 	ON_FAILURE = "ON_FAILURE",
 	ALWAYS = "ALWAYS",
 	NEVER = "NEVER",
 }
 
 /** Docker image source for a Railway service (e.g. `redis:8-alpine`). */
-interface RailwayServiceSource {
+interface ServiceSource {
 	/** Full Docker image reference including tag. */
 	image: string;
 }
 
 /** Resolved inputs for the Railway service dynamic provider. */
-interface RailwayServiceInputs {
+interface ServiceInputs {
 	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
@@ -64,10 +64,10 @@ interface RailwayServiceInputs {
 	icon?: string;
 
 	/** Docker image source for image-based services. */
-	source?: RailwayServiceSource;
+	source?: ServiceSource;
 
 	/** Build system to use when building the service. */
-	builder?: RailwayBuilder;
+	builder?: Builder;
 
 	/** Shell command executed during the build phase. */
 	buildCommand?: string;
@@ -82,7 +82,7 @@ interface RailwayServiceInputs {
 	startCommand?: string;
 
 	/** Restart behavior for the service container. */
-	restartPolicyType?: RailwayRestartPolicy;
+	restartPolicyType?: RestartPolicy;
 
 	/**
 	 * HTTP path polled for health checks (e.g. `"/healthcheck"`).
@@ -101,7 +101,7 @@ interface RailwayServiceInputs {
 }
 
 /** Persisted state for the Railway service, extending inputs with the Railway-assigned ID. */
-interface RailwayServiceOutputs extends RailwayServiceInputs {
+interface ServiceOutputs extends ServiceInputs {
 	/** Railway-assigned service UUID. */
 	serviceId: string;
 }
@@ -187,7 +187,7 @@ const SERVICE_INSTANCE_DEPLOY = `
  * that environment (proven live, 2026-07-06).
  */
 async function deployServiceInstance(
-	client: RailwayClient,
+	client: Client,
 	serviceId: string,
 	environmentId: string,
 ): Promise<void> {
@@ -222,7 +222,7 @@ const ENVIRONMENT_PATCH_COMMIT = `
  * create time; in every other environment the service is "skipped" — no
  * instance exists there, `serviceInstanceUpdate` returns true while silently
  * doing nothing, and `railway up` fails with UPLOAD_FAILED 404 (live incident:
- * first-ever mesh deploy to production). Materialization goes through the
+ * a service's first-ever deploy to production). Materialization goes through the
  * staged-changes flow — committing a config patch that keys the service in
  * `services` — which is the documented path for NAMED environments;
  * `environmentUnskipService` is rejected there ("Can only unskip services in
@@ -231,7 +231,7 @@ const ENVIRONMENT_PATCH_COMMIT = `
  * error rather than another silent no-op.
  */
 async function ensureServiceInstance(
-	client: RailwayClient,
+	client: Client,
 	serviceId: string,
 	environmentId: string,
 ): Promise<void> {
@@ -287,14 +287,14 @@ interface InstanceConfigResult {
  * (live drill finding), so on failure the call is retried without the
  * healthcheck fields and the drop is reported to the caller — which MUST
  * re-apply them after the first deployment exists (the provider itself for
- * image services, the RailwayDeploy monitor for code services). Silent loss is
+ * image services, the Deploy monitor for code services). Silent loss is
  * not an option.
  */
 async function applyInstanceConfig(
-	client: RailwayClient,
+	client: Client,
 	serviceId: string,
 	environmentId: string,
-	inputs: RailwayServiceInputs,
+	inputs: ServiceInputs,
 ): Promise<InstanceConfigResult> {
 	const instanceInput: Record<string, unknown> = {};
 
@@ -381,10 +381,10 @@ async function applyInstanceConfig(
  * forever, so it throws loudly instead.
  */
 async function applyHealthcheckConfig(
-	client: RailwayClient,
+	client: Client,
 	serviceId: string,
 	environmentId: string,
-	inputs: RailwayServiceInputs,
+	inputs: ServiceInputs,
 ): Promise<void> {
 	const healthcheckInput: Record<string, unknown> = {};
 
@@ -422,7 +422,7 @@ async function applyHealthcheckConfig(
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class RailwayServiceResourceProvider
+export class ServiceResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -430,9 +430,9 @@ export class RailwayServiceResourceProvider
 	 * fail deep inside `serviceInstanceUpdate` with an opaque GraphQL error.
 	 */
 	async check(
-		_olds: RailwayServiceInputs,
-		news: RailwayServiceInputs,
-	): Promise<pulumi.dynamic.CheckResult<RailwayServiceInputs>> {
+		_olds: ServiceInputs,
+		news: ServiceInputs,
+	): Promise<pulumi.dynamic.CheckResult<ServiceInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (
@@ -464,10 +464,8 @@ export class RailwayServiceResourceProvider
 	/**
 	 * Creates or adopts a Railway service by name, then applies instance config.
 	 */
-	async create(
-		inputs: RailwayServiceInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(
+	async create(inputs: ServiceInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -530,10 +528,10 @@ export class RailwayServiceResourceProvider
 			inputs,
 		);
 
-		// Image services have no `railway up` step (see RailwayDeploy for code
+		// Image services have no `railway up` step (see Deploy for code
 		// services) — the provider owns their deploy, and with it the post-deploy
 		// re-apply of any dropped healthcheck fields. Code services get theirs
-		// from the RailwayDeploy monitor instead.
+		// from the Deploy monitor instead.
 		if (inputs.source) {
 			await deployServiceInstance(client, serviceId, inputs.environmentId);
 
@@ -547,7 +545,7 @@ export class RailwayServiceResourceProvider
 			}
 		}
 
-		const outs: RailwayServiceOutputs = { ...inputs, serviceId };
+		const outs: ServiceOutputs = { ...inputs, serviceId };
 
 		return { id: serviceId, outs };
 	}
@@ -563,12 +561,10 @@ export class RailwayServiceResourceProvider
 	 */
 	async update(
 		id: string,
-		olds: RailwayServiceOutputs,
-		news: RailwayServiceInputs,
+		olds: ServiceOutputs,
+		news: ServiceInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(
-			resolveCredential(news.token, news.tokenEnvVar),
-		);
+		const client = new Client(resolveCredential(news.token, news.tokenEnvVar));
 
 		const updateInput: Record<string, unknown> = {};
 
@@ -605,7 +601,7 @@ export class RailwayServiceResourceProvider
 			}
 		}
 
-		const outs: RailwayServiceOutputs = { ...news, serviceId: id };
+		const outs: ServiceOutputs = { ...news, serviceId: id };
 
 		return { outs };
 	}
@@ -615,9 +611,9 @@ export class RailwayServiceResourceProvider
 	 */
 	async read(
 		id: string,
-		props: RailwayServiceOutputs,
+		props: ServiceOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -659,8 +655,8 @@ export class RailwayServiceResourceProvider
 	 */
 	async diff(
 		_id: string,
-		olds: RailwayServiceOutputs,
-		news: RailwayServiceInputs,
+		olds: ServiceOutputs,
+		news: ServiceInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 		const changes: string[] = [];
@@ -677,7 +673,7 @@ export class RailwayServiceResourceProvider
 			replaces.push("environmentId");
 		}
 
-		// RailwayServiceSource currently models only `image` — compare that
+		// ServiceSource currently models only `image` — compare that
 		// (undefined-safe on either side) rather than the whole object, whose
 		// identity always differs across separate inputs.
 		if (olds.source?.image !== news.source?.image) {
@@ -721,7 +717,7 @@ export class RailwayServiceResourceProvider
 			replaces,
 			// serviceId survives every in-place update (only projectId/environmentId
 			// changes replace), so declaring it stable keeps it known during preview —
-			// dependents (e.g. RailwayVolume) no longer see an unknown serviceId and
+			// dependents (e.g. Volume) no longer see an unknown serviceId and
 			// stop showing phantom replaces.
 			stables: replaces.length === 0 ? ["serviceId"] : [],
 			deleteBeforeReplace: true,
@@ -730,7 +726,7 @@ export class RailwayServiceResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class RailwayServiceResource extends pulumi.dynamic.Resource {
+class ServiceResource extends pulumi.dynamic.Resource {
 	public declare readonly serviceId: pulumi.Output<string>;
 
 	constructor(
@@ -743,10 +739,10 @@ class RailwayServiceResource extends pulumi.dynamic.Resource {
 			name: pulumi.Input<string>;
 			icon?: pulumi.Input<string>;
 			source?: pulumi.Input<{ image: pulumi.Input<string> }>;
-			builder?: pulumi.Input<RailwayBuilder>;
+			builder?: pulumi.Input<Builder>;
 			buildCommand?: pulumi.Input<string>;
 			startCommand?: pulumi.Input<string>;
-			restartPolicyType?: pulumi.Input<RailwayRestartPolicy>;
+			restartPolicyType?: pulumi.Input<RestartPolicy>;
 			healthcheckPath?: pulumi.Input<string>;
 			healthcheckTimeout?: pulumi.Input<number>;
 			preDeployCommand?: pulumi.Input<string>;
@@ -754,7 +750,7 @@ class RailwayServiceResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayServiceResourceProvider(),
+			new ServiceResourceProvider(),
 			name,
 			{ ...args, serviceId: undefined },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -763,23 +759,20 @@ class RailwayServiceResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for RailwayService — replaces Pulumi's native `provider` field. */
-type RailwayServiceOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Service — replaces Pulumi's native `provider` field. */
+type ServiceOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Railway authentication context. */
-	provider: RailwayProvider;
+	provider: Provider;
 
 	/** Railway project context. */
-	project: RailwayProject;
+	project: Project;
 
 	/** Railway environment context. */
-	environment: RailwayEnvironment;
+	environment: Environment;
 };
 
-/** Args for RailwayService. */
-export interface RailwayServiceArgs {
+/** Args for Service. */
+export interface ServiceArgs {
 	/** Human-readable service name used for adopt-or-create matching. */
 	name: pulumi.Input<string>;
 
@@ -796,7 +789,7 @@ export interface RailwayServiceArgs {
 	source?: pulumi.Input<{ image: pulumi.Input<string> }>;
 
 	/** Build system to use when building the service. */
-	builder?: pulumi.Input<RailwayBuilder>;
+	builder?: pulumi.Input<Builder>;
 
 	/** Shell command executed during the build phase. */
 	buildCommand?: pulumi.Input<string>;
@@ -811,7 +804,7 @@ export interface RailwayServiceArgs {
 	startCommand?: pulumi.Input<string>;
 
 	/** Restart behavior for the service container. */
-	restartPolicyType?: pulumi.Input<RailwayRestartPolicy>;
+	restartPolicyType?: pulumi.Input<RestartPolicy>;
 
 	/**
 	 * HTTP path polled for health checks (e.g. `"/healthcheck"`).
@@ -834,33 +827,29 @@ export interface RailwayServiceArgs {
  *
  * @example
  * ```typescript
- * const service = new RailwayService("api", {
+ * const service = new railway.Service("api", {
  *   name: "api",
- *   builder: RailwayBuilder.RAILPACK,
+ *   builder: railway.Builder.RAILPACK,
  *   startCommand: "node dist/index.js",
  *   healthcheckPath: "/health",
  * }, { provider, project, environment });
  *
  * // Use serviceId downstream
- * new RailwayVariable("api-vars", {
+ * new railway.Variable("api-vars", {
  *   variables: { DATABASE_URL: dbUrl },
  * }, { provider, project, environment, service });
  * ```
  */
-export class RailwayService extends pulumi.ComponentResource {
+export class Service extends pulumi.ComponentResource {
 	/** Railway service UUID. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: RailwayServiceArgs,
-		opts: RailwayServiceOptions,
-	) {
+	constructor(name: string, args: ServiceArgs, opts: ServiceOptions) {
 		const { provider, project, environment, ...pulumiOpts } = opts;
 
 		super("infracraft:railway:Service", name, {}, pulumiOpts);
 
-		const resource = new RailwayServiceResource(
+		const resource = new ServiceResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

@@ -2,14 +2,14 @@ import * as pulumi from "@pulumi/pulumi";
 import { ensurePulumiVersionMatch } from "../preflight/assert-pulumi-version-match";
 
 /**
- * Args for NeonProvider. Exactly one of `apiKey` and `apiKeyEnvVar` must be set.
+ * Args for Provider. Exactly one of `apiKey` and `apiKeyEnvVar` must be set.
  *
  * Neither `apiKey` nor `apiKeyEnvVar` is ever compared in any Neon resource's
  * `diff()` — rotating the credential (or switching between the two forms)
  * never triggers a replace or an in-place update on its own; it only changes
  * which credential the next operation authenticates with.
  */
-export interface NeonProviderArgs {
+export interface ProviderArgs {
 	/** Neon API key. Mutually exclusive with `apiKeyEnvVar`. */
 	apiKey?: pulumi.Input<string>;
 
@@ -33,21 +33,21 @@ export interface NeonProviderArgs {
 /**
  * Holds Neon authentication context for resource constructors.
  *
- * Pass a `NeonProvider` instance via the `provider` option on Neon resources
+ * Pass a `Provider` instance via the `provider` option on Neon resources
  * instead of passing `apiKey` everywhere explicitly.
  *
  * @example
  * ```typescript
- * const provider = new NeonProvider("neon", {
+ * const provider = new neon.Provider("neon", {
  *   apiKeyEnvVar: "NEON_API_KEY",
  *   // or: apiKey: config.requireSecret("neonApiKey"),
  *   orgId: "org-xxx",
  * });
  *
- * const project = new NeonProject("db", { name: "my-app" }, { provider });
+ * const project = new neon.Project("db", { name: "my-app" }, { provider });
  * ```
  */
-export class NeonProvider extends pulumi.ComponentResource {
+export class Provider extends pulumi.ComponentResource {
 	/** Neon API key (secret). Set only when configured via `apiKey`. */
 	public readonly apiKey?: pulumi.Output<string>;
 
@@ -59,7 +59,7 @@ export class NeonProvider extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: NeonProviderArgs,
+		args: ProviderArgs,
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:neon:Provider", name, {}, opts);
@@ -68,7 +68,7 @@ export class NeonProvider extends pulumi.ComponentResource {
 
 		if ((args.apiKey === undefined) === (args.apiKeyEnvVar === undefined)) {
 			throw new Error(
-				"NeonProvider requires exactly one of `apiKey` or `apiKeyEnvVar`",
+				"neon.Provider requires exactly one of `apiKey` or `apiKeyEnvVar`",
 			);
 		}
 

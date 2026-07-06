@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayServiceResourceProvider } from "../service";
+import { Client } from "../client";
+import { ServiceResourceProvider } from "../service";
 
-describe("RailwayServiceResourceProvider", () => {
+describe("railway.ServiceResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	/**
@@ -25,7 +25,7 @@ describe("RailwayServiceResourceProvider", () => {
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -56,7 +56,7 @@ describe("RailwayServiceResourceProvider", () => {
 				};
 			});
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await provider.create({
 				tokenEnvVar: "INFRACRAFT_TEST_RAILWAY_TOKEN",
@@ -69,7 +69,7 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 
 		it("throws a loud error naming the env var when it is not set", async () => {
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await expect(
 				provider.create({
@@ -92,7 +92,7 @@ describe("RailwayServiceResourceProvider", () => {
 				},
 			}));
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -117,7 +117,7 @@ describe("RailwayServiceResourceProvider", () => {
 					: { project: { services: { edges: [] } } },
 			);
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -158,13 +158,13 @@ describe("RailwayServiceResourceProvider", () => {
 
 				return {
 					project: {
-						services: { edges: [{ node: { id: "svc-mesh", name: "api" } }] },
+						services: { edges: [{ node: { id: "svc-api", name: "api" } }] },
 					},
 					serviceInstanceUpdate: true,
 				};
 			});
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await provider.create({
 				token: "tok",
@@ -179,7 +179,7 @@ describe("RailwayServiceResourceProvider", () => {
 			);
 
 			expect(patch?.[1].environmentId).toBe("env-production");
-			expect(patch?.[1].patch).toEqual({ services: { "svc-mesh": {} } });
+			expect(patch?.[1].patch).toEqual({ services: { "svc-api": {} } });
 		});
 
 		it("throws loudly when the instance is still missing after the patch commit", async () => {
@@ -194,12 +194,12 @@ describe("RailwayServiceResourceProvider", () => {
 
 				return {
 					project: {
-						services: { edges: [{ node: { id: "svc-mesh", name: "api" } }] },
+						services: { edges: [{ node: { id: "svc-api", name: "api" } }] },
 					},
 				};
 			});
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await expect(
 				provider.create({
@@ -225,7 +225,7 @@ describe("RailwayServiceResourceProvider", () => {
 				serviceInstanceDeployV2: "dep-1",
 			}));
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await provider.create({
 				token: "tok",
@@ -305,7 +305,7 @@ describe("RailwayServiceResourceProvider", () => {
 				},
 			);
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await provider.create({
 				token: "tok",
@@ -377,7 +377,7 @@ describe("RailwayServiceResourceProvider", () => {
 				};
 			});
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await expect(
 				provider.create({
@@ -392,7 +392,7 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 
 		it("does not trigger a deploy for code-sourced services", async () => {
-			// Code services deploy via RailwayDeploy (`railway up`); the provider
+			// Code services deploy via Deploy (`railway up`); the provider
 			// deploying them here would ship an empty build.
 			mockWithInstance(true, () => ({
 				project: {
@@ -401,7 +401,7 @@ describe("RailwayServiceResourceProvider", () => {
 				serviceInstanceUpdate: true,
 			}));
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await provider.create({
 				token: "tok",
@@ -421,7 +421,7 @@ describe("RailwayServiceResourceProvider", () => {
 
 	describe("check", () => {
 		it("passes valid inputs through untouched", async () => {
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const inputs = {
 				token: "tok",
@@ -438,7 +438,7 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 
 		it("fails an empty source.image, naming the property", async () => {
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const inputs = {
 				token: "tok",
@@ -458,7 +458,7 @@ describe("RailwayServiceResourceProvider", () => {
 
 	describe("check (healthcheckPath)", () => {
 		it("rejects a hyphenated healthcheckPath at plan time", async () => {
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const inputs = {
 				token: "tok",
@@ -476,7 +476,7 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 
 		it("passes a hyphen-free healthcheckPath", async () => {
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const inputs = {
 				token: "tok",
@@ -504,7 +504,7 @@ describe("RailwayServiceResourceProvider", () => {
 		it("returns a blank result when the service is gone (not-found)", async () => {
 			mockQuery.mockRejectedValueOnce(new Error("Service not found"));
 
-			const result = await new RailwayServiceResourceProvider().read(
+			const result = await new ServiceResourceProvider().read(
 				"svc-uuid",
 				props,
 			);
@@ -518,7 +518,7 @@ describe("RailwayServiceResourceProvider", () => {
 			);
 
 			await expect(
-				new RailwayServiceResourceProvider().read("svc-uuid", props),
+				new ServiceResourceProvider().read("svc-uuid", props),
 			).rejects.toThrow("401");
 		});
 	});
@@ -534,9 +534,9 @@ describe("RailwayServiceResourceProvider", () => {
 
 		it("declares serviceId stable on in-place updates", async () => {
 			// The live pain: without stables, a startCommand tweak made dependents
-			// (RailwayVolume) see serviceId as unknown during preview and show a
+			// (Volume) see serviceId as unknown during preview and show a
 			// phantom replace.
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const diff = await provider.diff("svc-uuid", olds, {
 				...olds,
@@ -549,7 +549,7 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 
 		it("declares no stables when an identity change forces a replace", async () => {
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const diff = await provider.diff("svc-uuid", olds, {
 				...olds,
@@ -561,7 +561,7 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 
 		it("flags an in-place change (no replace) when the image source bumps", async () => {
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			const diff = await provider.diff(
 				"svc-uuid",
@@ -581,7 +581,7 @@ describe("RailwayServiceResourceProvider", () => {
 				serviceInstanceDeployV2: "dep-2",
 			}));
 
-			const provider = new RailwayServiceResourceProvider();
+			const provider = new ServiceResourceProvider();
 
 			await provider.update(
 				"svc-redis",

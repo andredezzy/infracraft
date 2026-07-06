@@ -12,10 +12,10 @@ This is a research spike only. No code changes, no commits.
 
 Source: `packages/pulumi/src/neon/{project,branch,role,endpoint,database}.ts`. Each is a `ComponentResource` wrapping an internal `pulumi.dynamic.Resource` whose provider implements `check`/`create`/`read`/`update`/`delete`/`diff` against the Neon REST API. The consumer is `infrastructure/stacks/database.ts` (called from `infrastructure/index.ts` with `neonProjectName: "shared-db"`, `branchName: stackName`, `passwordVersion: config.getNumber("neonPasswordVersion")`).
 
-- **Adopt-or-create on every `create()`.** `NeonProject` queries `GET /projects` and exact-name-matches `shared-db`; if found it adopts (records the existing `projectId`), else `POST /projects`. `NeonBranch`, `NeonRole`, `NeonEndpoint`, `NeonDatabase` all do the by-name/by-branch equivalent. Both consumer stacks (production + staging) point at the **same** `shared-db` project and adopt it.
-- **Protective no-op project delete.** `NeonProject.delete()` is a deliberate no-op (`"Neon project deletion skipped"`) — a `pulumi destroy` on either stack can never drop the shared `shared-db` project.
-- **Copy-on-write branching.** On non-production stacks, `NeonBranch` forks `production` by resolving the parent branch *name* → `parent_id` and passing it to the Neon branch-create call.
-- **In-place password rotation.** `NeonRole` carries `passwordVersion`; bumping it triggers an `update()` that calls Neon's `reset_password` endpoint — an UPDATE, never a replace. Replace is explicitly avoided because it would try to `DELETE` the role, which Neon refuses for default roles like `neondb_owner` and which would drop real grants. `password` is exposed as a Sensitive output for connection-string composition; adopted copy-on-write roles get `resetPassword: true` to isolate their credential from production.
+- **Adopt-or-create on every `create()`.** `neon.Project` queries `GET /projects` and exact-name-matches `shared-db`; if found it adopts (records the existing `projectId`), else `POST /projects`. `neon.Branch`, `neon.Role`, `neon.Endpoint`, `neon.Database` all do the by-name/by-branch equivalent. Both consumer stacks (production + staging) point at the **same** `shared-db` project and adopt it.
+- **Protective no-op project delete.** `neon.Project.delete()` is a deliberate no-op (`"Neon project deletion skipped"`) — a `pulumi destroy` on either stack can never drop the shared `shared-db` project.
+- **Copy-on-write branching.** On non-production stacks, `neon.Branch` forks `production` by resolving the parent branch *name* → `parent_id` and passing it to the Neon branch-create call.
+- **In-place password rotation.** `neon.Role` carries `passwordVersion`; bumping it triggers an `update()` that calls Neon's `reset_password` endpoint — an UPDATE, never a replace. Replace is explicitly avoided because it would try to `DELETE` the role, which Neon refuses for default roles like `neondb_owner` and which would drop real grants. `password` is exposed as a Sensitive output for connection-string composition; adopted copy-on-write roles get `resetPassword: true` to isolate their credential from production.
 - **Endpoint-before-role ordering.** The consumer wires `dependsOn: [endpoint]` on the role and `dependsOn: [endpoint, role]` on the database, because a fresh copy-on-write branch has no compute and Neon returns a **412** (`"create a read-write endpoint to manage roles on this branch"`) otherwise, plus a **422** (`"database owner not found"`) if the database races the role.
 
 ## Gate-by-gate
@@ -37,7 +37,7 @@ The bridged `Project` resource has no find-by-name path. `resourceProjectCreate`
 The only correct adoption path is a one-time `pulumi import` per stack (the Pulumi Registry and Neon's guide both document import by project ID, e.g. `shiny-cell-31746257`). Two additional problems specific to the consumer program:
 
 - **Both stacks share `shared-db`.** production and staging are separate Pulumi stacks with separate state, both declaring the same project. Each would independently hold the `shared-db` project in its state after import.
-- **Delete is destructive.** `resourceProjectDelete` calls the real `DeleteProject(d.Id())`. Infracraft's `NeonProject.delete()` is a protective no-op. With the bridge, a `pulumi destroy` (or a replace triggered by a `ForceNew` field — see #218 below) on **either** stack would delete production's database unless every project/branch/role is manually guarded with `protect`/`retainOnDelete`. Infracraft removes this entire class of footgun by design.
+- **Delete is destructive.** `resourceProjectDelete` calls the real `DeleteProject(d.Id())`. Infracraft's `neon.Project.delete()` is a protective no-op. With the bridge, a `pulumi destroy` (or a replace triggered by a `ForceNew` field — see #218 below) on **either** stack would delete production's database unless every project/branch/role is manually guarded with `protect`/`retainOnDelete`. Infracraft removes this entire class of footgun by design.
 
 ### 2. Copy-on-write branching — PASS
 
@@ -94,7 +94,7 @@ For completeness only, the shape a switch would take, so the deferral is a decis
 
 1. Adopt official bridged resources (`neon.Project/Branch/Endpoint/Role/Database`) in `infrastructure/stacks/database.ts`.
 2. **Import, never recreate** — `pulumi import` the live `shared-db` project, `production` branch, its read-write endpoint, `neondb_owner`, and `neondb` into **each** stack's state by their Neon IDs before the first `up`; gate on a `pulumi preview --diff` showing **zero** replace/delete on every one.
-3. Re-implement the missing behaviors *around* the bridge: guard the project/branch/role with `retainOnDelete`/`protect` to replace infracraft's no-op delete; drive password rotation out-of-band via Neon's `reset_password` API (the bridge cannot), or keep `NeonRole` custom even if the rest switches.
+3. Re-implement the missing behaviors *around* the bridge: guard the project/branch/role with `retainOnDelete`/`protect` to replace infracraft's no-op delete; drive password rotation out-of-band via Neon's `reset_password` API (the bridge cannot), or keep `neon.Role` custom even if the rest switches.
 4. Keep infracraft's dynamic Neon providers as the fallback until a full drill (rehearsal on exported the consumer program state → staging → soak → production) passes with no data movement.
 
 The volume of behavior that must be rebuilt *around* the bridge (adoption safety, protective delete, rotation) is itself evidence that the bridge is the wrong substrate here.

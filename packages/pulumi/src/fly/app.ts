@@ -1,15 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
 
 import { resolveCredential } from "../dynamic/resolve-credential";
-import { FlyClient } from "./client";
-import type { FlyProvider } from "./provider";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Fly app dynamic provider. */
-interface FlyAppInputs {
+interface AppInputs {
 	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** App name (globally unique). Used as the resource identifier. */
@@ -20,13 +20,13 @@ interface FlyAppInputs {
 }
 
 /** Persisted state for the Fly app. */
-interface FlyAppOutputs extends FlyAppInputs {
+interface AppOutputs extends AppInputs {
 	/** App identifier — equals the app name (all child paths key off the name). */
 	appId: string;
 }
 
 /** Get-app response (only the fields we read). */
-interface FlyAppResponse {
+interface AppResponse {
 	id: string;
 	name: string;
 }
@@ -41,13 +41,13 @@ interface FlyAppResponse {
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
-	async create(inputs: FlyAppInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(
+export class AppResourceProvider implements pulumi.dynamic.ResourceProvider {
+	async create(inputs: AppInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
-		const existing = await client.tryGet<FlyAppResponse>(
+		const existing = await client.tryGet<AppResponse>(
 			`/v1/apps/${inputs.name}`,
 		);
 
@@ -56,7 +56,7 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 		} else {
 			if (!inputs.organization) {
 				throw new Error(
-					`FlyApp "${inputs.name}": an organization is required to create a new app — set it on FlyProvider or FlyApp args`,
+					`fly.App "${inputs.name}": an organization is required to create a new app — set it on fly.Provider or fly.App args`,
 				);
 			}
 
@@ -68,20 +68,20 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 			});
 		}
 
-		const outs: FlyAppOutputs = { ...inputs, appId: inputs.name };
+		const outs: AppOutputs = { ...inputs, appId: inputs.name };
 
 		return { id: inputs.name, outs };
 	}
 
 	async read(
 		id: string,
-		props: FlyAppOutputs,
+		props: AppOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new FlyClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
-		const app = await client.tryGet<FlyAppResponse>(`/v1/apps/${id}`);
+		const app = await client.tryGet<AppResponse>(`/v1/apps/${id}`);
 
 		if (!app) {
 			// Resource gone → blank id lets refresh reconcile the deletion.
@@ -99,8 +99,8 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 
 	async diff(
 		_id: string,
-		olds: FlyAppOutputs,
-		news: FlyAppInputs,
+		olds: AppOutputs,
+		news: AppInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -108,7 +108,7 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 			replaces.push("name");
 		}
 
-		// organization is evaluated only at creation time (see FlyAppArgs.organization)
+		// organization is evaluated only at creation time (see AppArgs.organization)
 		// and is deliberately NOT compared here: forcing a replace would destroy and
 		// recreate the entire app — everything it contains — just because the config
 		// value changed, even though create() never re-applies it to an adopted app.
@@ -121,7 +121,7 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class FlyAppResource extends pulumi.dynamic.Resource {
+class AppResource extends pulumi.dynamic.Resource {
 	public declare readonly appId: pulumi.Output<string>;
 
 	constructor(
@@ -135,7 +135,7 @@ class FlyAppResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new FlyAppResourceProvider(),
+			new AppResourceProvider(),
 			name,
 			{ ...args, appId: undefined },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -144,14 +144,14 @@ class FlyAppResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for FlyApp — replaces Pulumi's native `provider` field. */
-type FlyAppOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for App — replaces Pulumi's native `provider` field. */
+type AppOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Fly authentication context. */
-	provider: FlyProvider;
+	provider: Provider;
 };
 
-/** Args for FlyApp. */
-export interface FlyAppArgs {
+/** Args for App. */
+export interface AppArgs {
 	/**
 	 * App name (globally unique). Used for adoption lookup and as `.id`.
 	 * Maps to the Fly Machines API field `app_name`.
@@ -159,7 +159,7 @@ export interface FlyAppArgs {
 	name: pulumi.Input<string>;
 
 	/**
-	 * Org slug for app creation. Overrides `FlyProvider.organization`.
+	 * Org slug for app creation. Overrides `Provider.organization`.
 	 * Evaluated only at creation time — changing `organization` after the app
 	 * exists has no effect (an existing app is never moved between orgs; Fly
 	 * only supports that via `fly apps move`/the dashboard, not this provider's
@@ -173,19 +173,19 @@ export interface FlyAppArgs {
  *
  * @example
  * ```typescript
- * const app = new FlyApp("api", { name: "rby-api" }, { provider });
+ * const app = new fly.App("api", { name: "rby-api" }, { provider });
  * ```
  */
-export class FlyApp extends pulumi.ComponentResource {
+export class App extends pulumi.ComponentResource {
 	/** App identifier (equals the app name). */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(name: string, args: FlyAppArgs, opts: FlyAppOptions) {
+	constructor(name: string, args: AppArgs, opts: AppOptions) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:fly:App", name, {}, pulumiOpts);
 
-		const resource = new FlyAppResource(
+		const resource = new AppResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

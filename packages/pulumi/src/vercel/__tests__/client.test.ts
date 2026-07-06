@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { VercelClient } from "../client";
+import { Client } from "../client";
 
-describe("VercelClient", () => {
+describe("vercel.Client", () => {
 	const originalFetch = globalThis.fetch;
 
 	afterEach(() => {
@@ -17,7 +17,7 @@ describe("VercelClient", () => {
 			json: () => Promise.resolve({ id: "prj_1" }),
 		});
 
-		const client = new VercelClient("test-token", "team_1");
+		const client = new Client("test-token", "team_1");
 		const result = await client.get<{ id: string }>("/v9/projects/my-app");
 
 		expect(result.id).toBe("prj_1");
@@ -38,7 +38,7 @@ describe("VercelClient", () => {
 			json: () => Promise.resolve([]),
 		});
 
-		const client = new VercelClient("test-token", "team_1");
+		const client = new Client("test-token", "team_1");
 		await client.get("/v1/integrations/configurations?view=account");
 
 		const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -55,7 +55,7 @@ describe("VercelClient", () => {
 			json: () => Promise.resolve({}),
 		});
 
-		const client = new VercelClient("test-token");
+		const client = new Client("test-token");
 		await client.get("/v9/projects/my-app");
 
 		const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
@@ -69,7 +69,7 @@ describe("VercelClient", () => {
 			json: () => Promise.resolve({ id: "prj_1" }),
 		});
 
-		const client = new VercelClient("test-token", "team_1");
+		const client = new Client("test-token", "team_1");
 
 		const result = await client.post<{ id: string }>("/v9/projects", {
 			name: "my-app",
@@ -89,7 +89,7 @@ describe("VercelClient", () => {
 			json: () => Promise.resolve({ name: "my-app" }),
 		});
 
-		const client = new VercelClient("test-token", "team_1");
+		const client = new Client("test-token", "team_1");
 
 		const result = await client.patch<{ name: string }>(
 			"/v1/installations/icfg_1/resources/res_1",
@@ -110,7 +110,7 @@ describe("VercelClient", () => {
 			text: () => Promise.resolve("Not found"),
 		});
 
-		const client = new VercelClient("test-token", "team_1");
+		const client = new Client("test-token", "team_1");
 		const error = await client.get("/v9/projects/missing").catch((e) => e);
 
 		expect(error).toBeInstanceOf(ApiNotFoundError);
@@ -125,7 +125,7 @@ describe("VercelClient", () => {
 			text: () => Promise.resolve("Not found"),
 		});
 
-		const client = new VercelClient("test-token", "team_1");
+		const client = new Client("test-token", "team_1");
 
 		await expect(client.tryGet("/v9/projects/missing")).resolves.toBeNull();
 	});
@@ -137,7 +137,7 @@ describe("VercelClient", () => {
 			text: () => Promise.resolve("Unauthorized"),
 		});
 
-		const client = new VercelClient("test-token", "team_1");
+		const client = new Client("test-token", "team_1");
 
 		await expect(client.get("/v9/projects/my-app")).rejects.toThrow(
 			"Vercel API error (401): Unauthorized",

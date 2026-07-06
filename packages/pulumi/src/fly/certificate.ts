@@ -2,12 +2,12 @@ import * as pulumi from "@pulumi/pulumi";
 
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
-import type { FlyApp } from "./app";
-import { FlyClient } from "./client";
-import type { FlyProvider } from "./provider";
+import type { App } from "./app";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** DNS records the consumer must create for certificate validation. */
-export interface FlyDnsRequirements {
+export interface DnsRequirements {
 	/** ACME challenge CNAME record. */
 	acme_challenge?: { name: string; target: string };
 
@@ -19,11 +19,11 @@ export interface FlyDnsRequirements {
 }
 
 /** Resolved inputs for the Fly certificate dynamic provider. */
-interface FlyCertificateInputs {
+interface CertificateInputs {
 	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** App name the certificate belongs to. */
@@ -34,19 +34,19 @@ interface FlyCertificateInputs {
 }
 
 /** Persisted state for the Fly certificate. */
-interface FlyCertificateOutputs extends FlyCertificateInputs {
+interface CertificateOutputs extends CertificateInputs {
 	/** Whether the certificate is fully provisioned (DNS correct). */
 	configured: boolean;
 
 	/** DNS records required for validation. */
-	dnsRequirements: FlyDnsRequirements;
+	dnsRequirements: DnsRequirements;
 }
 
 /** Certificate response (only the fields we read). */
-interface FlyCertificateResponse {
+interface CertificateResponse {
 	hostname: string;
 	configured: boolean;
-	dns_requirements?: FlyDnsRequirements;
+	dns_requirements?: DnsRequirements;
 }
 
 /**
@@ -57,30 +57,30 @@ interface FlyCertificateResponse {
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class FlyCertificateResourceProvider
+export class CertificateResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	async create(
-		inputs: FlyCertificateInputs,
+		inputs: CertificateInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
 		const path = `/v1/apps/${inputs.appName}/certificates/${encodeURIComponent(inputs.hostname)}`;
 
-		let cert = await client.tryGet<FlyCertificateResponse>(path);
+		let cert = await client.tryGet<CertificateResponse>(path);
 
 		if (cert) {
 			pulumi.log.info(`Adopting existing Fly certificate "${inputs.hostname}"`);
 		} else {
-			cert = await client.post<FlyCertificateResponse>(
+			cert = await client.post<CertificateResponse>(
 				`/v1/apps/${inputs.appName}/certificates/acme`,
 				{ hostname: inputs.hostname },
 			);
 		}
 
-		const outs: FlyCertificateOutputs = {
+		const outs: CertificateOutputs = {
 			...inputs,
 			configured: cert.configured ?? false,
 			dnsRequirements: cert.dns_requirements ?? {},
@@ -91,13 +91,13 @@ export class FlyCertificateResourceProvider
 
 	async read(
 		id: string,
-		props: FlyCertificateOutputs,
+		props: CertificateOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new FlyClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
-		const cert = await client.tryGet<FlyCertificateResponse>(
+		const cert = await client.tryGet<CertificateResponse>(
 			`/v1/apps/${props.appName}/certificates/${encodeURIComponent(id)}`,
 		);
 
@@ -116,8 +116,8 @@ export class FlyCertificateResourceProvider
 		};
 	}
 
-	async delete(id: string, props: FlyCertificateOutputs): Promise<void> {
-		const client = new FlyClient(
+	async delete(id: string, props: CertificateOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -139,8 +139,8 @@ export class FlyCertificateResourceProvider
 
 	async diff(
 		_id: string,
-		olds: FlyCertificateOutputs,
-		news: FlyCertificateInputs,
+		olds: CertificateOutputs,
+		news: CertificateInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -161,9 +161,9 @@ export class FlyCertificateResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class FlyCertificateResource extends pulumi.dynamic.Resource {
+class CertificateResource extends pulumi.dynamic.Resource {
 	public declare readonly configured: pulumi.Output<boolean>;
-	public declare readonly dnsRequirements: pulumi.Output<FlyDnsRequirements>;
+	public declare readonly dnsRequirements: pulumi.Output<DnsRequirements>;
 
 	constructor(
 		name: string,
@@ -176,7 +176,7 @@ class FlyCertificateResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new FlyCertificateResourceProvider(),
+			new CertificateResourceProvider(),
 			name,
 			{ ...args, configured: undefined, dnsRequirements: undefined },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -185,20 +185,17 @@ class FlyCertificateResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for FlyCertificate. */
-type FlyCertificateOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Certificate. */
+type CertificateOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Fly authentication context. */
-	provider: FlyProvider;
+	provider: Provider;
 
 	/** App the certificate belongs to. */
-	app: FlyApp;
+	app: App;
 };
 
-/** Args for FlyCertificate. */
-export interface FlyCertificateArgs {
+/** Args for Certificate. */
+export interface CertificateArgs {
 	/** Hostname to issue an ACME certificate for (e.g. `"api.example.com"`). */
 	hostname: pulumi.Input<string>;
 }
@@ -211,12 +208,12 @@ export interface FlyCertificateArgs {
  *
  * @example
  * ```typescript
- * const cert = new FlyCertificate("api-cert", {
+ * const cert = new fly.Certificate("api-cert", {
  *   hostname: "api.example.com",
  * }, { provider, app });
  * ```
  */
-export class FlyCertificate extends pulumi.ComponentResource {
+export class Certificate extends pulumi.ComponentResource {
 	/** Certificate identifier (equals the hostname). */
 	public readonly id: pulumi.Output<string>;
 
@@ -224,18 +221,14 @@ export class FlyCertificate extends pulumi.ComponentResource {
 	public readonly configured: pulumi.Output<boolean>;
 
 	/** DNS records required for validation. */
-	public readonly dnsRequirements: pulumi.Output<FlyDnsRequirements>;
+	public readonly dnsRequirements: pulumi.Output<DnsRequirements>;
 
-	constructor(
-		name: string,
-		args: FlyCertificateArgs,
-		opts: FlyCertificateOptions,
-	) {
+	constructor(name: string, args: CertificateArgs, opts: CertificateOptions) {
 		const { provider, app, ...pulumiOpts } = opts;
 
 		super("infracraft:fly:Certificate", name, {}, pulumiOpts);
 
-		const resource = new FlyCertificateResource(
+		const resource = new CertificateResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

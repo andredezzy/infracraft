@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VercelResourceConnectionProvider } from "../resource-connection";
+import { ResourceConnectionProvider } from "../resource-connection";
 
-describe("VercelResourceConnectionProvider", () => {
+describe("vercel.ResourceConnectionProvider", () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
@@ -24,7 +24,7 @@ describe("VercelResourceConnectionProvider", () => {
 		};
 
 		it("rejects sensitive env vars combined with the development target at plan time", async () => {
-			const result = await new VercelResourceConnectionProvider().check(
+			const result = await new ResourceConnectionProvider().check(
 				inputs,
 				inputs,
 			);
@@ -36,19 +36,19 @@ describe("VercelResourceConnectionProvider", () => {
 		});
 
 		it("passes when development is combined with non-sensitive env vars", async () => {
-			const result = await new VercelResourceConnectionProvider().check(
-				inputs,
-				{ ...inputs, makeEnvVarsSensitive: false },
-			);
+			const result = await new ResourceConnectionProvider().check(inputs, {
+				...inputs,
+				makeEnvVarsSensitive: false,
+			});
 
 			expect(result.failures).toEqual([]);
 		});
 
 		it("passes when sensitive env vars target an environment other than development", async () => {
-			const result = await new VercelResourceConnectionProvider().check(
-				inputs,
-				{ ...inputs, targets: ["production", "preview"] },
-			);
+			const result = await new ResourceConnectionProvider().check(inputs, {
+				...inputs,
+				targets: ["production", "preview"],
+			});
 
 			expect(result.failures).toEqual([]);
 		});
@@ -68,7 +68,7 @@ describe("VercelResourceConnectionProvider", () => {
 					json: () => Promise.resolve({}),
 				});
 
-			const provider = new VercelResourceConnectionProvider();
+			const provider = new ResourceConnectionProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -107,7 +107,7 @@ describe("VercelResourceConnectionProvider", () => {
 					}),
 			});
 
-			const provider = new VercelResourceConnectionProvider();
+			const provider = new ResourceConnectionProvider();
 
 			const result = await provider.create({
 				token: "tok",
@@ -135,7 +135,7 @@ describe("VercelResourceConnectionProvider", () => {
 					text: () => Promise.resolve("forbidden"),
 				});
 
-			const provider = new VercelResourceConnectionProvider();
+			const provider = new ResourceConnectionProvider();
 
 			await expect(
 				provider.create({
@@ -169,7 +169,7 @@ describe("VercelResourceConnectionProvider", () => {
 					}),
 			});
 
-			const provider = new VercelResourceConnectionProvider();
+			const provider = new ResourceConnectionProvider();
 
 			const result = await provider.read("store_abc:prj_humanes", props);
 
@@ -182,7 +182,7 @@ describe("VercelResourceConnectionProvider", () => {
 				json: () => Promise.resolve({ connections: [] }),
 			});
 
-			const provider = new VercelResourceConnectionProvider();
+			const provider = new ResourceConnectionProvider();
 
 			const result = await provider.read("store_abc:prj_humanes", props);
 
@@ -196,7 +196,7 @@ describe("VercelResourceConnectionProvider", () => {
 				text: () => Promise.resolve("not found"),
 			});
 
-			const provider = new VercelResourceConnectionProvider();
+			const provider = new ResourceConnectionProvider();
 
 			const result = await provider.read("store_abc:prj_humanes", props);
 

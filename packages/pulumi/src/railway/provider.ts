@@ -2,14 +2,14 @@ import * as pulumi from "@pulumi/pulumi";
 import { ensurePulumiVersionMatch } from "../preflight/assert-pulumi-version-match";
 
 /**
- * Args for RailwayProvider. Exactly one of `token` and `tokenEnvVar` must be set.
+ * Args for Provider. Exactly one of `token` and `tokenEnvVar` must be set.
  *
  * Neither `token` nor `tokenEnvVar` is ever compared in any Railway resource's
  * `diff()` — rotating the credential (or switching between the two forms)
  * never triggers a replace or an in-place update on its own; it only changes
  * which credential the next operation authenticates with.
  */
-export interface RailwayProviderArgs {
+export interface ProviderArgs {
 	/** Railway API bearer token. Mutually exclusive with `tokenEnvVar`. */
 	token?: pulumi.Input<string>;
 
@@ -30,20 +30,20 @@ export interface RailwayProviderArgs {
 /**
  * Holds Railway authentication context for resource constructors.
  *
- * Pass a `RailwayProvider` instance via the `provider` option on Railway resources
+ * Pass a `Provider` instance via the `provider` option on Railway resources
  * instead of passing `token` everywhere explicitly.
  *
  * @example
  * ```typescript
- * const provider = new RailwayProvider("railway", {
+ * const provider = new railway.Provider("railway", {
  *   tokenEnvVar: "RAILWAY_TOKEN",
  *   // or: token: config.requireSecret("railwayToken"),
  * });
  *
- * const project = new RailwayProject("my-project", { name: "my-app" }, { provider });
+ * const project = new railway.Project("my-project", { name: "my-app" }, { provider });
  * ```
  */
-export class RailwayProvider extends pulumi.ComponentResource {
+export class Provider extends pulumi.ComponentResource {
 	/** Railway API bearer token (secret). Set only when configured via `token`. */
 	public readonly token?: pulumi.Output<string>;
 
@@ -52,7 +52,7 @@ export class RailwayProvider extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: RailwayProviderArgs,
+		args: ProviderArgs,
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:railway:Provider", name, {}, opts);
@@ -61,7 +61,7 @@ export class RailwayProvider extends pulumi.ComponentResource {
 
 		if ((args.token === undefined) === (args.tokenEnvVar === undefined)) {
 			throw new Error(
-				"RailwayProvider requires exactly one of `token` or `tokenEnvVar`",
+				"railway.Provider requires exactly one of `token` or `tokenEnvVar`",
 			);
 		}
 

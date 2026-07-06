@@ -1,19 +1,19 @@
 import * as pulumi from "@pulumi/pulumi";
 import { MockMonitor } from "@pulumi/pulumi/runtime/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RailwayClient } from "../client";
-import type { RailwayEnvironment } from "../environment";
-import type { RailwayProject } from "../project";
-import type { RailwayProvider } from "../provider";
-import type { RailwayService } from "../service";
-import { RailwayVariable, RailwayVariableResourceProvider } from "../variable";
+import { Client } from "../client";
+import type { Environment } from "../environment";
+import type { Project } from "../project";
+import type { Provider } from "../provider";
+import type { Service } from "../service";
+import { Variable, VariableResourceProvider } from "../variable";
 
-describe("RailwayVariableResourceProvider", () => {
+describe("railway.VariableResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -32,7 +32,7 @@ describe("RailwayVariableResourceProvider", () => {
 		it("upserts all variables in one batch with skipDeploys", async () => {
 			mockQuery.mockResolvedValueOnce({ variableCollectionUpsert: true });
 
-			const result = await new RailwayVariableResourceProvider().create(props);
+			const result = await new VariableResourceProvider().create(props);
 
 			expect(result.id).toBe("svc-1:variables");
 			expect(result.outs).toEqual(props);
@@ -57,7 +57,7 @@ describe("RailwayVariableResourceProvider", () => {
 
 			const news = { ...props, variables: { DATABASE_URL: "postgres://new" } };
 
-			const result = await new RailwayVariableResourceProvider().update(
+			const result = await new VariableResourceProvider().update(
 				"svc-1:variables",
 				props,
 				news,
@@ -79,11 +79,10 @@ describe("RailwayVariableResourceProvider", () => {
 		it("skips the upsert entirely when the new map is empty", async () => {
 			mockQuery.mockResolvedValue({});
 
-			await new RailwayVariableResourceProvider().update(
-				"svc-1:variables",
-				props,
-				{ ...props, variables: {} },
-			);
+			await new VariableResourceProvider().update("svc-1:variables", props, {
+				...props,
+				variables: {},
+			});
 
 			expect(mockQuery).toHaveBeenCalledTimes(2); // one delete per old key
 			for (const [mutation] of mockQuery.mock.calls) {
@@ -97,7 +96,7 @@ describe("RailwayVariableResourceProvider", () => {
 			const liveVariables = { DATABASE_URL: "postgres://db-live" };
 			mockQuery.mockResolvedValueOnce({ variables: liveVariables });
 
-			const result = await new RailwayVariableResourceProvider().read(
+			const result = await new VariableResourceProvider().read(
 				"svc-1:variables",
 				props,
 			);
@@ -120,7 +119,7 @@ describe("RailwayVariableResourceProvider", () => {
 		it("returns blank state when the service/environment/project is gone (not-found)", async () => {
 			mockQuery.mockRejectedValueOnce(new Error("Service not found"));
 
-			const result = await new RailwayVariableResourceProvider().read(
+			const result = await new VariableResourceProvider().read(
 				"svc-1:variables",
 				props,
 			);
@@ -132,7 +131,7 @@ describe("RailwayVariableResourceProvider", () => {
 			mockQuery.mockRejectedValueOnce(new Error("forbidden"));
 
 			await expect(
-				new RailwayVariableResourceProvider().read("svc-1:variables", props),
+				new VariableResourceProvider().read("svc-1:variables", props),
 			).rejects.toThrow("forbidden");
 		});
 	});
@@ -141,10 +140,7 @@ describe("RailwayVariableResourceProvider", () => {
 		it("deletes every variable individually", async () => {
 			mockQuery.mockResolvedValue({});
 
-			await new RailwayVariableResourceProvider().delete(
-				"svc-1:variables",
-				props,
-			);
+			await new VariableResourceProvider().delete("svc-1:variables", props);
 
 			expect(mockQuery).toHaveBeenCalledTimes(2);
 
@@ -161,7 +157,7 @@ describe("RailwayVariableResourceProvider", () => {
 				.mockResolvedValueOnce({});
 
 			await expect(
-				new RailwayVariableResourceProvider().delete("svc-1:variables", props),
+				new VariableResourceProvider().delete("svc-1:variables", props),
 			).resolves.toBeUndefined();
 
 			expect(mockQuery).toHaveBeenCalledTimes(2);
@@ -171,7 +167,7 @@ describe("RailwayVariableResourceProvider", () => {
 			mockQuery.mockRejectedValueOnce(new Error("forbidden"));
 
 			await expect(
-				new RailwayVariableResourceProvider().delete("svc-1:variables", props),
+				new VariableResourceProvider().delete("svc-1:variables", props),
 			).rejects.toThrow("forbidden");
 
 			expect(mockQuery).toHaveBeenCalledTimes(1);
@@ -180,7 +176,7 @@ describe("RailwayVariableResourceProvider", () => {
 
 	describe("diff", () => {
 		it("flags a change when a value differs", async () => {
-			const diff = await new RailwayVariableResourceProvider().diff(
+			const diff = await new VariableResourceProvider().diff(
 				"svc-1:variables",
 				props,
 				{
@@ -193,7 +189,7 @@ describe("RailwayVariableResourceProvider", () => {
 		});
 
 		it("flags a change when the key set differs", async () => {
-			const diff = await new RailwayVariableResourceProvider().diff(
+			const diff = await new VariableResourceProvider().diff(
 				"svc-1:variables",
 				props,
 				{ ...props, variables: { DATABASE_URL: "postgres://db" } },
@@ -203,7 +199,7 @@ describe("RailwayVariableResourceProvider", () => {
 		});
 
 		it("reports no changes when the map is identical", async () => {
-			const diff = await new RailwayVariableResourceProvider().diff(
+			const diff = await new VariableResourceProvider().diff(
 				"svc-1:variables",
 				props,
 				props,
@@ -214,7 +210,7 @@ describe("RailwayVariableResourceProvider", () => {
 	});
 });
 
-describe("RailwayVariable component", () => {
+describe("railway.Variable component", () => {
 	let capturedAdditionalSecretOutputs: string[];
 	let originalRegisterResource: typeof MockMonitor.prototype.registerResource;
 
@@ -244,19 +240,19 @@ describe("RailwayVariable component", () => {
 		const provider = {
 			token: pulumi.output("tok"),
 			tokenEnvVar: undefined,
-		} as unknown as RailwayProvider;
+		} as unknown as Provider;
 
 		const project = {
 			id: pulumi.output("proj-1"),
-		} as unknown as RailwayProject;
+		} as unknown as Project;
 
 		const environment = {
 			id: pulumi.output("env-1"),
-		} as unknown as RailwayEnvironment;
+		} as unknown as Environment;
 
-		const service = { id: pulumi.output("svc-1") } as unknown as RailwayService;
+		const service = { id: pulumi.output("svc-1") } as unknown as Service;
 
-		new RailwayVariable(
+		new Variable(
 			"api-vars",
 			{ variables: { DATABASE_URL: "postgres://db" } },
 			{ provider, project, environment, service },

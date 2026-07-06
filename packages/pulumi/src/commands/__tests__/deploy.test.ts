@@ -85,9 +85,9 @@ describe("createDeployCommand", () => {
 	it("sandbox + gitGuard → stub-mode script", () => {
 		createDeployCommand(
 			{
-				name: "nexus",
+				name: "acme",
 				cli: "vercel deploy --prod --yes",
-				excludePaths: ["apps/mesh"],
+				excludePaths: ["apps/api"],
 				triggers: [],
 			},
 			{ dependsOn: [sandbox, gitGuard] },
@@ -100,16 +100,16 @@ describe("createDeployCommand", () => {
 		).apply((s) => s);
 
 		expect(create).toContain(
-			'mktemp -d "/tmp/infracraft/$PROJECT-staging-nexus.',
+			'mktemp -d "/tmp/infracraft/$PROJECT-staging-acme.',
 		);
 
 		expect(create).toContain("git init -q && git add -A");
-		expect(create).toContain("apps\\/mesh");
+		expect(create).toContain("apps\\/api");
 	});
 
 	it("sandbox only → original-.git script", () => {
 		createDeployCommand(
-			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
+			{ name: "acme", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
 
@@ -126,7 +126,7 @@ describe("createDeployCommand", () => {
 	it("neither, opted in via allowUnsandboxed → raw live-tree script", () => {
 		createDeployCommand(
 			{
-				name: "nexus",
+				name: "acme",
 				cli: "vercel deploy --prod --yes",
 				triggers: [],
 				allowUnsandboxed: true,
@@ -147,7 +147,7 @@ describe("createDeployCommand", () => {
 	it("throws when no DeploySandbox is present and allowUnsandboxed is not set", () => {
 		expect(() =>
 			createDeployCommand(
-				{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
+				{ name: "acme", cli: "vercel deploy --prod --yes", triggers: [] },
 				{},
 			),
 		).toThrow(/DeploySandbox.*allowUnsandboxed/i);
@@ -164,7 +164,7 @@ describe("createDeployCommand", () => {
 
 	it("extracts the deploymentUrl from stdout even when non-URL lines trail it", () => {
 		const { deploymentUrl } = createDeployCommand(
-			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
+			{ name: "acme", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
 
@@ -193,7 +193,7 @@ describe("createDeployCommand", () => {
 		].join("\n");
 
 		const { deploymentUrl } = createDeployCommand(
-			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
+			{ name: "acme", cli: "vercel deploy --prod --yes", triggers: [] },
 			{ dependsOn: [sandbox] },
 		);
 

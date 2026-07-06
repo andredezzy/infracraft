@@ -1,6 +1,6 @@
 import { afterAll, describe, expect, it } from "vitest";
-import { NeonBranchResourceProvider } from "../branch";
-import { NeonClient } from "../client";
+import { BranchResourceProvider } from "../branch";
+import { Client } from "../client";
 
 /**
  * LIVE integration test for the Neon branch provider's copy-on-write fork.
@@ -15,7 +15,7 @@ import { NeonClient } from "../client";
  */
 
 /** Fully-resolved live-test configuration; only present when the tier is enabled. */
-interface NeonLiveConfig {
+interface LiveConfig {
 	/** Neon API key (account- or project-scoped). */
 	apiKey: string;
 
@@ -24,7 +24,7 @@ interface NeonLiveConfig {
 }
 
 /** Reads the live-test config, or `null` when the tier is disabled or any credential is missing. */
-function readLiveConfig(): NeonLiveConfig | null {
+function readLiveConfig(): LiveConfig | null {
 	if (process.env.INFRACRAFT_LIVE_TEST !== "1") {
 		return null;
 	}
@@ -61,12 +61,12 @@ interface BranchGetResponse {
 
 const config = readLiveConfig();
 
-describe.skipIf(!config)("NeonBranch copy-on-write fork (live)", () => {
+describe.skipIf(!config)("neon.Branch copy-on-write fork (live)", () => {
 	// Guarded by skipIf: whenever a hook or test body below runs, `config` is non-null.
-	const live = config as NeonLiveConfig;
+	const live = config as LiveConfig;
 
-	const client = new NeonClient(config?.apiKey ?? "");
-	const branchProvider = new NeonBranchResourceProvider();
+	const client = new Client(config?.apiKey ?? "");
+	const branchProvider = new BranchResourceProvider();
 
 	/** The forked child branch, deleted in afterAll. */
 	let childBranchId = "";

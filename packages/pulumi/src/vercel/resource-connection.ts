@@ -1,14 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
-import { VercelClient } from "./client";
-import type { VercelProvider } from "./provider";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Vercel resource connection dynamic provider. */
-interface VercelResourceConnectionInputs {
+interface ResourceConnectionInputs {
 	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
@@ -32,7 +32,7 @@ interface VercelResourceConnectionInputs {
 }
 
 /** Persisted state for the Vercel resource connection. */
-type VercelResourceConnectionOutputs = VercelResourceConnectionInputs;
+type ResourceConnectionOutputs = ResourceConnectionInputs;
 
 /** A single store-to-project connection as returned by the Vercel API. */
 interface StoreConnection {
@@ -50,7 +50,7 @@ interface StoreConnectionsResponse {
  * A 404 (store gone or not yet visible) reads as "no connection".
  */
 async function findConnection(
-	client: VercelClient,
+	client: Client,
 	storeId: string,
 	projectId: string,
 ): Promise<StoreConnection | undefined> {
@@ -67,7 +67,7 @@ async function findConnection(
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class VercelResourceConnectionProvider
+export class ResourceConnectionProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -76,9 +76,9 @@ export class VercelResourceConnectionProvider
 	 * a preview failure instead of a mid-apply GraphQL/HTTP error.
 	 */
 	async check(
-		_olds: VercelResourceConnectionInputs,
-		news: VercelResourceConnectionInputs,
-	): Promise<pulumi.dynamic.CheckResult<VercelResourceConnectionInputs>> {
+		_olds: ResourceConnectionInputs,
+		news: ResourceConnectionInputs,
+	): Promise<pulumi.dynamic.CheckResult<ResourceConnectionInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (
@@ -98,9 +98,9 @@ export class VercelResourceConnectionProvider
 	}
 
 	async create(
-		inputs: VercelResourceConnectionInputs,
+		inputs: ResourceConnectionInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new VercelClient(
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 			inputs.teamId,
 		);
@@ -138,9 +138,9 @@ export class VercelResourceConnectionProvider
 
 	async read(
 		id: string,
-		props: VercelResourceConnectionOutputs,
+		props: ResourceConnectionOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new VercelClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 			props.teamId,
 		);
@@ -162,14 +162,14 @@ export class VercelResourceConnectionProvider
 
 	async delete(): Promise<void> {
 		pulumi.log.warn(
-			"VercelResourceConnection deletion skipped — no public per-project disconnect endpoint; disconnect from the Vercel dashboard if intended",
+			"vercel.ResourceConnection deletion skipped — no public per-project disconnect endpoint; disconnect from the Vercel dashboard if intended",
 		);
 	}
 
 	async diff(
 		_id: string,
-		olds: VercelResourceConnectionOutputs,
-		news: VercelResourceConnectionInputs,
+		olds: ResourceConnectionOutputs,
+		news: ResourceConnectionInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -204,7 +204,7 @@ export class VercelResourceConnectionProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class VercelResourceConnectionResource extends pulumi.dynamic.Resource {
+class ResourceConnectionResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
@@ -219,7 +219,7 @@ class VercelResourceConnectionResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new VercelResourceConnectionProvider(),
+			new ResourceConnectionProvider(),
 			name,
 			{ ...args },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -228,22 +228,22 @@ class VercelResourceConnectionResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for VercelResourceConnection — replaces Pulumi's native `provider` field. */
-type VercelResourceConnectionOptions = Omit<
+/** Options type for ResourceConnection — replaces Pulumi's native `provider` field. */
+type ResourceConnectionOptions = Omit<
 	pulumi.ComponentResourceOptions,
 	"provider"
 > & {
 	/** Vercel authentication context. */
-	provider: VercelProvider;
+	provider: Provider;
 };
 
 /**
- * Args for {@link VercelResourceConnection}.
+ * Args for {@link ResourceConnection}.
  */
-export interface VercelResourceConnectionArgs {
+export interface ResourceConnectionArgs {
 	/**
 	 * The Vercel store ID of the provisioned marketplace resource (e.g. `"store_…"`).
-	 * Obtain this from {@link VercelMarketplaceResource.id}. Replaces on change.
+	 * Obtain this from {@link MarketplaceResource.id}. Replaces on change.
 	 */
 	storeId: pulumi.Input<string>;
 
@@ -277,31 +277,31 @@ export interface VercelResourceConnectionArgs {
  *
  * @example
  * ```typescript
- * const kvStore = new VercelMarketplaceResource("humanes-kv", {
+ * const kvStore = new vercel.MarketplaceResource("humanes-kv", {
  *   integrationConfigurationId: upstash.configurationId,
  *   name: "rby-humanes-kv",
  *   type: "upstash-kv",
  *   externalId: "rby-humanes-kv",
  * }, { provider });
  *
- * new VercelResourceConnection("humanes-kv-conn", {
+ * new vercel.ResourceConnection("humanes-kv-conn", {
  *   storeId: kvStore.id,
  *   projectId: humanesProject.id,
  *   targets: ["production", "preview"],
  * }, { provider });
  * ```
  */
-export class VercelResourceConnection extends pulumi.ComponentResource {
+export class ResourceConnection extends pulumi.ComponentResource {
 	constructor(
 		name: string,
-		args: VercelResourceConnectionArgs,
-		opts: VercelResourceConnectionOptions,
+		args: ResourceConnectionArgs,
+		opts: ResourceConnectionOptions,
 	) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:vercel:ResourceConnection", name, {}, pulumiOpts);
 
-		new VercelResourceConnectionResource(
+		new ResourceConnectionResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

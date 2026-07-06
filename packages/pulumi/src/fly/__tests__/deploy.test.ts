@@ -45,7 +45,7 @@ vi.mock("@pulumi/pulumi", () => ({
 }));
 
 import { DeploySandbox } from "../../sandbox";
-import { FlyDeploy } from "../deploy";
+import { Deploy } from "../deploy";
 
 const sandbox = new DeploySandbox("deploy-sandbox");
 
@@ -58,9 +58,9 @@ beforeEach(() => {
 	commandCalls.length = 0;
 });
 
-describe("FlyDeploy", () => {
+describe("fly.Deploy", () => {
 	it("writes fly.toml via setup and passes the token + toml content as env", () => {
-		new FlyDeploy(
+		new Deploy(
 			"api",
 			{
 				config: { app: "rby-api", primaryRegion: "iad" } as never,

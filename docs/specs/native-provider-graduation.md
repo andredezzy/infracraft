@@ -14,10 +14,10 @@ Every platform resource today is a `ComponentResource` wrapping an internal `pul
 
 | Platform | Dynamic resource leaves | Components (unaffected by graduation) |
 |---|---|---|
-| Railway | Project, Environment, Service, Variable, Domain, Volume, ProjectToken (7) | RailwayProvider, RailwayDeploy, deployment-monitor |
-| Neon | Project, Branch, Endpoint, Role, Database (5) | NeonProvider |
-| Vercel | Project, Variable, Domain, Integration, ResourceConnection, MarketplaceResource (6) | VercelProvider, VercelDeploy |
-| Fly | App, Secret, Volume, Certificate, Ip (5) | FlyProvider, FlyDeploy, toml |
+| Railway | Project, Environment, Service, Variable, Domain, Volume, ProjectToken (7) | railway.Provider, railway.Deploy, deployment-monitor |
+| Neon | Project, Branch, Endpoint, Role, Database (5) | neon.Provider |
+| Vercel | Project, Variable, Domain, Integration, ResourceConnection, MarketplaceResource (6) | vercel.Provider, vercel.Deploy |
+| Fly | App, Secret, Volume, Certificate, Ip (5) | fly.Provider, fly.Deploy, toml |
 
 23 dynamic resource types total. The deploy components (`@pulumi/command`-based), providers-as-credential-holders, `agents`, `git-guard`, `hash`, and `sandbox` never were dynamic resources — they stay SDK-side and are out of scope.
 
@@ -44,7 +44,7 @@ Verified against the **installed SDK, `@pulumi/pulumi` 3.243.0** (`node_modules/
 
 The official [Build a provider](https://www.pulumi.com/docs/iac/extending-pulumi/build-a-provider/) docs acknowledge this layer — "implement the gRPC interface directly in Python, Go, TypeScript, or any language with gRPC support" — but offer no TS framework; schema is hand-authored on this path.
 
-The method shapes are near-identical to `pulumi.dynamic.ResourceProvider` (the dynamic host is itself a Node provider built on this exact interface): the dynamic signatures just lack the `urn` parameter. Adapting `RailwayServiceResourceProvider` & co. is mechanical — the method bodies, the clients, and the tests survive unchanged.
+The method shapes are near-identical to `pulumi.dynamic.ResourceProvider` (the dynamic host is itself a Node provider built on this exact interface): the dynamic signatures just lack the `urn` parameter. Adapting `railway.ServiceResourceProvider` & co. is mechanical — the method bodies, the clients, and the tests survive unchanged.
 
 ### (c) pulumi-provider-boilerplate
 
@@ -84,7 +84,7 @@ Today every leaf carries `token` in its inputs *and* outputs (state), mitigated 
 Native resolution — split by framework:
 
 - **pulumi-go-provider:** fully solved: `infer.Config[T]` with `pulumi:"apiKey,secret"` fields makes credentials first-class provider-resource config (`pulumi:providers:infracraft`), encrypted once on the provider resource, never on leaves.
-- **TS path (recommended), as of `@pulumi/pulumi` 3.243.0:** provider config is **not plumbed through** to the TS `Provider` implementation (verified: `configure()` in `provider/server.js` discards the request's variables; `checkConfig`/`diffConfig` are `UNIMPLEMENTED`). Interim design: credentials stay **secret resource inputs** (exact status quo — already encrypted in state, zero regression), with **environment-variable fallback** (`RAILWAY_TOKEN`, `NEON_API_KEY`, `VERCEL_TOKEN`, `FLY_API_TOKEN`) read by the plugin process, which the consumer program can feed from Pulumi ESC `environmentVariables` — that path removes credentials from resource state entirely without waiting on upstream. Contributing `Provider.configure` support upstream is the tracked follow-up; when it lands, the SDK's `RailwayProvider` et al. flip from injecting token inputs to configuring a first-class provider instance, with no public API change (the options pattern already funnels `provider:` through `opts`).
+- **TS path (recommended), as of `@pulumi/pulumi` 3.243.0:** provider config is **not plumbed through** to the TS `Provider` implementation (verified: `configure()` in `provider/server.js` discards the request's variables; `checkConfig`/`diffConfig` are `UNIMPLEMENTED`). Interim design: credentials stay **secret resource inputs** (exact status quo — already encrypted in state, zero regression), with **environment-variable fallback** (`RAILWAY_TOKEN`, `NEON_API_KEY`, `VERCEL_TOKEN`, `FLY_API_TOKEN`) read by the plugin process, which the consumer program can feed from Pulumi ESC `environmentVariables` — that path removes credentials from resource state entirely without waiting on upstream. Contributing `Provider.configure` support upstream is the tracked follow-up; when it lands, the SDK's `railway.Provider` et al. flip from injecting token inputs to configuring a first-class provider instance, with no public API change (the options pattern already funnels `provider:` through `opts`).
 
 ### (d) Schema-driven previews/diffs
 
@@ -122,7 +122,7 @@ Per the [aliases docs](https://www.pulumi.com/docs/iac/concepts/options/aliases/
 The graduation changes exactly one URN component per leaf: the type. Name (`${name}-resource`) and parent (the wrapper component, whose own URN is untouched) stay identical. So the new native leaf reconstructs its old URN with a single field:
 
 ```typescript
-new RailwayServiceResource(`${name}-resource`, args, {
+new railway.ServiceResource(`${name}-resource`, args, {
   parent: this,
   aliases: [{ type: "pulumi-nodejs:dynamic:Resource" }],
 });
@@ -148,7 +148,7 @@ For each stack, staging before production, one platform phase at a time:
 1. **Backup:** `pulumi stack export --file pre-native-<stack>-<date>.json` (checked into the ops vault, not git).
 2. **Rehearsal:** create a scratch stack, `pulumi stack import` a copy of the exported state, point it at the new SDK version, run `pulumi preview --diff`. Gate: every graduating resource shows *update* or *same*; **zero** `replace`/`delete`. Previews call the native provider's `check`/`diff` without mutating the platform, so this rehearses the exact engine path against the real state shape, credential-free.
 3. **Staging up:** `pulumi up` on staging; verify resolve types in the summary; run the app-level smoke checks.
-4. **Soak:** one normal deploy cycle on staging (the mesh deploy path exercises Railway deploys, variables, domains end to end).
+4. **Soak:** one normal deploy cycle on staging (the main app's deploy path exercises Railway deploys, variables, domains end to end).
 5. **Production up:** same, with the backup from step 1 fresh.
 
 ### Rollback

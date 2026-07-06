@@ -3,18 +3,18 @@ import { fileURLToPath } from "node:url";
 import * as pulumi from "@pulumi/pulumi";
 
 import { createDeployCommand } from "../commands/deploy";
-import type { RailwayEnvironment } from "./environment";
-import type { RailwayProject } from "./project";
-import type { RailwayProvider } from "./provider";
-import { RailwayBuilder, type RailwayService } from "./service";
+import type { Environment } from "./environment";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
+import { Builder, type Service } from "./service";
 
-export interface RailwayDeployConfig {
-	builder?: RailwayBuilder;
+export interface DeployConfig {
+	builder?: Builder;
 	startCommand?: string;
 	preDeployCommand?: string;
 }
 
-export interface RailwayDeployArgs {
+export interface DeployArgs {
 	/** Redeploy triggers (e.g. source hashes, env hashes). */
 	triggers: pulumi.Input<pulumi.Input<string>[]>;
 	/** Paths excluded from the upload when running with `DeploySandbox` + `GitGuard`. */
@@ -26,11 +26,11 @@ export interface RailwayDeployArgs {
 	 * the deploy monitor once the deployment is live. Railway rejects
 	 * healthcheck fields on a fresh instance with no deployment ("Invalid
 	 * input"), so a code service's healthcheck can only land post-deploy —
-	 * pass it here (mirroring `RailwayServiceArgs.healthcheckPath`) and the
+	 * pass it here (mirroring `ServiceArgs.healthcheckPath`) and the
 	 * monitor applies it via `serviceInstanceUpdate`, failing loudly instead
 	 * of silently dropping it.
 	 *
-	 * This is the SAME Railway field `RailwayServiceArgs.healthcheckPath`
+	 * This is the SAME Railway field `ServiceArgs.healthcheckPath`
 	 * validates, just applied later (post-first-deploy): Railway rejects ANY
 	 * hyphen in the value with "Invalid input" (undocumented; proven by live
 	 * probe matrix 2026-07-06). A hyphenated value throws here at preview time.
@@ -42,15 +42,12 @@ export interface RailwayDeployArgs {
 	allowUnsandboxed?: boolean;
 }
 
-type RailwayDeployOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
-	provider: RailwayProvider;
-	project: RailwayProject;
-	environment: RailwayEnvironment;
-	service: RailwayService;
-	/** Environment-scoped Railway deploy token (provision via RailwayProjectToken). */
+type DeployOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+	provider: Provider;
+	project: Project;
+	environment: Environment;
+	service: Service;
+	/** Environment-scoped Railway deploy token (provision via ProjectToken). */
 	projectToken: pulumi.Input<string>;
 };
 
@@ -74,19 +71,15 @@ const MONITOR_BIN = fileURLToPath(
  *
  * @example
  * ```typescript
- * new RailwayDeploy("mesh", { triggers: [sourceHash], railpackConfig: { apt: ["libatomic1"] } },
+ * new railway.Deploy("api", { triggers: [sourceHash], railpackConfig: { apt: ["libatomic1"] } },
  *   { provider, project, environment, service, projectToken: token.token, dependsOn: [sandbox, gitGuard] });
  * ```
  */
-export class RailwayDeploy extends pulumi.ComponentResource {
+export class Deploy extends pulumi.ComponentResource {
 	/** The last http(s) URL token found in the deploy CLI's stdout (Railway service URL when emitted). */
 	public readonly deploymentUrl: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: RailwayDeployArgs,
-		opts: RailwayDeployOptions,
-	) {
+	constructor(name: string, args: DeployArgs, opts: DeployOptions) {
 		const {
 			provider,
 			project,

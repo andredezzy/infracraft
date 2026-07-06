@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { NeonBranchResourceProvider } from "../branch";
-import { NeonClient } from "../client";
+import { BranchResourceProvider } from "../branch";
+import { Client } from "../client";
 
-describe("NeonBranchResourceProvider", () => {
+describe("neon.BranchResourceProvider", () => {
 	let mockGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 
@@ -13,9 +13,9 @@ describe("NeonBranchResourceProvider", () => {
 		mockGet = vi.fn();
 		mockPost = vi.fn();
 		mockPatch = vi.fn();
-		vi.spyOn(NeonClient.prototype, "get").mockImplementation(mockGet);
-		vi.spyOn(NeonClient.prototype, "post").mockImplementation(mockPost);
-		vi.spyOn(NeonClient.prototype, "patch").mockImplementation(mockPatch);
+		vi.spyOn(Client.prototype, "get").mockImplementation(mockGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "patch").mockImplementation(mockPatch);
 	});
 
 	afterEach(() => {
@@ -27,7 +27,7 @@ describe("NeonBranchResourceProvider", () => {
 			mockGet.mockResolvedValue({ branches: [] });
 			mockPost.mockResolvedValue({ branch: { id: "br-new" } });
 
-			const provider = new NeonBranchResourceProvider();
+			const provider = new BranchResourceProvider();
 
 			const result = await provider.create({
 				apiKey: "key",
@@ -53,7 +53,7 @@ describe("NeonBranchResourceProvider", () => {
 
 			mockPost.mockResolvedValue({ branch: { id: "br-staging" } });
 
-			const provider = new NeonBranchResourceProvider();
+			const provider = new BranchResourceProvider();
 
 			const result = await provider.create({
 				apiKey: "key",
@@ -75,7 +75,7 @@ describe("NeonBranchResourceProvider", () => {
 				.mockResolvedValueOnce({ branches: [] }) // adopt check
 				.mockResolvedValueOnce({ branches: [] }); // parent lookup returns nothing
 
-			const provider = new NeonBranchResourceProvider();
+			const provider = new BranchResourceProvider();
 
 			await expect(
 				provider.create({
@@ -90,7 +90,7 @@ describe("NeonBranchResourceProvider", () => {
 
 	describe("diff", () => {
 		it("marks parent as replace when parentName changes", async () => {
-			const provider = new NeonBranchResourceProvider();
+			const provider = new BranchResourceProvider();
 
 			const result = await provider.diff(
 				"br-staging",
@@ -107,7 +107,7 @@ describe("NeonBranchResourceProvider", () => {
 		});
 
 		it("flags an in-place change (no replace) when only name changes", async () => {
-			const provider = new NeonBranchResourceProvider();
+			const provider = new BranchResourceProvider();
 
 			const result = await provider.diff(
 				"br-staging",
@@ -122,7 +122,7 @@ describe("NeonBranchResourceProvider", () => {
 
 	describe("update", () => {
 		it("PATCHes the branch name and agrees with diff's in-place case", async () => {
-			const provider = new NeonBranchResourceProvider();
+			const provider = new BranchResourceProvider();
 
 			const result = await provider.update(
 				"br-staging",
@@ -143,10 +143,7 @@ describe("NeonBranchResourceProvider", () => {
 		it("fails an empty branch name, naming the property", async () => {
 			const invalid = { apiKey: "key", projectId: "proj-abc", name: "  " };
 
-			const result = await new NeonBranchResourceProvider().check(
-				invalid,
-				invalid,
-			);
+			const result = await new BranchResourceProvider().check(invalid, invalid);
 
 			expect(result.failures).toHaveLength(1);
 			expect(result.failures?.[0].property).toBe("name");
@@ -160,7 +157,7 @@ describe("NeonBranchResourceProvider", () => {
 				branch: { id: "br-staging", name: "staging" },
 			});
 
-			const provider = new NeonBranchResourceProvider();
+			const provider = new BranchResourceProvider();
 
 			const result = await provider.read("br-staging", {
 				apiKey: "key",
@@ -185,9 +182,9 @@ describe("NeonBranchResourceProvider", () => {
 				},
 			});
 
-			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+			const mockDelete = vi.spyOn(Client.prototype, "delete");
 
-			await new NeonBranchResourceProvider().delete("br-main", {
+			await new BranchResourceProvider().delete("br-main", {
 				apiKey: "key",
 				projectId: "proj-abc",
 				name: "main",
@@ -207,10 +204,10 @@ describe("NeonBranchResourceProvider", () => {
 			});
 
 			const mockDelete = vi
-				.spyOn(NeonClient.prototype, "delete")
+				.spyOn(Client.prototype, "delete")
 				.mockResolvedValue(undefined);
 
-			await new NeonBranchResourceProvider().delete("br-feature", {
+			await new BranchResourceProvider().delete("br-feature", {
 				apiKey: "key",
 				projectId: "proj-abc",
 				name: "feature",
@@ -226,10 +223,10 @@ describe("NeonBranchResourceProvider", () => {
 				new ApiNotFoundError("neon", "/projects/proj-abc/branches/br-gone"),
 			);
 
-			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+			const mockDelete = vi.spyOn(Client.prototype, "delete");
 
 			await expect(
-				new NeonBranchResourceProvider().delete("br-gone", {
+				new BranchResourceProvider().delete("br-gone", {
 					apiKey: "key",
 					projectId: "proj-abc",
 					name: "gone",
@@ -243,7 +240,7 @@ describe("NeonBranchResourceProvider", () => {
 			mockGet.mockRejectedValueOnce(new Error("Neon API error (500): boom"));
 
 			await expect(
-				new NeonBranchResourceProvider().delete("br-feature", {
+				new BranchResourceProvider().delete("br-feature", {
 					apiKey: "key",
 					projectId: "proj-abc",
 					name: "feature",
@@ -261,12 +258,12 @@ describe("NeonBranchResourceProvider", () => {
 				},
 			});
 
-			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+			vi.spyOn(Client.prototype, "delete").mockRejectedValue(
 				new Error("Neon API error (403): forbidden"),
 			);
 
 			await expect(
-				new NeonBranchResourceProvider().delete("br-feature", {
+				new BranchResourceProvider().delete("br-feature", {
 					apiKey: "key",
 					projectId: "proj-abc",
 					name: "feature",

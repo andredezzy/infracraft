@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FlyClient } from "../client";
-import { FlyIpResourceProvider, FlyIpType } from "../ip";
+import { Client } from "../client";
+import { IpResourceProvider, IpType } from "../ip";
 
-describe("FlyIpResourceProvider", () => {
+describe("fly.IpResourceProvider", () => {
 	let mockGraphql: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockGraphql = vi.fn();
-		vi.spyOn(FlyClient.prototype, "graphql").mockImplementation(mockGraphql);
+		vi.spyOn(Client.prototype, "graphql").mockImplementation(mockGraphql);
 	});
 
 	afterEach(() => {
@@ -25,7 +25,7 @@ describe("FlyIpResourceProvider", () => {
 	const inputs = {
 		token: "tok",
 		appName: "my-app",
-		type: FlyIpType.V4,
+		type: IpType.V4,
 	};
 
 	const props = {
@@ -43,7 +43,7 @@ describe("FlyIpResourceProvider", () => {
 				]),
 			);
 
-			const result = await new FlyIpResourceProvider().create(inputs);
+			const result = await new IpResourceProvider().create(inputs);
 
 			expect(result.id).toBe("1.2.3.4");
 			expect(result.outs.ipAddressId).toBe("ip_1");
@@ -53,9 +53,9 @@ describe("FlyIpResourceProvider", () => {
 		it("adopts the app's shared IPv4 when one is already assigned", async () => {
 			mockGraphql.mockResolvedValueOnce(listResult([], "66.241.1.1"));
 
-			const result = await new FlyIpResourceProvider().create({
+			const result = await new IpResourceProvider().create({
 				...inputs,
-				type: FlyIpType.SHARED_V4,
+				type: IpType.SHARED_V4,
 			});
 
 			expect(result.id).toBe("66.241.1.1");
@@ -78,7 +78,7 @@ describe("FlyIpResourceProvider", () => {
 					},
 				});
 
-			const result = await new FlyIpResourceProvider().create({
+			const result = await new IpResourceProvider().create({
 				...inputs,
 				region: "iad",
 			});
@@ -103,9 +103,9 @@ describe("FlyIpResourceProvider", () => {
 				},
 			});
 
-			const result = await new FlyIpResourceProvider().create({
+			const result = await new IpResourceProvider().create({
 				...inputs,
-				type: FlyIpType.SHARED_V4,
+				type: IpType.SHARED_V4,
 			});
 
 			expect(result.id).toBe("66.241.2.2");
@@ -120,7 +120,7 @@ describe("FlyIpResourceProvider", () => {
 				},
 			});
 
-			await expect(new FlyIpResourceProvider().create(inputs)).rejects.toThrow(
+			await expect(new IpResourceProvider().create(inputs)).rejects.toThrow(
 				"returned no address",
 			);
 		});
@@ -134,7 +134,7 @@ describe("FlyIpResourceProvider", () => {
 				]),
 			);
 
-			const result = await new FlyIpResourceProvider().read("1.2.3.4", props);
+			const result = await new IpResourceProvider().read("1.2.3.4", props);
 
 			expect(result.id).toBe("1.2.3.4");
 			expect(result.props?.ipAddressId).toBe("ip_1");
@@ -143,7 +143,7 @@ describe("FlyIpResourceProvider", () => {
 		it("returns a blank result when the IP is gone (drift reconciled on refresh)", async () => {
 			mockGraphql.mockResolvedValueOnce(listResult([]));
 
-			const result = await new FlyIpResourceProvider().read("1.2.3.4", props);
+			const result = await new IpResourceProvider().read("1.2.3.4", props);
 
 			expect(result).toEqual({});
 		});
@@ -153,7 +153,7 @@ describe("FlyIpResourceProvider", () => {
 		it("releases by ipAddressId when present", async () => {
 			mockGraphql.mockResolvedValueOnce({});
 
-			await new FlyIpResourceProvider().delete("1.2.3.4", props);
+			await new IpResourceProvider().delete("1.2.3.4", props);
 
 			const [, variables] = mockGraphql.mock.calls[0];
 
@@ -166,9 +166,9 @@ describe("FlyIpResourceProvider", () => {
 		it("releases by address when the node ID is absent (shared_v4)", async () => {
 			mockGraphql.mockResolvedValueOnce({});
 
-			await new FlyIpResourceProvider().delete("66.241.1.1", {
+			await new IpResourceProvider().delete("66.241.1.1", {
 				...inputs,
-				type: FlyIpType.SHARED_V4,
+				type: IpType.SHARED_V4,
 				address: "66.241.1.1",
 			});
 
@@ -182,7 +182,7 @@ describe("FlyIpResourceProvider", () => {
 			);
 
 			await expect(
-				new FlyIpResourceProvider().delete("1.2.3.4", props),
+				new IpResourceProvider().delete("1.2.3.4", props),
 			).resolves.toBeUndefined();
 		});
 
@@ -192,14 +192,14 @@ describe("FlyIpResourceProvider", () => {
 			);
 
 			await expect(
-				new FlyIpResourceProvider().delete("1.2.3.4", props),
+				new IpResourceProvider().delete("1.2.3.4", props),
 			).rejects.toThrow("rate limited");
 		});
 	});
 
 	describe("diff", () => {
 		it("replaces on an appName change (delete-before-replace)", async () => {
-			const diff = await new FlyIpResourceProvider().diff("1.2.3.4", props, {
+			const diff = await new IpResourceProvider().diff("1.2.3.4", props, {
 				...props,
 				appName: "other-app",
 			});
@@ -210,16 +210,16 @@ describe("FlyIpResourceProvider", () => {
 		});
 
 		it("replaces on a type change", async () => {
-			const diff = await new FlyIpResourceProvider().diff("1.2.3.4", props, {
+			const diff = await new IpResourceProvider().diff("1.2.3.4", props, {
 				...props,
-				type: FlyIpType.V6,
+				type: IpType.V6,
 			});
 
 			expect(diff.replaces).toEqual(["type"]);
 		});
 
 		it("replaces on a region change", async () => {
-			const diff = await new FlyIpResourceProvider().diff("1.2.3.4", props, {
+			const diff = await new IpResourceProvider().diff("1.2.3.4", props, {
 				...props,
 				region: "fra",
 			});
@@ -228,11 +228,7 @@ describe("FlyIpResourceProvider", () => {
 		});
 
 		it("reports no changes when inputs are identical", async () => {
-			const diff = await new FlyIpResourceProvider().diff(
-				"1.2.3.4",
-				props,
-				props,
-			);
+			const diff = await new IpResourceProvider().diff("1.2.3.4", props, props);
 
 			expect(diff.changes).toBe(false);
 			expect(diff.replaces).toEqual([]);

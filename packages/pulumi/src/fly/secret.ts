@@ -2,16 +2,16 @@ import * as pulumi from "@pulumi/pulumi";
 
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
-import type { FlyApp } from "./app";
-import { FlyClient } from "./client";
-import type { FlyProvider } from "./provider";
+import type { App } from "./app";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Fly secret dynamic provider. */
-interface FlySecretInputs {
+interface SecretInputs {
 	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** App name the secrets belong to. */
@@ -22,7 +22,7 @@ interface FlySecretInputs {
 }
 
 /** Persisted state for Fly secrets. */
-interface FlySecretOutputs extends FlySecretInputs {
+interface SecretOutputs extends SecretInputs {
 	/** Fly secrets version (uint64, stored as string). Changes on every mutation. */
 	version: string;
 }
@@ -37,7 +37,7 @@ interface UpdateSecretsResponse {
  * deleted; keys with string values are set. Returns the new version as a string.
  */
 async function applySecrets(
-	client: FlyClient,
+	client: Client,
 	appName: string,
 	values: Record<string, string | null>,
 ): Promise<string> {
@@ -55,28 +55,26 @@ async function applySecrets(
  * Secret values are stored in state (required to diff them) and wrapped with
  * `pulumi.secret()` by the public resource so they are encrypted at rest.
  * Setting secrets only takes effect on the next machine restart — wire
- * `FlySecret.version` into `FlyDeploy.triggers` to force a redeploy on change.
+ * `Secret.version` into `Deploy.triggers` to force a redeploy on change.
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class FlySecretResourceProvider
-	implements pulumi.dynamic.ResourceProvider
-{
-	async create(inputs: FlySecretInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(
+export class SecretResourceProvider implements pulumi.dynamic.ResourceProvider {
+	async create(inputs: SecretInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
 		const version = await applySecrets(client, inputs.appName, inputs.secrets);
 
-		const outs: FlySecretOutputs = { ...inputs, version };
+		const outs: SecretOutputs = { ...inputs, version };
 
 		return { id: `${inputs.appName}-secrets`, outs };
 	}
 
 	async read(
 		id: string,
-		props: FlySecretOutputs,
+		props: SecretOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
 		// Values are write-only (the API returns digests, not plaintext), so we
 		// keep the desired state as the source of truth on refresh.
@@ -85,12 +83,10 @@ export class FlySecretResourceProvider
 
 	async update(
 		_id: string,
-		olds: FlySecretOutputs,
-		news: FlySecretInputs,
+		olds: SecretOutputs,
+		news: SecretInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new FlyClient(
-			resolveCredential(news.token, news.tokenEnvVar),
-		);
+		const client = new Client(resolveCredential(news.token, news.tokenEnvVar));
 
 		const values: Record<string, string | null> = { ...news.secrets };
 
@@ -105,8 +101,8 @@ export class FlySecretResourceProvider
 		return { outs: { ...news, version } };
 	}
 
-	async delete(_id: string, props: FlySecretOutputs): Promise<void> {
-		const client = new FlyClient(
+	async delete(_id: string, props: SecretOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -134,8 +130,8 @@ export class FlySecretResourceProvider
 
 	async diff(
 		_id: string,
-		olds: FlySecretOutputs,
-		news: FlySecretInputs,
+		olds: SecretOutputs,
+		news: SecretInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -159,7 +155,7 @@ export class FlySecretResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class FlySecretResource extends pulumi.dynamic.Resource {
+class SecretResource extends pulumi.dynamic.Resource {
 	public declare readonly version: pulumi.Output<string>;
 
 	constructor(
@@ -173,7 +169,7 @@ class FlySecretResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new FlySecretResourceProvider(),
+			new SecretResourceProvider(),
 			name,
 			{ ...args, version: undefined },
 			// The API token AND the secret values themselves flow into dynamic-provider
@@ -183,17 +179,17 @@ class FlySecretResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for FlySecret. */
-type FlySecretOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for Secret. */
+type SecretOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Fly authentication context. */
-	provider: FlyProvider;
+	provider: Provider;
 
 	/** App the secrets belong to. */
-	app: FlyApp;
+	app: App;
 };
 
-/** Args for FlySecret. */
-export interface FlySecretArgs {
+/** Args for Secret. */
+export interface SecretArgs {
 	/**
 	 * Secret key/value pairs to set on the app.
 	 * Maps to the bulk secrets endpoint's `values` map (where a `null` value deletes a key).
@@ -205,25 +201,25 @@ export interface FlySecretArgs {
  * Manages an app's Fly secrets as a single resource.
  *
  * Exposes `.version`, which changes only when the secret set changes — feed it
- * into `FlyDeploy.triggers` so a redeploy fires when secrets change.
+ * into `Deploy.triggers` so a redeploy fires when secrets change.
  *
  * @example
  * ```typescript
- * const secrets = new FlySecret("api-secrets", {
+ * const secrets = new fly.Secret("api-secrets", {
  *   secrets: { JWT_SECRET: jwt, DATABASE_URL: dbUrl },
  * }, { provider, app });
  * ```
  */
-export class FlySecret extends pulumi.ComponentResource {
+export class Secret extends pulumi.ComponentResource {
 	/** Fly secrets version. Changes only when the secret set changes. */
 	public readonly version: pulumi.Output<string>;
 
-	constructor(name: string, args: FlySecretArgs, opts: FlySecretOptions) {
+	constructor(name: string, args: SecretArgs, opts: SecretOptions) {
 		const { provider, app, ...pulumiOpts } = opts;
 
 		super("infracraft:fly:Secret", name, {}, pulumiOpts);
 
-		const resource = new FlySecretResource(
+		const resource = new SecretResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

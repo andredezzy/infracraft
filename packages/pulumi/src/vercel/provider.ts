@@ -2,14 +2,14 @@ import * as pulumi from "@pulumi/pulumi";
 import { ensurePulumiVersionMatch } from "../preflight/assert-pulumi-version-match";
 
 /**
- * Args for VercelProvider. Exactly one of `token` and `tokenEnvVar` must be set.
+ * Args for Provider. Exactly one of `token` and `tokenEnvVar` must be set.
  *
  * Neither `token` nor `tokenEnvVar` is ever compared in any Vercel resource's
  * `diff()` — rotating the credential (or switching between the two forms)
  * never triggers a replace or an in-place update on its own; it only changes
  * which credential the next operation authenticates with.
  */
-export interface VercelProviderArgs {
+export interface ProviderArgs {
 	/** Vercel API bearer token. Mutually exclusive with `tokenEnvVar`. */
 	token?: pulumi.Input<string>;
 
@@ -33,24 +33,24 @@ export interface VercelProviderArgs {
 /**
  * Holds Vercel authentication context for resource constructors.
  *
- * Pass a `VercelProvider` instance via the `provider` option on Vercel resources
+ * Pass a `Provider` instance via the `provider` option on Vercel resources
  * instead of passing `token` and `teamId` everywhere explicitly.
  *
  * @example
  * ```typescript
- * const provider = new VercelProvider("vercel", {
+ * const provider = new vercel.Provider("vercel", {
  *   tokenEnvVar: "VERCEL_TOKEN",
  *   // or: token: config.requireSecret("vercelToken"),
  *   teamId: "team_xxx",
  * });
  *
- * new VercelDeploy("deploy", {
+ * new vercel.Deploy("deploy", {
  *   projectId: "...",
  *   triggers: [sourceHash],
  * }, { provider });
  * ```
  */
-export class VercelProvider extends pulumi.ComponentResource {
+export class Provider extends pulumi.ComponentResource {
 	/** Vercel API bearer token (secret). Set only when configured via `token`. */
 	public readonly token?: pulumi.Output<string>;
 
@@ -62,7 +62,7 @@ export class VercelProvider extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: VercelProviderArgs,
+		args: ProviderArgs,
 		opts?: pulumi.ComponentResourceOptions,
 	) {
 		super("infracraft:vercel:Provider", name, {}, opts);
@@ -71,7 +71,7 @@ export class VercelProvider extends pulumi.ComponentResource {
 
 		if ((args.token === undefined) === (args.tokenEnvVar === undefined)) {
 			throw new Error(
-				"VercelProvider requires exactly one of `token` or `tokenEnvVar`",
+				"vercel.Provider requires exactly one of `token` or `tokenEnvVar`",
 			);
 		}
 

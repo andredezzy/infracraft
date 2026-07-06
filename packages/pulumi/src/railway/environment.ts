@@ -2,16 +2,16 @@ import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
-import { RailwayClient } from "./client";
-import type { RailwayProject } from "./project";
-import type { RailwayProvider } from "./provider";
+import { Client } from "./client";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Railway environment dynamic provider. */
-interface RailwayEnvironmentInputs {
+interface EnvironmentInputs {
 	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
@@ -25,7 +25,7 @@ interface RailwayEnvironmentInputs {
 }
 
 /** Persisted state for the Railway environment. */
-interface RailwayEnvironmentOutputs extends RailwayEnvironmentInputs {
+interface EnvironmentOutputs extends EnvironmentInputs {
 	/** Railway-assigned environment UUID. */
 	environmentId: string;
 }
@@ -62,7 +62,7 @@ const PROJECT_ENVIRONMENTS_QUERY = `
  * Queries a project's environments and resolves the ID for the given name.
  */
 async function findEnvironmentId(
-	client: RailwayClient,
+	client: Client,
 	projectId: string,
 	name: string,
 ): Promise<string | undefined> {
@@ -86,7 +86,7 @@ async function findEnvironmentId(
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class RailwayEnvironmentResourceProvider
+export class EnvironmentResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -94,9 +94,9 @@ export class RailwayEnvironmentResourceProvider
 	 * fail deep inside the Railway API call — and never match on the adopt lookup.
 	 */
 	async check(
-		_olds: RailwayEnvironmentInputs,
-		news: RailwayEnvironmentInputs,
-	): Promise<pulumi.dynamic.CheckResult<RailwayEnvironmentInputs>> {
+		_olds: EnvironmentInputs,
+		news: EnvironmentInputs,
+	): Promise<pulumi.dynamic.CheckResult<EnvironmentInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (isResolvedString(news.name) && news.name.trim().length === 0) {
@@ -118,9 +118,9 @@ export class RailwayEnvironmentResourceProvider
 	 * @throws {Error} When `source` is provided but cannot be resolved to an environment ID.
 	 */
 	async create(
-		inputs: RailwayEnvironmentInputs,
+		inputs: EnvironmentInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -158,7 +158,7 @@ export class RailwayEnvironmentResourceProvider
 					projectId: inputs.projectId,
 					name: inputs.name,
 					// skipInitialDeploys: hold deploys so a forked env doesn't run with inherited
-					// source/production variables before our RailwayVariable resources overwrite them.
+					// source/production variables before our Variable resources overwrite them.
 					skipInitialDeploys: true,
 					...(sourceEnvironmentId ? { sourceEnvironmentId } : {}),
 				},
@@ -171,16 +171,16 @@ export class RailwayEnvironmentResourceProvider
 			);
 		}
 
-		const outs: RailwayEnvironmentOutputs = { ...inputs, environmentId };
+		const outs: EnvironmentOutputs = { ...inputs, environmentId };
 
 		return { id: environmentId, outs };
 	}
 
 	async read(
 		_id: string,
-		props: RailwayEnvironmentOutputs,
+		props: EnvironmentOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -203,8 +203,8 @@ export class RailwayEnvironmentResourceProvider
 	 * Protection of the shared production environment is the consumer's responsibility
 	 * via the `protect` resource option, not provider logic.
 	 */
-	async delete(_id: string, props: RailwayEnvironmentOutputs): Promise<void> {
-		const client = new RailwayClient(
+	async delete(_id: string, props: EnvironmentOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -230,8 +230,8 @@ export class RailwayEnvironmentResourceProvider
 
 	async diff(
 		_id: string,
-		olds: RailwayEnvironmentOutputs,
-		news: RailwayEnvironmentInputs,
+		olds: EnvironmentOutputs,
+		news: EnvironmentInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -252,7 +252,7 @@ export class RailwayEnvironmentResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class RailwayEnvironmentResource extends pulumi.dynamic.Resource {
+class EnvironmentResource extends pulumi.dynamic.Resource {
 	public declare readonly environmentId: pulumi.Output<string>;
 
 	constructor(
@@ -267,7 +267,7 @@ class RailwayEnvironmentResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayEnvironmentResourceProvider(),
+			new EnvironmentResourceProvider(),
 			name,
 			{
 				...args,
@@ -279,20 +279,17 @@ class RailwayEnvironmentResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for RailwayEnvironment — replaces Pulumi's native `provider` field. */
-type RailwayEnvironmentOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Environment — replaces Pulumi's native `provider` field. */
+type EnvironmentOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Railway authentication context. */
-	provider: RailwayProvider;
+	provider: Provider;
 
 	/** Railway project context to resolve the environment from. */
-	project: RailwayProject;
+	project: Project;
 };
 
-/** Args for RailwayEnvironment. */
-export interface RailwayEnvironmentArgs {
+/** Args for Environment. */
+export interface EnvironmentArgs {
 	/** Environment display name (e.g. `"production"`, `"staging"`). */
 	name: pulumi.Input<string>;
 
@@ -315,36 +312,32 @@ export interface RailwayEnvironmentArgs {
  * @example
  * ```typescript
  * // Adopt or create "production" (no source)
- * const production = new RailwayEnvironment("production", {
+ * const production = new railway.Environment("production", {
  *   name: "production",
  * }, { provider, project });
  *
  * // Adopt or create "staging", forked from "production"
- * const staging = new RailwayEnvironment("staging", {
+ * const staging = new railway.Environment("staging", {
  *   name: "staging",
  *   source: "production",
  * }, { provider, project });
  *
  * // Use environmentId downstream
- * const service = new RailwayService("api", { name: "api" }, {
+ * const service = new railway.Service("api", { name: "api" }, {
  *   provider, project, environment: staging,
  * });
  * ```
  */
-export class RailwayEnvironment extends pulumi.ComponentResource {
+export class Environment extends pulumi.ComponentResource {
 	/** Railway environment UUID. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: RailwayEnvironmentArgs,
-		opts: RailwayEnvironmentOptions,
-	) {
+	constructor(name: string, args: EnvironmentArgs, opts: EnvironmentOptions) {
 		const { provider, project, ...pulumiOpts } = opts;
 
 		super("infracraft:railway:Environment", name, {}, pulumiOpts);
 
-		const resource = new RailwayEnvironmentResource(
+		const resource = new EnvironmentResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

@@ -1,16 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { NeonClient } from "../client";
-import { NeonProjectResourceProvider } from "../project";
+import { Client } from "../client";
+import { ProjectResourceProvider } from "../project";
 
-describe("NeonProjectResourceProvider", () => {
+describe("neon.ProjectResourceProvider", () => {
 	let mockGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockGet = vi.fn();
 		mockPost = vi.fn();
-		vi.spyOn(NeonClient.prototype, "get").mockImplementation(mockGet);
-		vi.spyOn(NeonClient.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "get").mockImplementation(mockGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
 	});
 
 	afterEach(() => {
@@ -21,7 +21,7 @@ describe("NeonProjectResourceProvider", () => {
 		it("fails an empty project name, naming the property", async () => {
 			const invalid = { apiKey: "key", name: "  " };
 
-			const result = await new NeonProjectResourceProvider().check(
+			const result = await new ProjectResourceProvider().check(
 				invalid,
 				invalid,
 			);
@@ -38,7 +38,7 @@ describe("NeonProjectResourceProvider", () => {
 				projects: [{ id: "proj-existing", name: "my-app" }],
 			});
 
-			const result = await new NeonProjectResourceProvider().create({
+			const result = await new ProjectResourceProvider().create({
 				apiKey: "key",
 				name: "my-app",
 			});
@@ -54,7 +54,7 @@ describe("NeonProjectResourceProvider", () => {
 				project: { id: "proj-new", name: "my-app" },
 			});
 
-			const result = await new NeonProjectResourceProvider().create({
+			const result = await new ProjectResourceProvider().create({
 				apiKey: "key",
 				name: "my-app",
 			});
@@ -73,7 +73,7 @@ describe("NeonProjectResourceProvider", () => {
 				project: { id: "proj-new", name: "my-app" },
 			});
 
-			await new NeonProjectResourceProvider().create({
+			await new ProjectResourceProvider().create({
 				apiKey: "key",
 				name: "my-app",
 			});
@@ -94,7 +94,7 @@ describe("NeonProjectResourceProvider", () => {
 					projects: [{ id: "proj-existing", name: "my-app" }],
 				});
 
-			const result = await new NeonProjectResourceProvider().create({
+			const result = await new ProjectResourceProvider().create({
 				apiKey: "key",
 				name: "my-app",
 			});
@@ -118,7 +118,7 @@ describe("NeonProjectResourceProvider", () => {
 				project: { id: "proj-new", name: "my-app" },
 			});
 
-			const result = await new NeonProjectResourceProvider().create({
+			const result = await new ProjectResourceProvider().create({
 				apiKey: "key",
 				name: "my-app",
 			});
@@ -131,10 +131,10 @@ describe("NeonProjectResourceProvider", () => {
 	describe("update", () => {
 		it("PATCHes the project name", async () => {
 			const mockPatch = vi
-				.spyOn(NeonClient.prototype, "patch")
+				.spyOn(Client.prototype, "patch")
 				.mockResolvedValue({});
 
-			const result = await new NeonProjectResourceProvider().update(
+			const result = await new ProjectResourceProvider().update(
 				"proj-abc",
 				{ apiKey: "key", name: "old-name", projectId: "proj-abc" },
 				{ apiKey: "key", name: "new-name" },
@@ -151,7 +151,7 @@ describe("NeonProjectResourceProvider", () => {
 	describe("delete", () => {
 		it("is a no-op — projects are not deleted by Pulumi", async () => {
 			await expect(
-				new NeonProjectResourceProvider().delete(),
+				new ProjectResourceProvider().delete(),
 			).resolves.toBeUndefined();
 
 			expect(mockGet).not.toHaveBeenCalled();
@@ -160,7 +160,7 @@ describe("NeonProjectResourceProvider", () => {
 
 	describe("diff", () => {
 		it("flags an in-place change (no replace) when the name changes", async () => {
-			const result = await new NeonProjectResourceProvider().diff(
+			const result = await new ProjectResourceProvider().diff(
 				"proj-abc",
 				{ apiKey: "key", name: "old-name", projectId: "proj-abc" },
 				{ apiKey: "key", name: "new-name" },
@@ -171,7 +171,7 @@ describe("NeonProjectResourceProvider", () => {
 		});
 
 		it("marks orgId as replace", async () => {
-			const result = await new NeonProjectResourceProvider().diff(
+			const result = await new ProjectResourceProvider().diff(
 				"proj-abc",
 				{
 					apiKey: "key",

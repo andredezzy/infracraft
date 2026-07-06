@@ -18,11 +18,11 @@ interface GraphQLResponse<T> {
  *
  * @example
  * ```typescript
- * const client = new FlyClient(token);
+ * const client = new fly.Client(token);
  * const app = await client.tryGet<{ name: string }>("/v1/apps/my-app");
  * ```
  */
-export class FlyClient {
+export class Client {
 	/** Fly API token used for both REST and GraphQL auth. */
 	private readonly token: string;
 

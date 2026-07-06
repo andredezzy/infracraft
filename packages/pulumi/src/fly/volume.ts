@@ -2,16 +2,16 @@ import * as pulumi from "@pulumi/pulumi";
 
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
-import type { FlyApp } from "./app";
-import { FlyClient } from "./client";
-import type { FlyProvider } from "./provider";
+import type { App } from "./app";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Fly volume dynamic provider. */
-interface FlyVolumeInputs {
+interface VolumeInputs {
 	/** Fly API token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `FlyProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** App name the volume belongs to. */
@@ -28,13 +28,13 @@ interface FlyVolumeInputs {
 }
 
 /** Persisted state for the Fly volume. */
-interface FlyVolumeOutputs extends FlyVolumeInputs {
+interface VolumeOutputs extends VolumeInputs {
 	/** Fly-assigned volume ID (`vol_…`). */
 	volumeId: string;
 }
 
 /** Volume response (only the fields we read). */
-interface FlyVolumeResponse {
+interface VolumeResponse {
 	id: string;
 	name: string;
 	state: string;
@@ -50,9 +50,7 @@ interface FlyVolumeResponse {
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class FlyVolumeResourceProvider
-	implements pulumi.dynamic.ResourceProvider
-{
+export class VolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
 	/**
 	 * Validates inputs at plan time. A non-positive or fractional `sizeGb`
 	 * would otherwise fail deep inside the volumes API with an opaque error.
@@ -60,9 +58,9 @@ export class FlyVolumeResourceProvider
 	 * `typeof` guard skips it.
 	 */
 	async check(
-		_olds: FlyVolumeInputs,
-		news: FlyVolumeInputs,
-	): Promise<pulumi.dynamic.CheckResult<FlyVolumeInputs>> {
+		_olds: VolumeInputs,
+		news: VolumeInputs,
+	): Promise<pulumi.dynamic.CheckResult<VolumeInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (
@@ -78,12 +76,12 @@ export class FlyVolumeResourceProvider
 		return { inputs: news, failures };
 	}
 
-	async create(inputs: FlyVolumeInputs): Promise<pulumi.dynamic.CreateResult> {
-		const client = new FlyClient(
+	async create(inputs: VolumeInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
-		const volumes = await client.get<FlyVolumeResponse[]>(
+		const volumes = await client.get<VolumeResponse[]>(
 			`/v1/apps/${inputs.appName}/volumes`,
 		);
 
@@ -100,7 +98,7 @@ export class FlyVolumeResourceProvider
 			// moves or resizes the volume, so writing the desired values here
 			// would make Pulumi believe an unapplied change already landed,
 			// masking real drift on the very next diff.
-			const outs: FlyVolumeOutputs = {
+			const outs: VolumeOutputs = {
 				...inputs,
 				region: existing.region,
 				sizeGb: existing.size_gb,
@@ -110,7 +108,7 @@ export class FlyVolumeResourceProvider
 			return { id: existing.id, outs };
 		}
 
-		const created = await client.post<FlyVolumeResponse>(
+		const created = await client.post<VolumeResponse>(
 			`/v1/apps/${inputs.appName}/volumes`,
 			{
 				name: inputs.name,
@@ -120,20 +118,20 @@ export class FlyVolumeResourceProvider
 			},
 		);
 
-		const outs: FlyVolumeOutputs = { ...inputs, volumeId: created.id };
+		const outs: VolumeOutputs = { ...inputs, volumeId: created.id };
 
 		return { id: created.id, outs };
 	}
 
 	async read(
 		id: string,
-		props: FlyVolumeOutputs,
+		props: VolumeOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new FlyClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
-		const volume = await client.tryGet<FlyVolumeResponse>(
+		const volume = await client.tryGet<VolumeResponse>(
 			`/v1/apps/${props.appName}/volumes/${id}`,
 		);
 
@@ -155,11 +153,11 @@ export class FlyVolumeResourceProvider
 
 	async update(
 		id: string,
-		olds: FlyVolumeOutputs,
-		news: FlyVolumeInputs,
+		olds: VolumeOutputs,
+		news: VolumeInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
 		if (news.sizeGb > olds.sizeGb) {
-			const client = new FlyClient(
+			const client = new Client(
 				resolveCredential(news.token, news.tokenEnvVar),
 			);
 
@@ -171,8 +169,8 @@ export class FlyVolumeResourceProvider
 		return { outs: { ...news, volumeId: id } };
 	}
 
-	async delete(id: string, props: FlyVolumeOutputs): Promise<void> {
-		const client = new FlyClient(
+	async delete(id: string, props: VolumeOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -192,8 +190,8 @@ export class FlyVolumeResourceProvider
 
 	async diff(
 		_id: string,
-		olds: FlyVolumeOutputs,
-		news: FlyVolumeInputs,
+		olds: VolumeOutputs,
+		news: VolumeInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -227,7 +225,7 @@ export class FlyVolumeResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class FlyVolumeResource extends pulumi.dynamic.Resource {
+class VolumeResource extends pulumi.dynamic.Resource {
 	public declare readonly volumeId: pulumi.Output<string>;
 
 	constructor(
@@ -243,7 +241,7 @@ class FlyVolumeResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new FlyVolumeResourceProvider(),
+			new VolumeResourceProvider(),
 			name,
 			{ ...args, volumeId: undefined },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -252,17 +250,17 @@ class FlyVolumeResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for FlyVolume. */
-type FlyVolumeOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for Volume. */
+type VolumeOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Fly authentication context. */
-	provider: FlyProvider;
+	provider: Provider;
 
 	/** App the volume belongs to. */
-	app: FlyApp;
+	app: App;
 };
 
-/** Args for FlyVolume. */
-export interface FlyVolumeArgs {
+/** Args for Volume. */
+export interface VolumeArgs {
 	/** Volume name. */
 	name: pulumi.Input<string>;
 
@@ -281,23 +279,23 @@ export interface FlyVolumeArgs {
  *
  * @example
  * ```typescript
- * const volume = new FlyVolume("api-data", {
+ * const volume = new fly.Volume("api-data", {
  *   name: "data",
  *   region: "iad",
  *   sizeGb: 10,
  * }, { provider, app });
  * ```
  */
-export class FlyVolume extends pulumi.ComponentResource {
+export class Volume extends pulumi.ComponentResource {
 	/** Fly-assigned volume ID. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(name: string, args: FlyVolumeArgs, opts: FlyVolumeOptions) {
+	constructor(name: string, args: VolumeArgs, opts: VolumeOptions) {
 		const { provider, app, ...pulumiOpts } = opts;
 
 		super("infracraft:fly:Volume", name, {}, pulumiOpts);
 
-		const resource = new FlyVolumeResource(
+		const resource = new VolumeResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

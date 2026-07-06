@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { NeonBranchResourceProvider } from "../branch";
-import { NeonClient } from "../client";
-import { NeonEndpointResourceProvider } from "../endpoint";
-import { NeonRoleResourceProvider } from "../role";
+import { BranchResourceProvider } from "../branch";
+import { Client } from "../client";
+import { EndpointResourceProvider } from "../endpoint";
+import { RoleResourceProvider } from "../role";
 
 /**
  * LIVE integration test for the Neon role provider, on a throwaway copy-on-write
@@ -22,7 +22,7 @@ import { NeonRoleResourceProvider } from "../role";
  */
 
 /** Fully-resolved live-test configuration; only present when the tier is enabled. */
-interface NeonLiveConfig {
+interface LiveConfig {
 	/** Neon API key (account- or project-scoped). */
 	apiKey: string;
 
@@ -31,7 +31,7 @@ interface NeonLiveConfig {
 }
 
 /** Reads the live-test config, or `null` when the tier is disabled or any credential is missing. */
-function readLiveConfig(): NeonLiveConfig | null {
+function readLiveConfig(): LiveConfig | null {
 	if (process.env.INFRACRAFT_LIVE_TEST !== "1") {
 		return null;
 	}
@@ -58,14 +58,14 @@ interface RoleListResponse {
 
 const config = readLiveConfig();
 
-describe.skipIf(!config)("NeonRole (live integration)", () => {
+describe.skipIf(!config)("neon.Role (live integration)", () => {
 	// Guarded by skipIf: whenever a hook or test body below runs, `config` is non-null.
-	const live = config as NeonLiveConfig;
+	const live = config as LiveConfig;
 
-	const client = new NeonClient(config?.apiKey ?? "");
-	const branchProvider = new NeonBranchResourceProvider();
-	const endpointProvider = new NeonEndpointResourceProvider();
-	const roleProvider = new NeonRoleResourceProvider();
+	const client = new Client(config?.apiKey ?? "");
+	const branchProvider = new BranchResourceProvider();
+	const endpointProvider = new EndpointResourceProvider();
+	const roleProvider = new RoleResourceProvider();
 
 	/** A throwaway branch that carries every role created here; deleted in afterAll. */
 	let branchId = "";

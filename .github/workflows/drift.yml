@@ -1,7 +1,7 @@
 name: Type drift
 
 # Detects when an upstream provider adds/removes a value that our hand-curated
-# closed-set types (e.g. FlyVmSize, RailwayBuilder, VercelFramework) should
+# closed-set types (e.g. fly.VmSize, railway.Builder) should
 # track. It hits live upstreams, so it runs on a schedule rather than blocking
 # PRs — a failure means a maintainer should update the relevant `*_VALUES`
 # const (see `bun run test:drift`).

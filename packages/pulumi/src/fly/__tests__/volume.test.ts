@@ -1,10 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { FlyClient } from "../client";
-import { FlyVolumeResourceProvider } from "../volume";
+import { Client } from "../client";
+import { VolumeResourceProvider } from "../volume";
 
-describe("FlyVolumeResourceProvider", () => {
+describe("fly.VolumeResourceProvider", () => {
 	let mockGet: ReturnType<typeof vi.fn>;
 	let mockTryGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
@@ -15,10 +15,10 @@ describe("FlyVolumeResourceProvider", () => {
 		mockTryGet = vi.fn();
 		mockPost = vi.fn();
 		mockDelete = vi.fn();
-		vi.spyOn(FlyClient.prototype, "get").mockImplementation(mockGet);
-		vi.spyOn(FlyClient.prototype, "tryGet").mockImplementation(mockTryGet);
-		vi.spyOn(FlyClient.prototype, "post").mockImplementation(mockPost);
-		vi.spyOn(FlyClient.prototype, "delete").mockImplementation(mockDelete);
+		vi.spyOn(Client.prototype, "get").mockImplementation(mockGet);
+		vi.spyOn(Client.prototype, "tryGet").mockImplementation(mockTryGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "delete").mockImplementation(mockDelete);
 	});
 
 	afterEach(() => {
@@ -50,7 +50,7 @@ describe("FlyVolumeResourceProvider", () => {
 				{ id: "vol_other", name: "cache", state: "created" },
 			]);
 
-			const result = await new FlyVolumeResourceProvider().create(inputs);
+			const result = await new VolumeResourceProvider().create(inputs);
 
 			expect(result.id).toBe("vol_live");
 			expect(result.outs.volumeId).toBe("vol_live");
@@ -63,7 +63,7 @@ describe("FlyVolumeResourceProvider", () => {
 			mockGet.mockResolvedValueOnce([]);
 			mockPost.mockResolvedValueOnce({ id: "vol_new" });
 
-			const result = await new FlyVolumeResourceProvider().create(inputs);
+			const result = await new VolumeResourceProvider().create(inputs);
 
 			expect(result.id).toBe("vol_new");
 
@@ -80,10 +80,7 @@ describe("FlyVolumeResourceProvider", () => {
 		it("returns a blank ReadResult when the volume is gone (deleted out of band)", async () => {
 			mockTryGet.mockResolvedValueOnce(null);
 
-			const result = await new FlyVolumeResourceProvider().read(
-				"vol_123",
-				props,
-			);
+			const result = await new VolumeResourceProvider().read("vol_123", props);
 
 			expect(result).toEqual({});
 		});
@@ -93,7 +90,7 @@ describe("FlyVolumeResourceProvider", () => {
 		it("deletes the volume via the volumes API", async () => {
 			mockDelete.mockResolvedValueOnce(undefined);
 
-			await new FlyVolumeResourceProvider().delete("vol_123", props);
+			await new VolumeResourceProvider().delete("vol_123", props);
 
 			expect(mockDelete).toHaveBeenCalledWith(
 				"/v1/apps/my-app/volumes/vol_123",
@@ -106,7 +103,7 @@ describe("FlyVolumeResourceProvider", () => {
 			);
 
 			await expect(
-				new FlyVolumeResourceProvider().delete("vol_123", props),
+				new VolumeResourceProvider().delete("vol_123", props),
 			).resolves.toBeUndefined();
 		});
 
@@ -116,7 +113,7 @@ describe("FlyVolumeResourceProvider", () => {
 			);
 
 			await expect(
-				new FlyVolumeResourceProvider().delete("vol_123", props),
+				new VolumeResourceProvider().delete("vol_123", props),
 			).rejects.toThrow("403");
 		});
 	});
@@ -125,10 +122,7 @@ describe("FlyVolumeResourceProvider", () => {
 		const { volumeId: _ignored, ...inputs } = props;
 
 		it("passes a positive integer sizeGb through untouched", async () => {
-			const result = await new FlyVolumeResourceProvider().check(
-				inputs,
-				inputs,
-			);
+			const result = await new VolumeResourceProvider().check(inputs, inputs);
 
 			expect(result.inputs).toEqual(inputs);
 			expect(result.failures).toEqual([]);
@@ -137,10 +131,7 @@ describe("FlyVolumeResourceProvider", () => {
 		it("fails a non-positive sizeGb, naming the property", async () => {
 			const invalid = { ...inputs, sizeGb: 0 };
 
-			const result = await new FlyVolumeResourceProvider().check(
-				invalid,
-				invalid,
-			);
+			const result = await new VolumeResourceProvider().check(invalid, invalid);
 
 			expect(result.failures).toHaveLength(1);
 			expect(result.failures?.[0].property).toBe("sizeGb");
@@ -150,10 +141,7 @@ describe("FlyVolumeResourceProvider", () => {
 		it("fails a fractional sizeGb", async () => {
 			const invalid = { ...inputs, sizeGb: 1.5 };
 
-			const result = await new FlyVolumeResourceProvider().check(
-				invalid,
-				invalid,
-			);
+			const result = await new VolumeResourceProvider().check(invalid, invalid);
 
 			expect(result.failures).toHaveLength(1);
 			expect(result.failures?.[0].property).toBe("sizeGb");
@@ -162,11 +150,10 @@ describe("FlyVolumeResourceProvider", () => {
 
 	describe("diff (stables)", () => {
 		it("declares volumeId stable on an in-place extend", async () => {
-			const diff = await new FlyVolumeResourceProvider().diff(
-				"vol_123",
-				props,
-				{ ...props, sizeGb: 20 },
-			);
+			const diff = await new VolumeResourceProvider().diff("vol_123", props, {
+				...props,
+				sizeGb: 20,
+			});
 
 			expect(diff.changes).toBe(true);
 			expect(diff.replaces).toEqual([]);
@@ -174,11 +161,10 @@ describe("FlyVolumeResourceProvider", () => {
 		});
 
 		it("declares no stables when a region change forces a replace", async () => {
-			const diff = await new FlyVolumeResourceProvider().diff(
-				"vol_123",
-				props,
-				{ ...props, region: "fra" },
-			);
+			const diff = await new VolumeResourceProvider().diff("vol_123", props, {
+				...props,
+				region: "fra",
+			});
 
 			expect(diff.replaces).toEqual(["region"]);
 			expect(diff.stables).toEqual([]);

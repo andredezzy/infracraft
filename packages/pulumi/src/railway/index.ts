@@ -1,23 +1,23 @@
-export { RailwayClient } from "./client";
-export type { RailwayDeployArgs, RailwayDeployConfig } from "./deploy";
-export { RailwayDeploy } from "./deploy";
-export type { RailwayDomainArgs } from "./domain";
-export { RailwayDomain } from "./domain";
-export type { RailwayEnvironmentArgs } from "./environment";
-export { RailwayEnvironment } from "./environment";
-export type { RailwayProjectArgs } from "./project";
-export { RailwayProject } from "./project";
-export type { RailwayProjectTokenArgs } from "./project-token";
-export { RailwayProjectToken } from "./project-token";
-export type { RailwayProviderArgs } from "./provider";
-export { RailwayProvider } from "./provider";
-export type { RailwayServiceArgs } from "./service";
+export { Client } from "./client";
+export type { DeployArgs, DeployConfig } from "./deploy";
+export { Deploy } from "./deploy";
+export type { DomainArgs } from "./domain";
+export { Domain } from "./domain";
+export type { EnvironmentArgs } from "./environment";
+export { Environment } from "./environment";
+export type { ProjectArgs } from "./project";
+export { Project } from "./project";
+export type { ProjectTokenArgs } from "./project-token";
+export { ProjectToken } from "./project-token";
+export type { ProviderArgs } from "./provider";
+export { Provider } from "./provider";
+export type { ServiceArgs } from "./service";
 export {
-	RailwayBuilder,
-	RailwayRestartPolicy,
-	RailwayService,
+	Builder,
+	RestartPolicy,
+	Service,
 } from "./service";
-export type { RailwayVariableArgs } from "./variable";
-export { RailwayVariable } from "./variable";
-export type { RailwayVolumeArgs } from "./volume";
-export { RailwayVolume } from "./volume";
+export type { VariableArgs } from "./variable";
+export { Variable } from "./variable";
+export type { VolumeArgs } from "./volume";
+export { Volume } from "./volume";

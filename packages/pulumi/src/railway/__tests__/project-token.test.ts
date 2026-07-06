@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayProjectTokenResourceProvider } from "../project-token";
+import { Client } from "../client";
+import { ProjectTokenResourceProvider } from "../project-token";
 
-describe("RailwayProjectTokenResourceProvider", () => {
+describe("railway.ProjectTokenResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -35,7 +35,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 				},
 			});
 
-		const provider = new RailwayProjectTokenResourceProvider();
+		const provider = new ProjectTokenResourceProvider();
 
 		const result = await provider.create({
 			token: "tok",
@@ -73,7 +73,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 			.mockResolvedValueOnce({ projectTokenCreate: "new-token-value" }) // create
 			.mockResolvedValueOnce({ projectTokens: { edges: [] } }); // re-list: token not found
 
-		const provider = new RailwayProjectTokenResourceProvider();
+		const provider = new ProjectTokenResourceProvider();
 
 		await expect(
 			provider.create({
@@ -98,7 +98,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 		it("revokes the token by its stored id", async () => {
 			mockQuery.mockResolvedValueOnce({ projectTokenDelete: true });
 
-			await new RailwayProjectTokenResourceProvider().delete(
+			await new ProjectTokenResourceProvider().delete(
 				"proj-1:pulumi-staging",
 				props,
 			);
@@ -114,7 +114,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 			);
 
 			await expect(
-				new RailwayProjectTokenResourceProvider().delete(
+				new ProjectTokenResourceProvider().delete(
 					"proj-1:pulumi-staging",
 					props,
 				),
@@ -127,7 +127,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 			);
 
 			await expect(
-				new RailwayProjectTokenResourceProvider().delete(
+				new ProjectTokenResourceProvider().delete(
 					"proj-1:pulumi-staging",
 					props,
 				),
@@ -152,7 +152,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 				},
 			});
 
-			const result = await new RailwayProjectTokenResourceProvider().read(
+			const result = await new ProjectTokenResourceProvider().read(
 				"proj-1:pulumi-staging",
 				props,
 			);
@@ -171,7 +171,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 				},
 			});
 
-			const result = await new RailwayProjectTokenResourceProvider().read(
+			const result = await new ProjectTokenResourceProvider().read(
 				"proj-1:pulumi-staging",
 				props,
 			);
@@ -191,7 +191,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 		};
 
 		it("reports a tokenVersion bump as a create-before-delete replace", async () => {
-			const provider = new RailwayProjectTokenResourceProvider();
+			const provider = new ProjectTokenResourceProvider();
 
 			const diff = await provider.diff("env-staging/pulumi-staging", olds, {
 				...olds,
@@ -206,7 +206,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 		});
 
 		it("keeps delete-before-replace for identity changes", async () => {
-			const provider = new RailwayProjectTokenResourceProvider();
+			const provider = new ProjectTokenResourceProvider();
 
 			const diff = await provider.diff("env-staging/pulumi-staging", olds, {
 				...olds,
@@ -218,7 +218,7 @@ describe("RailwayProjectTokenResourceProvider", () => {
 		});
 
 		it("reports no change when tokenVersion is stable", async () => {
-			const provider = new RailwayProjectTokenResourceProvider();
+			const provider = new ProjectTokenResourceProvider();
 
 			const diff = await provider.diff(
 				"env-staging/pulumi-staging",

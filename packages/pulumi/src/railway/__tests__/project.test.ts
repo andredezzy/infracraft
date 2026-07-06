@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayProjectResourceProvider } from "../project";
+import { Client } from "../client";
+import { ProjectResourceProvider } from "../project";
 
-describe("RailwayProjectResourceProvider", () => {
+describe("railway.ProjectResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -18,7 +18,7 @@ describe("RailwayProjectResourceProvider", () => {
 		it("fails an empty project name, naming the property", async () => {
 			const invalid = { token: "tok", name: "  " };
 
-			const result = await new RailwayProjectResourceProvider().check(
+			const result = await new ProjectResourceProvider().check(
 				invalid,
 				invalid,
 			);
@@ -31,10 +31,7 @@ describe("RailwayProjectResourceProvider", () => {
 		it("passes a non-empty name through untouched", async () => {
 			const valid = { token: "tok", name: "my-app" };
 
-			const result = await new RailwayProjectResourceProvider().check(
-				valid,
-				valid,
-			);
+			const result = await new ProjectResourceProvider().check(valid, valid);
 
 			expect(result.failures).toEqual([]);
 		});
@@ -68,7 +65,7 @@ describe("RailwayProjectResourceProvider", () => {
 				};
 			});
 
-			const result = await new RailwayProjectResourceProvider().create({
+			const result = await new ProjectResourceProvider().create({
 				token: "tok",
 				name: "my-app",
 			});
@@ -96,7 +93,7 @@ describe("RailwayProjectResourceProvider", () => {
 				return { project: { environments: { edges: [] } } };
 			});
 
-			const result = await new RailwayProjectResourceProvider().create({
+			const result = await new ProjectResourceProvider().create({
 				token: "tok",
 				name: "my-app",
 			});
@@ -109,7 +106,7 @@ describe("RailwayProjectResourceProvider", () => {
 			mockQuery.mockResolvedValue({ me: { workspaces: [] } });
 
 			await expect(
-				new RailwayProjectResourceProvider().create({
+				new ProjectResourceProvider().create({
 					token: "tok",
 					name: "my-app",
 				}),
@@ -133,7 +130,7 @@ describe("RailwayProjectResourceProvider", () => {
 				};
 			});
 
-			const result = await new RailwayProjectResourceProvider().update(
+			const result = await new ProjectResourceProvider().update(
 				"proj-abc",
 				{
 					token: "tok",
@@ -152,7 +149,7 @@ describe("RailwayProjectResourceProvider", () => {
 	describe("delete", () => {
 		it("is a no-op — projects are not deleted by Pulumi", async () => {
 			await expect(
-				new RailwayProjectResourceProvider().delete(),
+				new ProjectResourceProvider().delete(),
 			).resolves.toBeUndefined();
 
 			expect(mockQuery).not.toHaveBeenCalled();
@@ -161,7 +158,7 @@ describe("RailwayProjectResourceProvider", () => {
 
 	describe("diff", () => {
 		it("flags an in-place change (no replace) when the name changes", async () => {
-			const result = await new RailwayProjectResourceProvider().diff(
+			const result = await new ProjectResourceProvider().diff(
 				"proj-abc",
 				{
 					token: "tok",
@@ -177,7 +174,7 @@ describe("RailwayProjectResourceProvider", () => {
 		});
 
 		it("declares projectId stable across in-place updates", async () => {
-			const result = await new RailwayProjectResourceProvider().diff(
+			const result = await new ProjectResourceProvider().diff(
 				"proj-abc",
 				{
 					token: "tok",

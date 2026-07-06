@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { FlyAppResourceProvider } from "../app";
-import { FlyClient } from "../client";
+import { AppResourceProvider } from "../app";
+import { Client } from "../client";
 
-describe("FlyAppResourceProvider", () => {
+describe("fly.AppResourceProvider", () => {
 	let mockTryGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockTryGet = vi.fn();
 		mockPost = vi.fn();
-		vi.spyOn(FlyClient.prototype, "tryGet").mockImplementation(mockTryGet);
-		vi.spyOn(FlyClient.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "tryGet").mockImplementation(mockTryGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
 	});
 
 	afterEach(() => {
@@ -31,7 +31,7 @@ describe("FlyAppResourceProvider", () => {
 				return { id: "app-internal", name: "my-app" };
 			});
 
-			await new FlyAppResourceProvider().create({
+			await new AppResourceProvider().create({
 				tokenEnvVar: "INFRACRAFT_TEST_FLY_TOKEN",
 				name: "my-app",
 			});
@@ -41,7 +41,7 @@ describe("FlyAppResourceProvider", () => {
 
 		it("throws a loud error naming the env var when it is not set", async () => {
 			await expect(
-				new FlyAppResourceProvider().create({
+				new AppResourceProvider().create({
 					tokenEnvVar: "INFRACRAFT_TEST_FLY_TOKEN_UNSET",
 					name: "my-app",
 				}),
@@ -61,7 +61,7 @@ describe("FlyAppResourceProvider", () => {
 		it("adopts an existing app without creating", async () => {
 			mockTryGet.mockResolvedValueOnce({ id: "app-internal", name: "my-app" });
 
-			const result = await new FlyAppResourceProvider().create({
+			const result = await new AppResourceProvider().create({
 				token: "tok",
 				name: "my-app",
 			});
@@ -75,7 +75,7 @@ describe("FlyAppResourceProvider", () => {
 			mockTryGet.mockResolvedValueOnce(null);
 			mockPost.mockResolvedValueOnce({});
 
-			const result = await new FlyAppResourceProvider().create({
+			const result = await new AppResourceProvider().create({
 				token: "tok",
 				name: "my-app",
 				organization: "my-org",
@@ -93,7 +93,7 @@ describe("FlyAppResourceProvider", () => {
 			mockTryGet.mockResolvedValueOnce(null);
 
 			await expect(
-				new FlyAppResourceProvider().create({ token: "tok", name: "my-app" }),
+				new AppResourceProvider().create({ token: "tok", name: "my-app" }),
 			).rejects.toThrow("organization is required");
 
 			expect(mockPost).not.toHaveBeenCalled();
@@ -104,7 +104,7 @@ describe("FlyAppResourceProvider", () => {
 		it("returns a blank ReadResult when the app is gone (deleted out of band)", async () => {
 			mockTryGet.mockResolvedValueOnce(null);
 
-			const result = await new FlyAppResourceProvider().read("my-app", props);
+			const result = await new AppResourceProvider().read("my-app", props);
 
 			expect(result).toEqual({});
 		});
@@ -112,7 +112,7 @@ describe("FlyAppResourceProvider", () => {
 		it("refreshes props when the app still exists", async () => {
 			mockTryGet.mockResolvedValueOnce({ id: "app-internal", name: "my-app" });
 
-			const result = await new FlyAppResourceProvider().read("my-app", props);
+			const result = await new AppResourceProvider().read("my-app", props);
 
 			expect(result.id).toBe("my-app");
 			expect(result.props?.name).toBe("my-app");
@@ -122,9 +122,7 @@ describe("FlyAppResourceProvider", () => {
 
 	describe("delete", () => {
 		it("is a deliberate no-op (deleting an app would destroy everything in it)", async () => {
-			await expect(
-				new FlyAppResourceProvider().delete(),
-			).resolves.toBeUndefined();
+			await expect(new AppResourceProvider().delete()).resolves.toBeUndefined();
 
 			expect(mockTryGet).not.toHaveBeenCalled();
 			expect(mockPost).not.toHaveBeenCalled();
@@ -133,7 +131,7 @@ describe("FlyAppResourceProvider", () => {
 
 	describe("diff", () => {
 		it("replaces on a name change (delete-before-replace)", async () => {
-			const diff = await new FlyAppResourceProvider().diff("my-app", props, {
+			const diff = await new AppResourceProvider().diff("my-app", props, {
 				...props,
 				name: "renamed",
 			});
@@ -144,10 +142,10 @@ describe("FlyAppResourceProvider", () => {
 		});
 
 		it("ignores an organization change — never replaces the app over it", async () => {
-			// organization is create-time only (see FlyAppArgs.organization JSDoc):
+			// organization is create-time only (see AppArgs.organization JSDoc):
 			// forcing a replace here would destroy and recreate the entire app —
 			// everything in it — for a field create() never re-applies on adoption.
-			const diff = await new FlyAppResourceProvider().diff(
+			const diff = await new AppResourceProvider().diff(
 				"my-app",
 				{ ...props, organization: "org-a" },
 				{ ...props, organization: "org-b" },
@@ -158,11 +156,7 @@ describe("FlyAppResourceProvider", () => {
 		});
 
 		it("reports no changes when inputs are identical", async () => {
-			const diff = await new FlyAppResourceProvider().diff(
-				"my-app",
-				props,
-				props,
-			);
+			const diff = await new AppResourceProvider().diff("my-app", props, props);
 
 			expect(diff.changes).toBe(false);
 			expect(diff.replaces).toEqual([]);

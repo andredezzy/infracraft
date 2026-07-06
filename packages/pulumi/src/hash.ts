@@ -154,9 +154,9 @@ function buildWorkspaceIndex(monorepoRoot: string): Map<string, string> {
  * needs no hand-maintained list of which packages to hash.
  *
  * @param monorepoRoot Absolute repo root (holds `apps/` and `packages/`).
- * @param appDirectory The app to hash, relative to the root (e.g. `apps/mesh`).
+ * @param appDirectory The app to hash, relative to the root (e.g. `apps/api`).
  * @example
- * triggers: [hashApp(monorepoRoot, "apps/mesh"), hash(env)]
+ * triggers: [hashApp(monorepoRoot, "apps/api"), hash(env)]
  */
 export function hashApp(
 	monorepoRoot: string,

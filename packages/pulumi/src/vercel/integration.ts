@@ -1,14 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
-import { VercelClient } from "./client";
-import type { VercelProvider } from "./provider";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Vercel integration dynamic provider. */
-interface VercelIntegrationInputs {
+interface IntegrationInputs {
 	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
@@ -19,21 +19,21 @@ interface VercelIntegrationInputs {
 }
 
 /** Persisted state for the Vercel integration. */
-interface VercelIntegrationOutputs extends VercelIntegrationInputs {
+interface IntegrationOutputs extends IntegrationInputs {
 	/** Vercel-assigned configuration ID (e.g. `"icfg_…"`). */
 	configurationId: string;
 }
 
 /** A single installed Vercel marketplace integration configuration. */
-interface VercelIntegrationConfiguration {
+interface IntegrationConfiguration {
 	id: string;
 	slug: string;
 }
 
 /** Response of `GET /v1/integrations/configurations` — a top-level array, sometimes wrapped. */
-type VercelIntegrationConfigurationsResponse =
-	| VercelIntegrationConfiguration[]
-	| { configurations: VercelIntegrationConfiguration[] };
+type IntegrationConfigurationsResponse =
+	| IntegrationConfiguration[]
+	| { configurations: IntegrationConfiguration[] };
 
 /**
  * Dynamic provider that resolves an installed Vercel marketplace integration
@@ -41,19 +41,19 @@ type VercelIntegrationConfigurationsResponse =
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class VercelIntegrationResourceProvider
+export class IntegrationResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	async create(
-		inputs: VercelIntegrationInputs,
+		inputs: IntegrationInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new VercelClient(
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 			inputs.teamId,
 		);
 
 		// `view=account` is required by the configurations endpoint (a missing view returns 400).
-		const data = await client.get<VercelIntegrationConfigurationsResponse>(
+		const data = await client.get<IntegrationConfigurationsResponse>(
 			"/v1/integrations/configurations?view=account",
 		);
 
@@ -67,11 +67,11 @@ export class VercelIntegrationResourceProvider
 				configurations.map((c) => c.slug).join(", ") || "(none)";
 
 			throw new Error(
-				`VercelIntegration "${inputs.slug}" is not installed on this team (available: ${available})`,
+				`vercel.Integration "${inputs.slug}" is not installed on this team (available: ${available})`,
 			);
 		}
 
-		const outs: VercelIntegrationOutputs = {
+		const outs: IntegrationOutputs = {
 			...inputs,
 			configurationId: config.id,
 		};
@@ -81,7 +81,7 @@ export class VercelIntegrationResourceProvider
 
 	async read(
 		id: string,
-		props: VercelIntegrationOutputs,
+		props: IntegrationOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
 		// Resolver-only: the integration's configuration id (icfg_…) is stable for the
 		// lifetime of an installed integration, so read() does not re-query. If the
@@ -91,14 +91,14 @@ export class VercelIntegrationResourceProvider
 
 	async delete(): Promise<void> {
 		pulumi.log.warn(
-			"VercelIntegration is a read-only resolver — uninstall the integration from the Vercel dashboard if needed",
+			"vercel.Integration is a read-only resolver — uninstall the integration from the Vercel dashboard if needed",
 		);
 	}
 
 	async diff(
 		_id: string,
-		olds: VercelIntegrationOutputs,
-		news: VercelIntegrationInputs,
+		olds: IntegrationOutputs,
+		news: IntegrationInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -119,7 +119,7 @@ export class VercelIntegrationResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class VercelIntegrationResource extends pulumi.dynamic.Resource {
+class IntegrationResource extends pulumi.dynamic.Resource {
 	public declare readonly configurationId: pulumi.Output<string>;
 
 	constructor(
@@ -133,7 +133,7 @@ class VercelIntegrationResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new VercelIntegrationResourceProvider(),
+			new IntegrationResourceProvider(),
 			name,
 			{ ...args, configurationId: undefined },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -142,19 +142,16 @@ class VercelIntegrationResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for VercelIntegration — replaces Pulumi's native `provider` field. */
-type VercelIntegrationOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Integration — replaces Pulumi's native `provider` field. */
+type IntegrationOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Vercel authentication context. */
-	provider: VercelProvider;
+	provider: Provider;
 };
 
 /**
- * Args for {@link VercelIntegration}.
+ * Args for {@link Integration}.
  */
-export interface VercelIntegrationArgs {
+export interface IntegrationArgs {
 	/**
 	 * Marketplace integration slug (e.g. `"upstash"`, `"neon"`).
 	 * The integration must already be installed on the team via the Vercel dashboard.
@@ -174,7 +171,7 @@ export interface VercelIntegrationArgs {
  *
  * @example
  * ```typescript
- * const upstash = new VercelIntegration("upstash", {
+ * const upstash = new vercel.Integration("upstash", {
  *   slug: "upstash",
  * }, { provider });
  *
@@ -182,20 +179,16 @@ export interface VercelIntegrationArgs {
  * export const upstashConfigId = upstash.configurationId;
  * ```
  */
-export class VercelIntegration extends pulumi.ComponentResource {
+export class Integration extends pulumi.ComponentResource {
 	/** Vercel integration configuration ID (e.g. `"icfg_…"`). */
 	public readonly configurationId: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: VercelIntegrationArgs,
-		opts: VercelIntegrationOptions,
-	) {
+	constructor(name: string, args: IntegrationArgs, opts: IntegrationOptions) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:vercel:Integration", name, {}, pulumiOpts);
 
-		const resource = new VercelIntegrationResource(
+		const resource = new IntegrationResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

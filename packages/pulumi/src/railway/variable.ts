@@ -1,18 +1,18 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
-import { RailwayClient } from "./client";
-import type { RailwayEnvironment } from "./environment";
-import type { RailwayProject } from "./project";
-import type { RailwayProvider } from "./provider";
-import type { RailwayService } from "./service";
+import { Client } from "./client";
+import type { Environment } from "./environment";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
+import type { Service } from "./service";
 
 /** Resolved inputs for the Railway variable dynamic provider. */
-interface RailwayVariableInputs {
+interface VariableInputs {
 	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
@@ -29,7 +29,7 @@ interface RailwayVariableInputs {
 }
 
 /** Persisted state for Railway variables (identical to inputs). */
-interface RailwayVariableOutputs extends RailwayVariableInputs {}
+interface VariableOutputs extends VariableInputs {}
 
 const VARIABLE_UPSERT = `
   mutation($input: VariableCollectionUpsertInput!) {
@@ -62,16 +62,14 @@ interface VariablesResponse {
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class RailwayVariableResourceProvider
+export class VariableResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
 	 * Creates all variables on the target service via batch upsert.
 	 */
-	async create(
-		inputs: RailwayVariableInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(
+	async create(inputs: VariableInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -95,12 +93,10 @@ export class RailwayVariableResourceProvider
 	 */
 	async update(
 		_id: string,
-		olds: RailwayVariableOutputs,
-		news: RailwayVariableInputs,
+		olds: VariableOutputs,
+		news: VariableInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(
-			resolveCredential(news.token, news.tokenEnvVar),
-		);
+		const client = new Client(resolveCredential(news.token, news.tokenEnvVar));
 
 		const removedKeys = Object.keys(olds.variables).filter(
 			(key) => !(key in news.variables),
@@ -138,9 +134,9 @@ export class RailwayVariableResourceProvider
 	 */
 	async read(
 		id: string,
-		props: RailwayVariableOutputs,
+		props: VariableOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -168,8 +164,8 @@ export class RailwayVariableResourceProvider
 	/**
 	 * Deletes all variables one by one. Silently succeeds if already deleted.
 	 */
-	async delete(_id: string, props: RailwayVariableOutputs): Promise<void> {
-		const client = new RailwayClient(
+	async delete(_id: string, props: VariableOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -201,8 +197,8 @@ export class RailwayVariableResourceProvider
 	 */
 	async diff(
 		_id: string,
-		olds: RailwayVariableOutputs,
-		news: RailwayVariableInputs,
+		olds: VariableOutputs,
+		news: VariableInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const oldKeys = Object.keys(olds.variables).sort().join(",");
 		const newKeys = Object.keys(news.variables).sort().join(",");
@@ -218,7 +214,7 @@ export class RailwayVariableResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class RailwayVariableResource extends pulumi.dynamic.Resource {
+class VariableResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
@@ -232,7 +228,7 @@ class RailwayVariableResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayVariableResourceProvider(),
+			new VariableResourceProvider(),
 			name,
 			{ ...args },
 			// The API token AND the variable values themselves flow into
@@ -242,26 +238,23 @@ class RailwayVariableResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for RailwayVariable — replaces Pulumi's native `provider` field. */
-type RailwayVariableOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Variable — replaces Pulumi's native `provider` field. */
+type VariableOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Railway authentication context. */
-	provider: RailwayProvider;
+	provider: Provider;
 
 	/** Railway project context. */
-	project: RailwayProject;
+	project: Project;
 
 	/** Railway environment context. */
-	environment: RailwayEnvironment;
+	environment: Environment;
 
 	/** Railway service context. */
-	service: RailwayService;
+	service: Service;
 };
 
-/** Args for RailwayVariable. */
-export interface RailwayVariableArgs {
+/** Args for Variable. */
+export interface VariableArgs {
 	/** Key-value map of environment variable names to their values. */
 	variables: pulumi.Input<Record<string, pulumi.Input<string>>>;
 }
@@ -271,22 +264,18 @@ export interface RailwayVariableArgs {
  *
  * @example
  * ```typescript
- * new RailwayVariable("api-vars", {
+ * new railway.Variable("api-vars", {
  *   variables: { DATABASE_URL: databaseUrl, NODE_ENV: "production" },
  * }, { provider, project, environment, service });
  * ```
  */
-export class RailwayVariable extends pulumi.ComponentResource {
-	constructor(
-		name: string,
-		args: RailwayVariableArgs,
-		opts: RailwayVariableOptions,
-	) {
+export class Variable extends pulumi.ComponentResource {
+	constructor(name: string, args: VariableArgs, opts: VariableOptions) {
 		const { provider, project, environment, service, ...pulumiOpts } = opts;
 
 		super("infracraft:railway:Variable", name, {}, pulumiOpts);
 
-		new RailwayVariableResource(
+		new VariableResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

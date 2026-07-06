@@ -3,17 +3,17 @@ import { MockMonitor } from "@pulumi/pulumi/runtime/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { FlyApp } from "../app";
-import { FlyClient } from "../client";
-import { FlyProvider } from "../provider";
-import { FlySecret, FlySecretResourceProvider } from "../secret";
+import { App } from "../app";
+import { Client } from "../client";
+import { Provider } from "../provider";
+import { Secret, SecretResourceProvider } from "../secret";
 
-describe("FlySecretResourceProvider", () => {
+describe("fly.SecretResourceProvider", () => {
 	let mockPost: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockPost = vi.fn();
-		vi.spyOn(FlyClient.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
 	});
 
 	afterEach(() => {
@@ -31,7 +31,7 @@ describe("FlySecretResourceProvider", () => {
 		it("sets all secrets via the bulk endpoint and stores the returned version", async () => {
 			mockPost.mockResolvedValueOnce({ version: 3 });
 
-			const result = await new FlySecretResourceProvider().create({
+			const result = await new SecretResourceProvider().create({
 				token: "tok",
 				appName: "my-app",
 				secrets: { JWT_SECRET: "abc" },
@@ -48,7 +48,7 @@ describe("FlySecretResourceProvider", () => {
 
 	describe("read", () => {
 		it("passes persisted state through (values are write-only in the Fly API)", async () => {
-			const result = await new FlySecretResourceProvider().read(
+			const result = await new SecretResourceProvider().read(
 				"my-app-secrets",
 				props,
 			);
@@ -62,7 +62,7 @@ describe("FlySecretResourceProvider", () => {
 		it("nulls removed keys and upserts the rest in one bulk call", async () => {
 			mockPost.mockResolvedValueOnce({ version: 8 });
 
-			const result = await new FlySecretResourceProvider().update(
+			const result = await new SecretResourceProvider().update(
 				"my-app-secrets",
 				props,
 				{
@@ -84,7 +84,7 @@ describe("FlySecretResourceProvider", () => {
 		it("unsets every key via the bulk endpoint", async () => {
 			mockPost.mockResolvedValueOnce({ version: 9 });
 
-			await new FlySecretResourceProvider().delete("my-app-secrets", props);
+			await new SecretResourceProvider().delete("my-app-secrets", props);
 
 			expect(mockPost).toHaveBeenCalledWith("/v1/apps/my-app/secrets", {
 				values: { JWT_SECRET: null, DATABASE_URL: null },
@@ -97,7 +97,7 @@ describe("FlySecretResourceProvider", () => {
 			);
 
 			await expect(
-				new FlySecretResourceProvider().delete("my-app-secrets", props),
+				new SecretResourceProvider().delete("my-app-secrets", props),
 			).resolves.toBeUndefined();
 		});
 
@@ -107,14 +107,14 @@ describe("FlySecretResourceProvider", () => {
 			);
 
 			await expect(
-				new FlySecretResourceProvider().delete("my-app-secrets", props),
+				new SecretResourceProvider().delete("my-app-secrets", props),
 			).rejects.toThrow("403");
 		});
 	});
 
 	describe("diff", () => {
 		it("replaces on an appName change (delete-before-replace)", async () => {
-			const diff = await new FlySecretResourceProvider().diff(
+			const diff = await new SecretResourceProvider().diff(
 				"my-app-secrets",
 				props,
 				{ ...props, appName: "other-app" },
@@ -126,7 +126,7 @@ describe("FlySecretResourceProvider", () => {
 		});
 
 		it("flags an in-place change when a value rotates", async () => {
-			const diff = await new FlySecretResourceProvider().diff(
+			const diff = await new SecretResourceProvider().diff(
 				"my-app-secrets",
 				props,
 				{ ...props, secrets: { ...props.secrets, JWT_SECRET: "rotated" } },
@@ -137,7 +137,7 @@ describe("FlySecretResourceProvider", () => {
 		});
 
 		it("flags an in-place change when the key set changes", async () => {
-			const diff = await new FlySecretResourceProvider().diff(
+			const diff = await new SecretResourceProvider().diff(
 				"my-app-secrets",
 				props,
 				{ ...props, secrets: { JWT_SECRET: "abc" } },
@@ -148,7 +148,7 @@ describe("FlySecretResourceProvider", () => {
 		});
 
 		it("reports no changes when the secret set is identical", async () => {
-			const diff = await new FlySecretResourceProvider().diff(
+			const diff = await new SecretResourceProvider().diff(
 				"my-app-secrets",
 				props,
 				props,
@@ -159,7 +159,7 @@ describe("FlySecretResourceProvider", () => {
 	});
 });
 
-describe("FlySecret component", () => {
+describe("fly.Secret component", () => {
 	let capturedAdditionalSecretOutputs: Map<string, string[]>;
 	let originalRegisterResource: typeof MockMonitor.prototype.registerResource;
 
@@ -189,10 +189,10 @@ describe("FlySecret component", () => {
 	});
 
 	it("marks both token and secrets as additionalSecretOutputs on the underlying dynamic resource", async () => {
-		const provider = new FlyProvider("fly", { tokenEnvVar: "FLY_API_TOKEN" });
-		const app = new FlyApp("app", { name: "my-app" }, { provider });
+		const provider = new Provider("fly", { tokenEnvVar: "FLY_API_TOKEN" });
+		const app = new App("app", { name: "my-app" }, { provider });
 
-		new FlySecret(
+		new Secret(
 			"api-secrets",
 			{ secrets: { JWT_SECRET: "abc" } },
 			{ provider, app },

@@ -60,7 +60,7 @@ vi.mock("@pulumi/pulumi", () => {
 
 import { GitGuard } from "../../git-guard";
 import { DeploySandbox } from "../../sandbox";
-import { RailwayDeploy } from "../deploy";
+import { Deploy } from "../deploy";
 
 const sandbox = new DeploySandbox("deploy-sandbox");
 const gitGuard = new GitGuard("git-guard");
@@ -77,10 +77,10 @@ beforeEach(() => {
 	commandCalls.length = 0;
 });
 
-describe("RailwayDeploy", () => {
+describe("railway.Deploy", () => {
 	it("uploads with --detach and hands off to the monitor bin inside the sandbox", () => {
-		new RailwayDeploy(
-			"mesh",
+		new Deploy(
+			"api",
 			{ triggers: [], railpackConfig: { apt: ["libatomic1"] } },
 			{ ...ctx, dependsOn: [sandbox, gitGuard] },
 		);
@@ -130,8 +130,8 @@ describe("RailwayDeploy", () => {
 	});
 
 	it("passes IC_HC_* bindings to the monitor only when healthcheck args are provided", () => {
-		new RailwayDeploy(
-			"mesh",
+		new Deploy(
+			"api",
 			{
 				triggers: [],
 				healthcheckPath: "/healthcheck",
@@ -153,8 +153,8 @@ describe("RailwayDeploy", () => {
 	it("throws when healthcheckPath contains a hyphen (same Railway field service.ts validates)", () => {
 		expect(
 			() =>
-				new RailwayDeploy(
-					"mesh",
+				new Deploy(
+					"api",
 					{ triggers: [], healthcheckPath: "/health-check" },
 					{ ...ctx, dependsOn: [sandbox, gitGuard] },
 				),
@@ -162,8 +162,8 @@ describe("RailwayDeploy", () => {
 	});
 
 	it("escapes railpackConfig values containing an apostrophe (POSIX single-quote)", () => {
-		new RailwayDeploy(
-			"mesh",
+		new Deploy(
+			"api",
 			{ triggers: [], railpackConfig: { note: "it's fine" } },
 			{ ...ctx, dependsOn: [sandbox, gitGuard] },
 		);

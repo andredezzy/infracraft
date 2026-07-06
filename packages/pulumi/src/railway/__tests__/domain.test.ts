@@ -1,13 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayDomainResourceProvider } from "../domain";
+import { Client } from "../client";
+import { DomainResourceProvider } from "../domain";
 
-describe("RailwayDomainResourceProvider", () => {
+describe("railway.DomainResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockQuery = vi.fn();
-		vi.spyOn(RailwayClient.prototype, "query").mockImplementation(mockQuery);
+		vi.spyOn(Client.prototype, "query").mockImplementation(mockQuery);
 	});
 
 	afterEach(() => {
@@ -17,7 +17,7 @@ describe("RailwayDomainResourceProvider", () => {
 	const inputs = () => ({
 		token: "tok",
 		projectId: "proj-123",
-		serviceId: "svc-mesh",
+		serviceId: "svc-api",
 		environmentId: "env-staging",
 		customDomain: "api.example.com",
 	});
@@ -54,7 +54,7 @@ describe("RailwayDomainResourceProvider", () => {
 				},
 			});
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.id).toBe("api.example.com");
 			expect(result.outs.cnameTarget).toBe("edge.railway-target.app");
@@ -75,7 +75,7 @@ describe("RailwayDomainResourceProvider", () => {
 					},
 				}); // create
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.id).toBe("api.example.com");
 			expect(result.outs.cnameTarget).toBe("edge.railway-target.app");
@@ -94,7 +94,7 @@ describe("RailwayDomainResourceProvider", () => {
 					},
 				});
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.outs.cnameTarget).toBeUndefined();
 		});
@@ -118,7 +118,7 @@ describe("RailwayDomainResourceProvider", () => {
 				},
 			});
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.outs.verificationTxtName).toBe("_railway-verify.api");
 
@@ -145,7 +145,7 @@ describe("RailwayDomainResourceProvider", () => {
 					},
 				});
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.outs.verificationTxtName).toBe("_railway-verify.api");
 
@@ -171,7 +171,7 @@ describe("RailwayDomainResourceProvider", () => {
 					},
 				});
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.outs.verificationTxtName).toBeUndefined();
 			expect(result.outs.verificationTxtValue).toBeUndefined();
@@ -194,7 +194,7 @@ describe("RailwayDomainResourceProvider", () => {
 					},
 				});
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.outs.verificationTxtValue).toBe(
 				"railway-verify=already-prefixed-token",
@@ -218,7 +218,7 @@ describe("RailwayDomainResourceProvider", () => {
 					},
 				});
 
-			const result = await new RailwayDomainResourceProvider().create(inputs());
+			const result = await new DomainResourceProvider().create(inputs());
 
 			expect(result.outs.verificationTxtValue).toBe(
 				"railway-verify=bare-token-no-prefix",
@@ -234,7 +234,7 @@ describe("RailwayDomainResourceProvider", () => {
 					serviceDomainCreate: { id: "dom-uuid", domain: "svc.up.railway.app" },
 				});
 
-			const result = await new RailwayDomainResourceProvider().create({
+			const result = await new DomainResourceProvider().create({
 				...inputs(),
 				customDomain: undefined,
 			});
@@ -267,16 +267,14 @@ describe("RailwayDomainResourceProvider", () => {
 
 			mockQuery.mockResolvedValueOnce(bothDomains); // adopt api.example.com
 
-			const apiResult = await new RailwayDomainResourceProvider().create(
-				inputs(),
-			);
+			const apiResult = await new DomainResourceProvider().create(inputs());
 
 			expect(apiResult.id).toBe("api.example.com");
 			expect(apiResult.outs.cnameTarget).toBe("api-target.railway.app");
 
 			mockQuery.mockResolvedValueOnce(bothDomains); // adopt www.example.com
 
-			const wwwResult = await new RailwayDomainResourceProvider().create({
+			const wwwResult = await new DomainResourceProvider().create({
 				...inputs(),
 				customDomain: "www.example.com",
 			});
@@ -287,7 +285,7 @@ describe("RailwayDomainResourceProvider", () => {
 			// Deleting one domain only targets its own domainId, never the other's.
 			mockQuery.mockResolvedValueOnce({});
 
-			await new RailwayDomainResourceProvider().delete(
+			await new DomainResourceProvider().delete(
 				"api.example.com",
 				apiResult.outs,
 			);
@@ -308,7 +306,7 @@ describe("RailwayDomainResourceProvider", () => {
 			mockQuery.mockRejectedValueOnce(new Error("Domain not found"));
 
 			await expect(
-				new RailwayDomainResourceProvider().delete("api.example.com", props),
+				new DomainResourceProvider().delete("api.example.com", props),
 			).resolves.toBeUndefined();
 		});
 
@@ -316,7 +314,7 @@ describe("RailwayDomainResourceProvider", () => {
 			mockQuery.mockRejectedValueOnce(new Error("forbidden"));
 
 			await expect(
-				new RailwayDomainResourceProvider().delete("api.example.com", props),
+				new DomainResourceProvider().delete("api.example.com", props),
 			).rejects.toThrow("forbidden");
 		});
 	});

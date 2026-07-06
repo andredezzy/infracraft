@@ -2,15 +2,15 @@ import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { ApiNotFoundError } from "../errors/api-not-found-error";
-import { NeonClient } from "./client";
-import type { NeonProvider } from "./provider";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Neon project dynamic provider. */
-interface NeonProjectInputs {
+interface ProjectInputs {
 	/** Neon API key. Absent when `apiKeyEnvVar` is used instead. */
 	apiKey?: string;
 
-	/** Env var name resolved to the API key when `apiKey` is absent (see `NeonProviderArgs.apiKeyEnvVar`). */
+	/** Env var name resolved to the API key when `apiKey` is absent (see `ProviderArgs.apiKeyEnvVar`). */
 	apiKeyEnvVar?: string;
 
 	/** Exact project display name to adopt or create. */
@@ -21,7 +21,7 @@ interface NeonProjectInputs {
 }
 
 /** Persisted state for the Neon project. */
-interface NeonProjectOutputs extends NeonProjectInputs {
+interface ProjectOutputs extends ProjectInputs {
 	/** Neon-assigned project ID (e.g. `"quiet-forest-69719462"`). */
 	projectId: string;
 }
@@ -43,7 +43,7 @@ const MAX_PROJECT_LIST_PAGES = 100;
  * substring match, not exact, so an exact-name check still runs client-side.
  */
 async function findProjectByName(
-	client: NeonClient,
+	client: Client,
 	name: string,
 	orgId?: string,
 ): Promise<string | undefined> {
@@ -101,7 +101,7 @@ interface ProjectReadResponse {
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class NeonProjectResourceProvider
+export class ProjectResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -109,9 +109,9 @@ export class NeonProjectResourceProvider
 	 * fail deep inside the Neon API call — and never match on the adopt lookup.
 	 */
 	async check(
-		_olds: NeonProjectInputs,
-		news: NeonProjectInputs,
-	): Promise<pulumi.dynamic.CheckResult<NeonProjectInputs>> {
+		_olds: ProjectInputs,
+		news: ProjectInputs,
+	): Promise<pulumi.dynamic.CheckResult<ProjectInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (isResolvedString(news.name) && news.name.trim().length === 0) {
@@ -124,10 +124,8 @@ export class NeonProjectResourceProvider
 		return { inputs: news, failures };
 	}
 
-	async create(
-		inputs: NeonProjectInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new NeonClient(
+	async create(inputs: ProjectInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
 		);
 
@@ -155,16 +153,16 @@ export class NeonProjectResourceProvider
 			projectId = created.project.id;
 		}
 
-		const outs: NeonProjectOutputs = { ...inputs, projectId };
+		const outs: ProjectOutputs = { ...inputs, projectId };
 
 		return { id: projectId, outs };
 	}
 
 	async read(
 		id: string,
-		props: NeonProjectOutputs,
+		props: ProjectOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new NeonClient(
+		const client = new Client(
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
 		);
 
@@ -191,10 +189,10 @@ export class NeonProjectResourceProvider
 
 	async update(
 		id: string,
-		_olds: NeonProjectOutputs,
-		news: NeonProjectInputs,
+		_olds: ProjectOutputs,
+		news: ProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new NeonClient(
+		const client = new Client(
 			resolveCredential(news.apiKey, news.apiKeyEnvVar),
 		);
 
@@ -213,8 +211,8 @@ export class NeonProjectResourceProvider
 
 	async diff(
 		_id: string,
-		olds: NeonProjectOutputs,
-		news: NeonProjectInputs,
+		olds: ProjectOutputs,
+		news: ProjectInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 		const changes: string[] = [];
@@ -239,7 +237,7 @@ export class NeonProjectResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class NeonProjectResource extends pulumi.dynamic.Resource {
+class ProjectResource extends pulumi.dynamic.Resource {
 	public declare readonly projectId: pulumi.Output<string>;
 
 	constructor(
@@ -253,7 +251,7 @@ class NeonProjectResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new NeonProjectResourceProvider(),
+			new ProjectResourceProvider(),
 			name,
 			{ ...args, projectId: undefined },
 			// The API key flows into dynamic-provider state with the outputs — mark it secret there.
@@ -262,14 +260,14 @@ class NeonProjectResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for NeonProject — replaces Pulumi's native `provider` field. */
-type NeonProjectOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
+/** Options type for Project — replaces Pulumi's native `provider` field. */
+type ProjectOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Neon authentication context. */
-	provider: NeonProvider;
+	provider: Provider;
 };
 
-/** Args for NeonProject. */
-export interface NeonProjectArgs {
+/** Args for Project. */
+export interface ProjectArgs {
 	/** Exact project display name to adopt or create. */
 	name: pulumi.Input<string>;
 }
@@ -279,25 +277,25 @@ export interface NeonProjectArgs {
  *
  * @example
  * ```typescript
- * const project = new NeonProject("db", {
+ * const project = new neon.Project("db", {
  *   name: "my-app",
  * }, { provider });
  *
- * const branch = new NeonBranch("production", {
+ * const branch = new neon.Branch("production", {
  *   name: "production",
  * }, { provider, project });
  * ```
  */
-export class NeonProject extends pulumi.ComponentResource {
+export class Project extends pulumi.ComponentResource {
 	/** Neon-assigned project ID. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(name: string, args: NeonProjectArgs, opts: NeonProjectOptions) {
+	constructor(name: string, args: ProjectArgs, opts: ProjectOptions) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:neon:Project", name, {}, pulumiOpts);
 
-		const resource = new NeonProjectResource(
+		const resource = new ProjectResource(
 			`${name}-resource`,
 			{
 				apiKey: provider.apiKey,

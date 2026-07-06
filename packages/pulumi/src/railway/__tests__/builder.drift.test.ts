@@ -1,21 +1,21 @@
 import { describe, expect, it } from "vitest";
-import { RailwayBuilder, RailwayRestartPolicy } from "../service";
+import { Builder, RestartPolicy } from "../service";
 
 /**
- * Drift test: asserts that RailwayBuilder and RailwayRestartPolicy enum values
+ * Drift test: asserts that Builder and RestartPolicy enum values
  * match the Railway JSON schema at backboard.railway.app.
  *
  * Run with: bun run test:drift
  */
 
 /** Railway schema fields use anyOf: [{type:string, enum:[...]}, {type:null}] */
-interface RailwaySchemaField {
+interface SchemaField {
 	anyOf?: Array<{ type: string; enum?: string[] }>;
 	enum?: string[];
 }
 
 /** Extract enum values from a Railway schema field (handles both direct and anyOf patterns). */
-function extractEnum(field: RailwaySchemaField): string[] | undefined {
+function extractEnum(field: SchemaField): string[] | undefined {
 	if (field.enum) {
 		return field.enum;
 	}
@@ -32,7 +32,7 @@ function extractEnum(field: RailwaySchemaField): string[] | undefined {
 }
 
 describe("Railway enum drift", () => {
-	it("RailwayBuilder matches railway.schema.json build.builder enum", async () => {
+	it("railway.Builder matches railway.schema.json build.builder enum", async () => {
 		const url = "https://backboard.railway.app/railway.schema.json";
 
 		const response = await fetch(url);
@@ -45,7 +45,7 @@ describe("Railway enum drift", () => {
 			properties?: {
 				build?: {
 					properties?: {
-						builder?: RailwaySchemaField;
+						builder?: SchemaField;
 					};
 				};
 			};
@@ -66,26 +66,24 @@ describe("Railway enum drift", () => {
 		).toBeDefined();
 
 		const upstreamSet = new Set(upstreamBuilders ?? []);
-		const localSet = new Set(Object.values(RailwayBuilder));
+		const localSet = new Set(Object.values(Builder));
 
-		const added = [...upstreamSet].filter(
-			(v) => !localSet.has(v as RailwayBuilder),
-		);
+		const added = [...upstreamSet].filter((v) => !localSet.has(v as Builder));
 
 		const removed = [...localSet].filter((v) => !upstreamSet.has(v));
 
 		expect(
 			added,
-			`Upstream added builder values not in RailwayBuilder: ${added.join(", ")}`,
+			`Upstream added builder values not in railway.Builder: ${added.join(", ")}`,
 		).toHaveLength(0);
 
 		expect(
 			removed,
-			`RailwayBuilder has values no longer in upstream schema: ${removed.join(", ")}`,
+			`railway.Builder has values no longer in upstream schema: ${removed.join(", ")}`,
 		).toHaveLength(0);
 	});
 
-	it("RailwayRestartPolicy matches railway.schema.json deploy.restartPolicyType enum", async () => {
+	it("railway.RestartPolicy matches railway.schema.json deploy.restartPolicyType enum", async () => {
 		const url = "https://backboard.railway.app/railway.schema.json";
 
 		const response = await fetch(url);
@@ -98,7 +96,7 @@ describe("Railway enum drift", () => {
 			properties?: {
 				deploy?: {
 					properties?: {
-						restartPolicyType?: RailwaySchemaField;
+						restartPolicyType?: SchemaField;
 					};
 				};
 			};
@@ -120,22 +118,22 @@ describe("Railway enum drift", () => {
 		).toBeDefined();
 
 		const upstreamSet = new Set(upstreamPolicies ?? []);
-		const localSet = new Set(Object.values(RailwayRestartPolicy));
+		const localSet = new Set(Object.values(RestartPolicy));
 
 		const added = [...upstreamSet].filter(
-			(v) => !localSet.has(v as RailwayRestartPolicy),
+			(v) => !localSet.has(v as RestartPolicy),
 		);
 
 		const removed = [...localSet].filter((v) => !upstreamSet.has(v));
 
 		expect(
 			added,
-			`Upstream added restart policy values not in RailwayRestartPolicy: ${added.join(", ")}`,
+			`Upstream added restart policy values not in railway.RestartPolicy: ${added.join(", ")}`,
 		).toHaveLength(0);
 
 		expect(
 			removed,
-			`RailwayRestartPolicy has values no longer in upstream schema: ${removed.join(", ")}`,
+			`railway.RestartPolicy has values no longer in upstream schema: ${removed.join(", ")}`,
 		).toHaveLength(0);
 	});
 });

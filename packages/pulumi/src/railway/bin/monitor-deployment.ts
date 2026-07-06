@@ -1,5 +1,5 @@
 /**
- * Runnable entry for the Railway deploy monitor — invoked by `RailwayDeploy` as
+ * Runnable entry for the Railway deploy monitor — invoked by `Deploy` as
  * `node <dist>/railway/bin/monitor-deployment.mjs` after `railway up --detach`.
  *
  * Reads the deploy context from `IC_*` env vars, wires the real `fetch`/`setTimeout`/stderr
@@ -23,7 +23,7 @@ async function main(): Promise<void> {
 			uploadExitCode: Number(process.env.IC_UP_EXIT ?? "0"),
 			since: Number(process.env.IC_SINCE ?? "0"),
 			// Healthcheck config applied post-deploy (fresh instances reject it
-			// pre-deploy); set by RailwayDeploy only when the consumer configured it.
+			// pre-deploy); set by Deploy only when the consumer configured it.
 			healthcheckPath: process.env.IC_HC_PATH || undefined,
 			healthcheckTimeout: process.env.IC_HC_TIMEOUT
 				? Number(process.env.IC_HC_TIMEOUT)

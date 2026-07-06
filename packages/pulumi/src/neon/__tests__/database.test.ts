@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { NeonClient } from "../client";
-import { NeonDatabaseResourceProvider } from "../database";
+import { Client } from "../client";
+import { DatabaseResourceProvider } from "../database";
 
-describe("NeonDatabaseResourceProvider", () => {
+describe("neon.DatabaseResourceProvider", () => {
 	let mockGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 	let mockPatch: ReturnType<typeof vi.fn>;
@@ -12,9 +12,9 @@ describe("NeonDatabaseResourceProvider", () => {
 		mockGet = vi.fn();
 		mockPost = vi.fn();
 		mockPatch = vi.fn();
-		vi.spyOn(NeonClient.prototype, "get").mockImplementation(mockGet);
-		vi.spyOn(NeonClient.prototype, "post").mockImplementation(mockPost);
-		vi.spyOn(NeonClient.prototype, "patch").mockImplementation(mockPatch);
+		vi.spyOn(Client.prototype, "get").mockImplementation(mockGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "patch").mockImplementation(mockPatch);
 	});
 
 	afterEach(() => {
@@ -31,7 +31,7 @@ describe("NeonDatabaseResourceProvider", () => {
 				ownerName: "neondb_owner",
 			};
 
-			const result = await new NeonDatabaseResourceProvider().check(
+			const result = await new DatabaseResourceProvider().check(
 				invalid,
 				invalid,
 			);
@@ -46,7 +46,7 @@ describe("NeonDatabaseResourceProvider", () => {
 		it("creates the database when it doesn't already exist", async () => {
 			mockGet.mockResolvedValue({ databases: [] });
 
-			const provider = new NeonDatabaseResourceProvider();
+			const provider = new DatabaseResourceProvider();
 
 			const result = await provider.create({
 				apiKey: "key",
@@ -78,7 +78,7 @@ describe("NeonDatabaseResourceProvider", () => {
 					},
 				});
 
-			const provider = new NeonDatabaseResourceProvider();
+			const provider = new DatabaseResourceProvider();
 
 			const result = await provider.create({
 				apiKey: "key",
@@ -95,7 +95,7 @@ describe("NeonDatabaseResourceProvider", () => {
 
 	describe("diff", () => {
 		it("marks name as replace when the database name changes", async () => {
-			const provider = new NeonDatabaseResourceProvider();
+			const provider = new DatabaseResourceProvider();
 
 			const result = await provider.diff(
 				"br-main/neondb",
@@ -119,7 +119,7 @@ describe("NeonDatabaseResourceProvider", () => {
 		});
 
 		it("flags an in-place change (no replace) when only ownerName changes", async () => {
-			const provider = new NeonDatabaseResourceProvider();
+			const provider = new DatabaseResourceProvider();
 
 			const result = await provider.diff(
 				"br-main/neondb",
@@ -146,7 +146,7 @@ describe("NeonDatabaseResourceProvider", () => {
 
 	describe("update", () => {
 		it("PATCHes the owner name and agrees with diff's in-place case", async () => {
-			const provider = new NeonDatabaseResourceProvider();
+			const provider = new DatabaseResourceProvider();
 
 			const result = await provider.update(
 				"br-main/neondb",
@@ -178,10 +178,10 @@ describe("NeonDatabaseResourceProvider", () => {
 	describe("delete", () => {
 		it("deletes the database", async () => {
 			const mockDelete = vi
-				.spyOn(NeonClient.prototype, "delete")
+				.spyOn(Client.prototype, "delete")
 				.mockResolvedValue(undefined);
 
-			await new NeonDatabaseResourceProvider().delete("br-main/neondb", {
+			await new DatabaseResourceProvider().delete("br-main/neondb", {
 				apiKey: "key",
 				projectId: "proj-abc",
 				branchId: "br-main",
@@ -195,7 +195,7 @@ describe("NeonDatabaseResourceProvider", () => {
 		});
 
 		it("tolerates an already-deleted database (not-found)", async () => {
-			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+			vi.spyOn(Client.prototype, "delete").mockRejectedValue(
 				new ApiNotFoundError(
 					"neon",
 					"/projects/proj-abc/branches/br-main/databases/neondb",
@@ -203,7 +203,7 @@ describe("NeonDatabaseResourceProvider", () => {
 			);
 
 			await expect(
-				new NeonDatabaseResourceProvider().delete("br-main/neondb", {
+				new DatabaseResourceProvider().delete("br-main/neondb", {
 					apiKey: "key",
 					projectId: "proj-abc",
 					branchId: "br-main",
@@ -214,12 +214,12 @@ describe("NeonDatabaseResourceProvider", () => {
 		});
 
 		it("rethrows a real error", async () => {
-			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+			vi.spyOn(Client.prototype, "delete").mockRejectedValue(
 				new Error("Neon API error (403): forbidden"),
 			);
 
 			await expect(
-				new NeonDatabaseResourceProvider().delete("br-main/neondb", {
+				new DatabaseResourceProvider().delete("br-main/neondb", {
 					apiKey: "key",
 					projectId: "proj-abc",
 					branchId: "br-main",

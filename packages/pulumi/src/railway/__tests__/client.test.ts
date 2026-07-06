@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { RailwayClient } from "../client";
+import { Client } from "../client";
 
-describe("RailwayClient", () => {
+describe("railway.Client", () => {
 	const originalFetch = globalThis.fetch;
 
 	afterEach(() => {
@@ -15,7 +15,7 @@ describe("RailwayClient", () => {
 			json: () => Promise.resolve({ data: { me: { id: "user-1" } } }),
 		});
 
-		const client = new RailwayClient("test-token");
+		const client = new Client("test-token");
 		const result = await client.query<{ me: { id: string } }>("{ me { id } }");
 
 		expect(result.me.id).toBe("user-1");
@@ -33,7 +33,7 @@ describe("RailwayClient", () => {
 				}),
 		});
 
-		const client = new RailwayClient("test-token");
+		const client = new Client("test-token");
 
 		await expect(client.query("{ project }")).rejects.toThrow(
 			"Project not found",
@@ -48,7 +48,7 @@ describe("RailwayClient", () => {
 			text: () => Promise.resolve("Unauthorized"),
 		});
 
-		const client = new RailwayClient("test-token");
+		const client = new Client("test-token");
 
 		await expect(client.query("{ me }")).rejects.toThrow("401");
 	});

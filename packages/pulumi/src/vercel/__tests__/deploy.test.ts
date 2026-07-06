@@ -13,7 +13,7 @@ vi.mock("@pulumi/command", () => ({
 		Command: class {
 			stdout = {
 				apply: (fn: (out: string) => string) =>
-					fn("build\nhttps://nexus.vercel.app"),
+					fn("build\nhttps://demo-app.vercel.app"),
 			};
 			constructor(
 				public name: string,
@@ -61,13 +61,13 @@ vi.mock("@pulumi/pulumi", () => {
 });
 
 import { DeploySandbox } from "../../sandbox";
-import { VercelDeploy } from "../deploy";
-import type { VercelProvider } from "../provider";
+import { Deploy } from "../deploy";
+import type { Provider } from "../provider";
 
 const provider = {
 	token: "vercel-token",
 	teamId: "team_abc",
-} as unknown as VercelProvider;
+} as unknown as Provider;
 
 const sandbox = new DeploySandbox("deploy-sandbox");
 
@@ -75,17 +75,17 @@ beforeEach(() => {
 	commandCalls.length = 0;
 });
 
-describe("VercelDeploy", () => {
+describe("vercel.Deploy", () => {
 	it("wires the seam with the Vercel cli and env, no monorepoRoot/dir", () => {
-		new VercelDeploy(
-			"nexus",
+		new Deploy(
+			"demo-app",
 			{ projectId: "prj_1", triggers: ["h"] },
 			{ provider, dependsOn: [sandbox] },
 		);
 
 		expect(commandCalls).toHaveLength(1);
 		const { name, args } = commandCalls[0];
-		expect(name).toBe("nexus");
+		expect(name).toBe("demo-app");
 		expect(args.dir).toBeUndefined();
 
 		expect(args.environment).toEqual({
@@ -102,18 +102,18 @@ describe("VercelDeploy", () => {
 	});
 
 	it("derives deploymentUrl from the final stdout line", () => {
-		const deploy = new VercelDeploy(
-			"nexus",
+		const deploy = new Deploy(
+			"demo-app",
 			{ projectId: "prj_1", triggers: [] },
 			{ provider, dependsOn: [sandbox] },
 		);
 
-		expect(deploy.deploymentUrl).toBe("https://nexus.vercel.app");
+		expect(deploy.deploymentUrl).toBe("https://demo-app.vercel.app");
 	});
 
 	it("passes triggers through unchanged and adds no env-applier step", () => {
-		new VercelDeploy(
-			"nexus",
+		new Deploy(
+			"demo-app",
 			{ projectId: "prj_1", triggers: ["h"] },
 			{ provider, dependsOn: [sandbox] },
 		);

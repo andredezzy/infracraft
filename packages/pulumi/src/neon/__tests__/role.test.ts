@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { NeonClient } from "../client";
-import { NeonRoleResourceProvider } from "../role";
+import { Client } from "../client";
+import { RoleResourceProvider } from "../role";
 
-describe("NeonRoleResourceProvider", () => {
+describe("neon.RoleResourceProvider", () => {
 	let mockGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockGet = vi.fn();
 		mockPost = vi.fn();
-		vi.spyOn(NeonClient.prototype, "get").mockImplementation(mockGet);
-		vi.spyOn(NeonClient.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "get").mockImplementation(mockGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
 	});
 
 	afterEach(() => {
@@ -33,7 +33,7 @@ describe("NeonRoleResourceProvider", () => {
 
 			mockPost.mockResolvedValueOnce({ role: { password: "fresh-pw" } });
 
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			await provider.create({
 				apiKeyEnvVar: "INFRACRAFT_TEST_NEON_API_KEY",
@@ -47,7 +47,7 @@ describe("NeonRoleResourceProvider", () => {
 		});
 
 		it("throws a loud error naming the env var when it is not set", async () => {
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			await expect(
 				provider.create({
@@ -68,7 +68,7 @@ describe("NeonRoleResourceProvider", () => {
 			mockGet.mockResolvedValueOnce({ roles: [{ name: "neondb_owner" }] }); // role exists
 			mockPost.mockResolvedValueOnce({ role: { password: "fresh-pw" } }); // reset_password
 
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const result = await provider.create({
 				apiKey: "key",
@@ -93,7 +93,7 @@ describe("NeonRoleResourceProvider", () => {
 				.mockResolvedValueOnce({ roles: [{ name: "neondb_owner" }] }) // role exists
 				.mockResolvedValueOnce({ password: "inherited-pw" }); // reveal_password
 
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const result = await provider.create({
 				apiKey: "key",
@@ -119,7 +119,7 @@ describe("NeonRoleResourceProvider", () => {
 
 			mockPost.mockResolvedValueOnce({}); // create role
 
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const result = await provider.create({
 				apiKey: "key",
@@ -162,7 +162,7 @@ describe("NeonRoleResourceProvider", () => {
 				),
 			);
 
-			const result = await new NeonRoleResourceProvider().read(
+			const result = await new RoleResourceProvider().read(
 				"br-staging/neondb_owner",
 				props,
 			);
@@ -174,7 +174,7 @@ describe("NeonRoleResourceProvider", () => {
 			mockGet.mockRejectedValueOnce(new Error("Neon API error (500): boom"));
 
 			await expect(
-				new NeonRoleResourceProvider().read("br-staging/neondb_owner", props),
+				new RoleResourceProvider().read("br-staging/neondb_owner", props),
 			).rejects.toThrow("500");
 		});
 	});
@@ -192,7 +192,7 @@ describe("NeonRoleResourceProvider", () => {
 		it("rotates the password in place when passwordVersion changes", async () => {
 			mockPost.mockResolvedValueOnce({ role: { password: "rotated-pw" } });
 
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const result = await provider.update("br-staging/neondb_owner", olds, {
 				...olds,
@@ -208,7 +208,7 @@ describe("NeonRoleResourceProvider", () => {
 		});
 
 		it("keeps the password when passwordVersion is unchanged", async () => {
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const result = await provider.update(
 				"br-staging/neondb_owner",
@@ -221,7 +221,7 @@ describe("NeonRoleResourceProvider", () => {
 		});
 
 		it("reports a rotation as an update, never a replace", async () => {
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const diff = await provider.diff("br-staging/neondb_owner", olds, {
 				...olds,
@@ -243,7 +243,7 @@ describe("NeonRoleResourceProvider", () => {
 		};
 
 		it("passes a valid role name through untouched", async () => {
-			const result = await new NeonRoleResourceProvider().check(inputs, inputs);
+			const result = await new RoleResourceProvider().check(inputs, inputs);
 
 			expect(result.inputs).toEqual(inputs);
 			expect(result.failures).toEqual([]);
@@ -252,10 +252,7 @@ describe("NeonRoleResourceProvider", () => {
 		it("fails an empty role name, naming the property", async () => {
 			const invalid = { ...inputs, name: "" };
 
-			const result = await new NeonRoleResourceProvider().check(
-				invalid,
-				invalid,
-			);
+			const result = await new RoleResourceProvider().check(invalid, invalid);
 
 			expect(result.failures).toHaveLength(1);
 			expect(result.failures?.[0].property).toBe("name");
@@ -274,7 +271,7 @@ describe("NeonRoleResourceProvider", () => {
 		};
 
 		it("declares identity fields stable on rotation — but never the password", async () => {
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const diff = await provider.diff("br-staging/neondb_owner", olds, {
 				...olds,
@@ -286,7 +283,7 @@ describe("NeonRoleResourceProvider", () => {
 		});
 
 		it("declares no stables when an identity change forces a replace", async () => {
-			const provider = new NeonRoleResourceProvider();
+			const provider = new RoleResourceProvider();
 
 			const diff = await provider.diff("br-staging/neondb_owner", olds, {
 				...olds,
@@ -313,12 +310,9 @@ describe("NeonRoleResourceProvider", () => {
 				role: { name: "neondb_owner", protected: true },
 			});
 
-			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+			const mockDelete = vi.spyOn(Client.prototype, "delete");
 
-			await new NeonRoleResourceProvider().delete(
-				"br-main/neondb_owner",
-				props,
-			);
+			await new RoleResourceProvider().delete("br-main/neondb_owner", props);
 
 			expect(mockDelete).not.toHaveBeenCalled();
 		});
@@ -329,13 +323,10 @@ describe("NeonRoleResourceProvider", () => {
 			});
 
 			const mockDelete = vi
-				.spyOn(NeonClient.prototype, "delete")
+				.spyOn(Client.prototype, "delete")
 				.mockResolvedValue(undefined);
 
-			await new NeonRoleResourceProvider().delete(
-				"br-main/neondb_owner",
-				props,
-			);
+			await new RoleResourceProvider().delete("br-main/neondb_owner", props);
 
 			expect(mockDelete).toHaveBeenCalledWith(
 				"/projects/proj-abc/branches/br-main/roles/neondb_owner",
@@ -350,10 +341,10 @@ describe("NeonRoleResourceProvider", () => {
 				),
 			);
 
-			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+			const mockDelete = vi.spyOn(Client.prototype, "delete");
 
 			await expect(
-				new NeonRoleResourceProvider().delete("br-main/neondb_owner", props),
+				new RoleResourceProvider().delete("br-main/neondb_owner", props),
 			).resolves.toBeUndefined();
 
 			expect(mockDelete).not.toHaveBeenCalled();
@@ -363,7 +354,7 @@ describe("NeonRoleResourceProvider", () => {
 			mockGet.mockRejectedValueOnce(new Error("Neon API error (500): boom"));
 
 			await expect(
-				new NeonRoleResourceProvider().delete("br-main/neondb_owner", props),
+				new RoleResourceProvider().delete("br-main/neondb_owner", props),
 			).rejects.toThrow("500");
 		});
 
@@ -372,12 +363,12 @@ describe("NeonRoleResourceProvider", () => {
 				role: { name: "neondb_owner", protected: false },
 			});
 
-			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+			vi.spyOn(Client.prototype, "delete").mockRejectedValue(
 				new Error("Neon API error (403): forbidden"),
 			);
 
 			await expect(
-				new NeonRoleResourceProvider().delete("br-main/neondb_owner", props),
+				new RoleResourceProvider().delete("br-main/neondb_owner", props),
 			).rejects.toThrow("403");
 		});
 	});

@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayEnvironmentResourceProvider } from "../environment";
-import { RailwayServiceResourceProvider } from "../service";
-import { RailwayVolumeResourceProvider } from "../volume";
+import { Client } from "../client";
+import { EnvironmentResourceProvider } from "../environment";
+import { ServiceResourceProvider } from "../service";
+import { VolumeResourceProvider } from "../volume";
 
 /**
  * LIVE integration test for the Railway volume provider's ENVIRONMENT-SCOPED
@@ -21,7 +21,7 @@ import { RailwayVolumeResourceProvider } from "../volume";
  */
 
 /** Fully-resolved live-test configuration; only present when the tier is enabled. */
-interface RailwayLiveConfig {
+interface LiveConfig {
 	/** Railway account/team API token. */
 	token: string;
 
@@ -33,7 +33,7 @@ interface RailwayLiveConfig {
 }
 
 /** Reads the live-test config, or `null` when the tier is disabled or any credential is missing. */
-function readLiveConfig(): RailwayLiveConfig | null {
+function readLiveConfig(): LiveConfig | null {
 	if (process.env.INFRACRAFT_LIVE_TEST !== "1") {
 		return null;
 	}
@@ -80,15 +80,15 @@ const ENVIRONMENT_DELETE = `
 const config = readLiveConfig();
 
 describe.skipIf(!config)(
-	"RailwayVolume environment-scoped adoption (live)",
+	"railway.Volume environment-scoped adoption (live)",
 	() => {
 		// Guarded by skipIf: whenever a hook or test body below runs, `config` is non-null.
-		const live = config as RailwayLiveConfig;
+		const live = config as LiveConfig;
 
-		const client = new RailwayClient(config?.token ?? "");
-		const serviceProvider = new RailwayServiceResourceProvider();
-		const environmentProvider = new RailwayEnvironmentResourceProvider();
-		const volumeProvider = new RailwayVolumeResourceProvider();
+		const client = new Client(config?.token ?? "");
+		const serviceProvider = new ServiceResourceProvider();
+		const environmentProvider = new EnvironmentResourceProvider();
+		const volumeProvider = new VolumeResourceProvider();
 
 		const suffix = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 		const serviceName = `ic-live-vol-${suffix}`;

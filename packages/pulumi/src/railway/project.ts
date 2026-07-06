@@ -1,15 +1,15 @@
 import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
-import { RailwayClient } from "./client";
-import type { RailwayProvider } from "./provider";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Railway project dynamic provider. */
-interface RailwayProjectInputs {
+interface ProjectInputs {
 	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Desired display name for the project in Railway's dashboard. */
@@ -20,7 +20,7 @@ interface RailwayProjectInputs {
 }
 
 /** Persisted state for the Railway project. */
-interface RailwayProjectOutputs extends RailwayProjectInputs {
+interface ProjectOutputs extends ProjectInputs {
 	/** Railway-assigned project UUID. */
 	projectId: string;
 
@@ -84,7 +84,7 @@ const PROJECT_ENVIRONMENTS_QUERY = `
  * Fetches all environments for a project and returns a name → UUID map.
  */
 async function fetchProjectEnvironments(
-	client: RailwayClient,
+	client: Client,
 	projectId: string,
 ): Promise<Record<string, string>> {
 	const result = await client.query<{
@@ -117,7 +117,7 @@ async function fetchProjectEnvironments(
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class RailwayProjectResourceProvider
+export class ProjectResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -125,9 +125,9 @@ export class RailwayProjectResourceProvider
 	 * deep inside the Railway API call — and never match on the adopt lookup.
 	 */
 	async check(
-		_olds: RailwayProjectInputs,
-		news: RailwayProjectInputs,
-	): Promise<pulumi.dynamic.CheckResult<RailwayProjectInputs>> {
+		_olds: ProjectInputs,
+		news: ProjectInputs,
+	): Promise<pulumi.dynamic.CheckResult<ProjectInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (isResolvedString(news.name) && news.name.trim().length === 0) {
@@ -140,10 +140,8 @@ export class RailwayProjectResourceProvider
 		return { inputs: news, failures };
 	}
 
-	async create(
-		inputs: RailwayProjectInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(
+	async create(inputs: ProjectInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -220,7 +218,7 @@ export class RailwayProjectResourceProvider
 
 		const productionEnvironmentId = environments.production ?? "";
 
-		const outs: RailwayProjectOutputs = {
+		const outs: ProjectOutputs = {
 			...inputs,
 			projectId,
 			productionEnvironmentId,
@@ -231,12 +229,10 @@ export class RailwayProjectResourceProvider
 
 	async update(
 		id: string,
-		_olds: RailwayProjectOutputs,
-		news: RailwayProjectInputs,
+		_olds: ProjectOutputs,
+		news: ProjectInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new RailwayClient(
-			resolveCredential(news.token, news.tokenEnvVar),
-		);
+		const client = new Client(resolveCredential(news.token, news.tokenEnvVar));
 
 		await client.query(PROJECT_UPDATE, {
 			id,
@@ -247,7 +243,7 @@ export class RailwayProjectResourceProvider
 
 		const productionEnvironmentId = environments.production ?? "";
 
-		const outs: RailwayProjectOutputs = {
+		const outs: ProjectOutputs = {
 			...news,
 			projectId: id,
 			productionEnvironmentId,
@@ -258,9 +254,9 @@ export class RailwayProjectResourceProvider
 
 	async read(
 		id: string,
-		props: RailwayProjectOutputs,
+		props: ProjectOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -283,8 +279,8 @@ export class RailwayProjectResourceProvider
 
 	async diff(
 		_id: string,
-		olds: RailwayProjectOutputs,
-		news: RailwayProjectInputs,
+		olds: ProjectOutputs,
+		news: ProjectInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const changes: string[] = [];
 
@@ -310,7 +306,7 @@ export class RailwayProjectResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class RailwayProjectResource extends pulumi.dynamic.Resource {
+class ProjectResource extends pulumi.dynamic.Resource {
 	public declare readonly projectId: pulumi.Output<string>;
 	public declare readonly productionEnvironmentId: pulumi.Output<string>;
 
@@ -325,7 +321,7 @@ class RailwayProjectResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayProjectResourceProvider(),
+			new ProjectResourceProvider(),
 			name,
 			{
 				...args,
@@ -338,17 +334,14 @@ class RailwayProjectResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for RailwayProject — replaces Pulumi's native `provider` field. */
-type RailwayProjectOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Project — replaces Pulumi's native `provider` field. */
+type ProjectOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Railway authentication context. */
-	provider: RailwayProvider;
+	provider: Provider;
 };
 
-/** Args for RailwayProject. */
-export interface RailwayProjectArgs {
+/** Args for Project. */
+export interface ProjectArgs {
 	/** Project display name to find and adopt or create. */
 	name: pulumi.Input<string>;
 
@@ -360,36 +353,32 @@ export interface RailwayProjectArgs {
  * Manages a Railway project with adopt-or-create semantics.
  *
  * Discovers or creates the project and resolves the production environment ID.
- * Deploy tokens are provisioned separately via {@link RailwayProjectToken} so
+ * Deploy tokens are provisioned separately via {@link ProjectToken} so
  * each environment gets its own correctly-scoped token with no cross-stack collisions.
  *
  * @example
  * ```typescript
- * const project = new RailwayProject("my-project", {
+ * const project = new railway.Project("my-project", {
  *   name: "my-app",
  *   description: "Railway services for my-app",
  * }, { provider });
  *
  * // Use outputs downstream
- * const environment = new RailwayEnvironment("production", {
+ * const environment = new railway.Environment("production", {
  *   name: "production",
  * }, { provider, project });
  * ```
  */
-export class RailwayProject extends pulumi.ComponentResource {
+export class Project extends pulumi.ComponentResource {
 	/** Railway project UUID. */
 	public readonly id: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: RailwayProjectArgs,
-		opts: RailwayProjectOptions,
-	) {
+	constructor(name: string, args: ProjectArgs, opts: ProjectOptions) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:railway:Project", name, {}, pulumiOpts);
 
-		const resource = new RailwayProjectResource(
+		const resource = new ProjectResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

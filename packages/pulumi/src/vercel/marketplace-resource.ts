@@ -1,14 +1,14 @@
 import * as pulumi from "@pulumi/pulumi";
 import { resolveCredential } from "../dynamic/resolve-credential";
-import { VercelClient } from "./client";
-import type { VercelProvider } from "./provider";
+import { Client } from "./client";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Vercel marketplace resource dynamic provider. */
-interface VercelMarketplaceResourceInputs {
+interface MarketplaceResourceInputs {
 	/** Vercel API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `VercelProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Vercel team/org ID. */
@@ -34,8 +34,7 @@ interface VercelMarketplaceResourceInputs {
 }
 
 /** Persisted state for the Vercel marketplace resource. */
-interface VercelMarketplaceResourceOutputs
-	extends VercelMarketplaceResourceInputs {
+interface MarketplaceResourceOutputs extends MarketplaceResourceInputs {
 	/** Vercel-assigned store ID. */
 	storeId: string;
 
@@ -47,7 +46,7 @@ interface VercelMarketplaceResourceOutputs
 }
 
 /** Vercel API response shape for a provisioned store. */
-interface VercelStoreResponse {
+interface StoreResponse {
 	store: {
 		id: string;
 		externalResourceId: string;
@@ -61,11 +60,11 @@ interface VercelStoreResponse {
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class VercelMarketplaceResourceProvider
+export class MarketplaceResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	async create(
-		inputs: VercelMarketplaceResourceInputs,
+		inputs: MarketplaceResourceInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
 		const body = {
 			name: inputs.name,
@@ -79,12 +78,12 @@ export class VercelMarketplaceResourceProvider
 				: {}),
 		};
 
-		const client = new VercelClient(
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 			inputs.teamId,
 		);
 
-		const { store } = await client.post<VercelStoreResponse>(
+		const { store } = await client.post<StoreResponse>(
 			"/v1/storage/stores/integration/direct",
 			body,
 		);
@@ -93,7 +92,7 @@ export class VercelMarketplaceResourceProvider
 		// store with this externalId already exists out-of-band (created outside Pulumi) and
 		// Vercel does not dedupe server-side, this creates a duplicate — unlike the other
 		// adopt-or-create providers in this package, there is no adopt-by-list lookup here.
-		const outs: VercelMarketplaceResourceOutputs = {
+		const outs: MarketplaceResourceOutputs = {
 			...inputs,
 			storeId: store.id,
 			externalResourceId: store.externalResourceId,
@@ -111,10 +110,10 @@ export class VercelMarketplaceResourceProvider
 	 */
 	async update(
 		id: string,
-		olds: VercelMarketplaceResourceOutputs,
-		news: VercelMarketplaceResourceInputs,
+		olds: MarketplaceResourceOutputs,
+		news: MarketplaceResourceInputs,
 	): Promise<pulumi.dynamic.UpdateResult> {
-		const client = new VercelClient(
+		const client = new Client(
 			resolveCredential(news.token, news.tokenEnvVar),
 			news.teamId,
 		);
@@ -124,7 +123,7 @@ export class VercelMarketplaceResourceProvider
 			{ metadata: news.metadata ?? {} },
 		);
 
-		const outs: VercelMarketplaceResourceOutputs = {
+		const outs: MarketplaceResourceOutputs = {
 			...olds,
 			...news,
 			storeId: id,
@@ -135,7 +134,7 @@ export class VercelMarketplaceResourceProvider
 
 	async read(
 		id: string,
-		props: VercelMarketplaceResourceOutputs,
+		props: MarketplaceResourceOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
 		// Pass-through read: Vercel's store-read endpoint isn't wired up here, so
 		// out-of-band store changes are not detected — this returns stored state as-is.
@@ -144,14 +143,14 @@ export class VercelMarketplaceResourceProvider
 
 	async delete(): Promise<void> {
 		pulumi.log.warn(
-			"VercelMarketplaceResource deletion skipped — data store; remove it from the Vercel dashboard if intended",
+			"vercel.MarketplaceResource deletion skipped — data store; remove it from the Vercel dashboard if intended",
 		);
 	}
 
 	async diff(
 		_id: string,
-		olds: VercelMarketplaceResourceOutputs,
-		news: VercelMarketplaceResourceInputs,
+		olds: MarketplaceResourceOutputs,
+		news: MarketplaceResourceInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -179,7 +178,7 @@ export class VercelMarketplaceResourceProvider
 		// update()); billingPlanId is NOT — that endpoint only accepts a full
 		// billingPlan object (id + type + name + ...), a materially different
 		// shape than the plain string this provider exposes, so billingPlanId
-		// stays create-time-only (see its JSDoc on VercelMarketplaceResourceArgs).
+		// stays create-time-only (see its JSDoc on MarketplaceResourceArgs).
 		const metadataChanged =
 			JSON.stringify(olds.metadata) !== JSON.stringify(news.metadata);
 
@@ -192,7 +191,7 @@ export class VercelMarketplaceResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class VercelMarketplaceStoreResource extends pulumi.dynamic.Resource {
+class MarketplaceStoreResource extends pulumi.dynamic.Resource {
 	public declare readonly storeId: pulumi.Output<string>;
 	public declare readonly externalResourceId: pulumi.Output<string>;
 	public declare readonly status: pulumi.Output<string>;
@@ -213,7 +212,7 @@ class VercelMarketplaceStoreResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new VercelMarketplaceResourceProvider(),
+			new MarketplaceResourceProvider(),
 			name,
 			{
 				...args,
@@ -227,22 +226,22 @@ class VercelMarketplaceStoreResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for VercelMarketplaceResource — replaces Pulumi's native `provider` field. */
-type VercelMarketplaceResourceOptions = Omit<
+/** Options type for MarketplaceResource — replaces Pulumi's native `provider` field. */
+type MarketplaceResourceOptions = Omit<
 	pulumi.ComponentResourceOptions,
 	"provider"
 > & {
 	/** Vercel authentication context. */
-	provider: VercelProvider;
+	provider: Provider;
 };
 
 /**
- * Args for {@link VercelMarketplaceResource}.
+ * Args for {@link MarketplaceResource}.
  */
-export interface VercelMarketplaceResourceArgs {
+export interface MarketplaceResourceArgs {
 	/**
 	 * Integration configuration ID (e.g. `"icfg_…"`).
-	 * Obtain this from {@link VercelIntegration.configurationId}.
+	 * Obtain this from {@link Integration.configurationId}.
 	 * Replaces on change.
 	 */
 	integrationConfigurationId: pulumi.Input<string>;
@@ -291,9 +290,9 @@ export interface VercelMarketplaceResourceArgs {
  *
  * @example
  * ```typescript
- * const upstash = new VercelIntegration("upstash", { slug: "upstash" }, { provider });
+ * const upstash = new vercel.Integration("upstash", { slug: "upstash" }, { provider });
  *
- * const kvStore = new VercelMarketplaceResource("humanes-kv", {
+ * const kvStore = new vercel.MarketplaceResource("humanes-kv", {
  *   integrationConfigurationId: upstash.configurationId,
  *   name: "rby-humanes-kv",
  *   type: "upstash-kv",
@@ -304,7 +303,7 @@ export interface VercelMarketplaceResourceArgs {
  * export const kvExternalResourceId = kvStore.externalResourceId;
  * ```
  */
-export class VercelMarketplaceResource extends pulumi.ComponentResource {
+export class MarketplaceResource extends pulumi.ComponentResource {
 	/** Vercel-assigned store ID (also the Pulumi resource ID). */
 	public readonly id: pulumi.Output<string>;
 
@@ -316,14 +315,14 @@ export class VercelMarketplaceResource extends pulumi.ComponentResource {
 
 	constructor(
 		name: string,
-		args: VercelMarketplaceResourceArgs,
-		opts: VercelMarketplaceResourceOptions,
+		args: MarketplaceResourceArgs,
+		opts: MarketplaceResourceOptions,
 	) {
 		const { provider, ...pulumiOpts } = opts;
 
 		super("infracraft:vercel:MarketplaceResource", name, {}, pulumiOpts);
 
-		const resource = new VercelMarketplaceStoreResource(
+		const resource = new MarketplaceStoreResource(
 			`${name}-resource`,
 			{
 				token: provider.token,

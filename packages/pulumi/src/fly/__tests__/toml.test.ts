@@ -1,13 +1,13 @@
 import { describe, expect, it } from "vitest";
 
 import {
-	FlyAutoStopMachines,
-	FlyConcurrencyType,
-	FlyCpuKind,
-	FlyDeployStrategy,
-	FlyRestartPolicy,
-	type FlyTomlConfig,
+	AutoStopMachines,
+	ConcurrencyType,
+	CpuKind,
+	DeployStrategy,
 	generateFlyToml,
+	RestartPolicy,
+	type TomlConfig,
 } from "../toml";
 
 describe("generateFlyToml", () => {
@@ -19,7 +19,7 @@ describe("generateFlyToml", () => {
 	});
 
 	it("emits build, env and processes sections", () => {
-		const config: FlyTomlConfig = {
+		const config: TomlConfig = {
 			app: "rby-api",
 			primaryRegion: "iad",
 			build: { dockerfile: "apps/api/Dockerfile" },
@@ -38,17 +38,17 @@ describe("generateFlyToml", () => {
 	});
 
 	it("emits http_service with concurrency and checks", () => {
-		const config: FlyTomlConfig = {
+		const config: TomlConfig = {
 			app: "rby-api",
 			primaryRegion: "iad",
 			httpService: {
 				internalPort: 3333,
 				forceHttps: true,
-				autoStopMachines: FlyAutoStopMachines.OFF,
+				autoStopMachines: AutoStopMachines.OFF,
 				autoStartMachines: true,
 				minMachinesRunning: 1,
 				concurrency: {
-					type: FlyConcurrencyType.REQUESTS,
+					type: ConcurrencyType.REQUESTS,
 					softLimit: 200,
 					hardLimit: 250,
 				},
@@ -82,7 +82,7 @@ describe("generateFlyToml", () => {
 	});
 
 	it("emits mounts, vm (without count), deploy and restart", () => {
-		const config: FlyTomlConfig = {
+		const config: TomlConfig = {
 			app: "rby-redis",
 			primaryRegion: "iad",
 			mounts: [
@@ -92,15 +92,15 @@ describe("generateFlyToml", () => {
 				{
 					size: "shared-cpu-1x",
 					memory: "256mb",
-					cpuKind: FlyCpuKind.SHARED,
+					cpuKind: CpuKind.SHARED,
 					cpus: 1,
 				},
 			],
 			deploy: {
-				strategy: FlyDeployStrategy.BLUEGREEN,
+				strategy: DeployStrategy.BLUEGREEN,
 				releaseCommand: "node scripts/migrate.js",
 			},
-			restart: { policy: FlyRestartPolicy.ON_FAILURE, retries: 5 },
+			restart: { policy: RestartPolicy.ON_FAILURE, retries: 5 },
 		};
 
 		const toml = generateFlyToml(config);
@@ -141,7 +141,7 @@ describe("generateFlyToml", () => {
 				{
 					size: "performance-4x",
 					memory: "8192mb",
-					cpuKind: FlyCpuKind.PERFORMANCE,
+					cpuKind: CpuKind.PERFORMANCE,
 					cpus: 4,
 				},
 			],
@@ -172,7 +172,7 @@ describe("generateFlyToml", () => {
 			{ app: "app-jnb", primaryRegion: "jnb" as const },
 		] satisfies Array<{
 			app: string;
-			primaryRegion: import("../toml").FlyRegion;
+			primaryRegion: import("../toml").Region;
 		}>;
 
 		for (const config of configs) {

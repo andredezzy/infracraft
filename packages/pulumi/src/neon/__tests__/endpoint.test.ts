@@ -1,17 +1,17 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiNotFoundError } from "../../errors/api-not-found-error";
-import { NeonClient } from "../client";
-import { NeonEndpointResourceProvider } from "../endpoint";
+import { Client } from "../client";
+import { EndpointResourceProvider } from "../endpoint";
 
-describe("NeonEndpointResourceProvider", () => {
+describe("neon.EndpointResourceProvider", () => {
 	let mockGet: ReturnType<typeof vi.fn>;
 	let mockPost: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
 		mockGet = vi.fn();
 		mockPost = vi.fn();
-		vi.spyOn(NeonClient.prototype, "get").mockImplementation(mockGet);
-		vi.spyOn(NeonClient.prototype, "post").mockImplementation(mockPost);
+		vi.spyOn(Client.prototype, "get").mockImplementation(mockGet);
+		vi.spyOn(Client.prototype, "post").mockImplementation(mockPost);
 	});
 
 	afterEach(() => {
@@ -29,10 +29,7 @@ describe("NeonEndpointResourceProvider", () => {
 		};
 
 		it("fails maxCu below minCu, naming the property", async () => {
-			const result = await new NeonEndpointResourceProvider().check(
-				inputs,
-				inputs,
-			);
+			const result = await new EndpointResourceProvider().check(inputs, inputs);
 
 			expect(result.failures).toHaveLength(1);
 			expect(result.failures?.[0].property).toBe("maxCu");
@@ -42,10 +39,7 @@ describe("NeonEndpointResourceProvider", () => {
 		it("passes when maxCu is greater than or equal to minCu", async () => {
 			const valid = { ...inputs, minCu: 0.25, maxCu: 1 };
 
-			const result = await new NeonEndpointResourceProvider().check(
-				valid,
-				valid,
-			);
+			const result = await new EndpointResourceProvider().check(valid, valid);
 
 			expect(result.failures).toEqual([]);
 		});
@@ -59,7 +53,7 @@ describe("NeonEndpointResourceProvider", () => {
 				endpoint: { id: "ep-new", host: "ep-new.neon.tech" },
 			});
 
-			const result = await new NeonEndpointResourceProvider().create({
+			const result = await new EndpointResourceProvider().create({
 				apiKey: "key",
 				projectId: "proj-abc",
 				branchId: "br-main",
@@ -76,10 +70,10 @@ describe("NeonEndpointResourceProvider", () => {
 	describe("delete", () => {
 		it("deletes the endpoint", async () => {
 			const mockDelete = vi
-				.spyOn(NeonClient.prototype, "delete")
+				.spyOn(Client.prototype, "delete")
 				.mockResolvedValue(undefined);
 
-			await new NeonEndpointResourceProvider().delete("ep-main", {
+			await new EndpointResourceProvider().delete("ep-main", {
 				apiKey: "key",
 				projectId: "proj-abc",
 				branchId: "br-main",
@@ -95,12 +89,12 @@ describe("NeonEndpointResourceProvider", () => {
 		});
 
 		it("tolerates an already-deleted endpoint (not-found)", async () => {
-			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+			vi.spyOn(Client.prototype, "delete").mockRejectedValue(
 				new ApiNotFoundError("neon", "/projects/proj-abc/endpoints/ep-gone"),
 			);
 
 			await expect(
-				new NeonEndpointResourceProvider().delete("ep-gone", {
+				new EndpointResourceProvider().delete("ep-gone", {
 					apiKey: "key",
 					projectId: "proj-abc",
 					branchId: "br-main",
@@ -113,12 +107,12 @@ describe("NeonEndpointResourceProvider", () => {
 		});
 
 		it("rethrows a real error", async () => {
-			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+			vi.spyOn(Client.prototype, "delete").mockRejectedValue(
 				new Error("Neon API error (403): forbidden"),
 			);
 
 			await expect(
-				new NeonEndpointResourceProvider().delete("ep-main", {
+				new EndpointResourceProvider().delete("ep-main", {
 					apiKey: "key",
 					projectId: "proj-abc",
 					branchId: "br-main",
@@ -143,7 +137,7 @@ describe("NeonEndpointResourceProvider", () => {
 				host: "ep.neon.tech",
 			};
 
-			const result = await new NeonEndpointResourceProvider().diff(
+			const result = await new EndpointResourceProvider().diff(
 				"ep-main",
 				olds,
 				{ ...olds, maxCu: 2 },

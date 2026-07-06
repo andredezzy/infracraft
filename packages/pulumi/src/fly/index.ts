@@ -1,46 +1,46 @@
 // The typed not-found error this provider's client throws — consumers catch by instanceof.
 export { ApiNotFoundError } from "../errors/api-not-found-error";
-export type { FlyAppArgs } from "./app";
-export { FlyApp } from "./app";
-export type { FlyCertificateArgs, FlyDnsRequirements } from "./certificate";
-export { FlyCertificate } from "./certificate";
-export { FlyClient } from "./client";
-export type { FlyDeployArgs } from "./deploy";
-export { FlyDeploy } from "./deploy";
-export type { FlyIpArgs } from "./ip";
-export { FlyIp, FlyIpType } from "./ip";
-export type { FlyProviderArgs } from "./provider";
-export { FlyProvider } from "./provider";
-export type { FlySecretArgs } from "./secret";
-export { FlySecret } from "./secret";
+export type { AppArgs } from "./app";
+export { App } from "./app";
+export type { CertificateArgs, DnsRequirements } from "./certificate";
+export { Certificate } from "./certificate";
+export { Client } from "./client";
+export type { DeployArgs } from "./deploy";
+export { Deploy } from "./deploy";
+export type { IpArgs } from "./ip";
+export { Ip, IpType } from "./ip";
+export type { ProviderArgs } from "./provider";
+export { Provider } from "./provider";
+export type { SecretArgs } from "./secret";
+export { Secret } from "./secret";
 export type {
-	FlyBuildConfig,
-	FlyCheck,
-	FlyConcurrency,
-	FlyCpuCount,
-	FlyDeployConfig,
-	FlyHttpService,
-	FlyMount,
-	FlyRegion,
-	FlyRestartConfig,
-	FlyService,
-	FlyServicePort,
-	FlyTomlConfig,
-	FlyVm,
-	FlyVmSize,
+	BuildConfig,
+	Check,
+	Concurrency,
+	CpuCount,
+	DeployConfig,
+	HttpService,
+	Mount,
+	Region,
+	RestartConfig,
+	Service,
+	ServicePort,
+	TomlConfig,
+	Vm,
+	VmSize,
 } from "./toml";
 export {
+	AutoStopMachines,
+	CheckType,
+	ConcurrencyType,
+	CpuKind,
+	DeployStrategy,
 	FLY_REGIONS,
 	FLY_VM_SIZES,
-	FlyAutoStopMachines,
-	FlyCheckType,
-	FlyConcurrencyType,
-	FlyCpuKind,
-	FlyDeployStrategy,
-	FlyPortHandler,
-	FlyRestartPolicy,
-	FlyServiceProtocol,
 	generateFlyToml,
+	PortHandler,
+	RestartPolicy,
+	ServiceProtocol,
 } from "./toml";
-export type { FlyVolumeArgs } from "./volume";
-export { FlyVolume } from "./volume";
+export type { VolumeArgs } from "./volume";
+export { Volume } from "./volume";

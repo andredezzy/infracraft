@@ -44,9 +44,9 @@ describe("buildSandboxFileFilter", () => {
 	});
 
 	it("drops an app's code but keeps its package.json", () => {
-		const filter = buildSandboxFileFilter(["apps/mesh"]);
-		expect(filter).toContain("/^apps\\/mesh(\\/|$)/");
-		expect(filter).toContain("!/^apps\\/mesh\\/package\\.json$/");
+		const filter = buildSandboxFileFilter(["apps/api"]);
+		expect(filter).toContain("/^apps\\/api(\\/|$)/");
+		expect(filter).toContain("!/^apps\\/api\\/package\\.json$/");
 	});
 
 	it("keeps the manifest of an excluded workspace member (e.g. infrastructure/)", () => {
@@ -59,10 +59,10 @@ describe("buildSandboxFileFilter", () => {
 		const lines = [
 			"infrastructure/package.json",
 			"infrastructure/index.ts",
-			"infrastructure/stacks/mesh.ts",
+			"infrastructure/stacks/api.ts",
 			"apps/lab/package.json",
 			"apps/lab/src/page.tsx",
-			"apps/mesh/src/index.ts",
+			"apps/api/src/index.ts",
 			"package.json",
 		].join("\n");
 
@@ -74,15 +74,15 @@ describe("buildSandboxFileFilter", () => {
 		expect(kept).toEqual([
 			"infrastructure/package.json",
 			"apps/lab/package.json",
-			"apps/mesh/src/index.ts",
+			"apps/api/src/index.ts",
 			"package.json",
 		]);
 	});
 
 	it("ANDs every exclude clause into one awk program", () => {
-		const filter = buildSandboxFileFilter(["apps/mesh", "docs"]);
+		const filter = buildSandboxFileFilter(["apps/api", "docs"]);
 		expect(filter.match(/&&/g)?.length).toBeGreaterThanOrEqual(1);
-		expect(filter).toContain("apps\\/mesh");
+		expect(filter).toContain("apps\\/api");
 		expect(filter).toContain("docs");
 	});
 
@@ -108,7 +108,7 @@ describe("buildSandboxFileFilter", () => {
 });
 
 describe("buildSandboxScript", () => {
-	const base = { appName: "nexus", cli: "vercel deploy --prod --yes" };
+	const base = { appName: "acme", cli: "vercel deploy --prod --yes" };
 
 	it("every script runs under `set -e` and guards the repo lookup", () => {
 		for (const mode of [
@@ -134,18 +134,18 @@ describe("buildSandboxScript", () => {
 		const script = buildSandboxScript({
 			...base,
 			mode: SandboxMode.STUB,
-			excludePaths: ["apps/mesh"],
+			excludePaths: ["apps/api"],
 		});
 
 		expect(script).toContain('PROJECT=$(basename "$REPO")');
-		expect(script).toContain('mktemp -d "/tmp/infracraft/$PROJECT-nexus.');
+		expect(script).toContain('mktemp -d "/tmp/infracraft/$PROJECT-acme.');
 		expect(script).toContain("[infracraft] mktemp failed"); // mktemp guarded
 		expect(script).toContain("trap 'rm -rf \"$SANDBOX\"' EXIT");
 		// Copy is staged through list files (no pipe) so a git failure aborts.
 		expect(script).toContain('git -C "$REPO" ls-files > "$SANDBOX/.ic-ls"');
 		expect(script).toContain('rsync -a --files-from="$SANDBOX/.ic-lsf"');
 		expect(script).not.toContain("ls-files |"); // not piped
-		expect(script).toContain("apps\\/mesh"); // filter is applied
+		expect(script).toContain("apps\\/api"); // filter is applied
 		expect(script).toContain('cd "$SANDBOX"; git init -q && git add -A');
 		expect(script).not.toContain("cp -c -R"); // stub does not copy the real .git
 	});
@@ -158,7 +158,7 @@ describe("buildSandboxScript", () => {
 		});
 
 		expect(script).toContain(
-			'mktemp -d "/tmp/infracraft/$PROJECT-staging-nexus.',
+			'mktemp -d "/tmp/infracraft/$PROJECT-staging-acme.',
 		);
 	});
 
@@ -166,10 +166,10 @@ describe("buildSandboxScript", () => {
 		const script = buildSandboxScript({
 			...base,
 			mode: SandboxMode.ORIGINAL,
-			excludePaths: ["apps/mesh"],
+			excludePaths: ["apps/api"],
 		});
 
-		expect(script).toContain('mktemp -d "/tmp/infracraft/$PROJECT-nexus.');
+		expect(script).toContain('mktemp -d "/tmp/infracraft/$PROJECT-acme.');
 		expect(script).toContain('cat "$SANDBOX/.ic-ls" > "$SANDBOX/.ic-lsf"'); // no awk
 
 		expect(script).toContain(
@@ -177,7 +177,7 @@ describe("buildSandboxScript", () => {
 		);
 
 		expect(script).not.toContain("git init"); // original keeps real history
-		expect(script).not.toContain("apps\\/mesh"); // ORIGINAL does not filter
+		expect(script).not.toContain("apps\\/api"); // ORIGINAL does not filter
 	});
 
 	it("runs setup before the cli when provided", () => {

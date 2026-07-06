@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { RailwayClient } from "../client";
-import { RailwayServiceResourceProvider } from "../service";
+import { Client } from "../client";
+import { ServiceResourceProvider } from "../service";
 
 /**
  * LIVE integration test for the Railway service provider. Runs the real
@@ -37,7 +37,7 @@ import { RailwayServiceResourceProvider } from "../service";
  */
 
 /** Fully-resolved live-test configuration; only present when the tier is enabled. */
-interface RailwayLiveConfig {
+interface LiveConfig {
 	/** Railway account/team API token. */
 	token: string;
 
@@ -49,7 +49,7 @@ interface RailwayLiveConfig {
 }
 
 /** Reads the live-test config, or `null` when the tier is disabled or any credential is missing. */
-function readLiveConfig(): RailwayLiveConfig | null {
+function readLiveConfig(): LiveConfig | null {
 	if (process.env.INFRACRAFT_LIVE_TEST !== "1") {
 		return null;
 	}
@@ -161,12 +161,12 @@ function isUncertifiedMaterializationError(error: unknown): boolean {
 
 const config = readLiveConfig();
 
-describe.skipIf(!config)("RailwayService (live integration)", () => {
+describe.skipIf(!config)("railway.Service (live integration)", () => {
 	// Guarded by skipIf: whenever a test body below runs, `config` is non-null.
-	const live = config as RailwayLiveConfig;
+	const live = config as LiveConfig;
 
-	const client = new RailwayClient(config?.token ?? "");
-	const provider = new RailwayServiceResourceProvider();
+	const client = new Client(config?.token ?? "");
+	const provider = new ServiceResourceProvider();
 
 	/** Generates a collision-resistant throwaway service name. */
 	function uniqueServiceName(): string {

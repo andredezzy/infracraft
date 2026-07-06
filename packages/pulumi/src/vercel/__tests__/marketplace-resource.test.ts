@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { VercelMarketplaceResourceProvider } from "../marketplace-resource";
+import { MarketplaceResourceProvider } from "../marketplace-resource";
 
-describe("VercelMarketplaceResourceProvider", () => {
+describe("vercel.MarketplaceResourceProvider", () => {
 	let mockFetch: ReturnType<typeof vi.fn>;
 
 	beforeEach(() => {
@@ -26,7 +26,7 @@ describe("VercelMarketplaceResourceProvider", () => {
 				}),
 		});
 
-		const provider = new VercelMarketplaceResourceProvider();
+		const provider = new MarketplaceResourceProvider();
 
 		const result = await provider.create({
 			token: "tok",
@@ -60,7 +60,7 @@ describe("VercelMarketplaceResourceProvider", () => {
 			text: () => Promise.resolve("payment required"),
 		});
 
-		const provider = new VercelMarketplaceResourceProvider();
+		const provider = new MarketplaceResourceProvider();
 
 		await expect(
 			provider.create({
@@ -94,7 +94,7 @@ describe("VercelMarketplaceResourceProvider", () => {
 				json: () => Promise.resolve({ name: "rby-humanes-kv" }),
 			});
 
-			const provider = new VercelMarketplaceResourceProvider();
+			const provider = new MarketplaceResourceProvider();
 
 			const result = await provider.update("store_1", olds, {
 				...olds,
@@ -115,7 +115,7 @@ describe("VercelMarketplaceResourceProvider", () => {
 
 	describe("diff", () => {
 		it("flags a metadata change as an in-place update, not a replace", async () => {
-			const provider = new VercelMarketplaceResourceProvider();
+			const provider = new MarketplaceResourceProvider();
 
 			const diff = await provider.diff("store_1", olds, {
 				...olds,
@@ -127,7 +127,7 @@ describe("VercelMarketplaceResourceProvider", () => {
 		});
 
 		it("flags a name change as a replace", async () => {
-			const provider = new VercelMarketplaceResourceProvider();
+			const provider = new MarketplaceResourceProvider();
 
 			const diff = await provider.diff("store_1", olds, {
 				...olds,
@@ -139,7 +139,7 @@ describe("VercelMarketplaceResourceProvider", () => {
 		});
 
 		it("reports no changes when nothing differs", async () => {
-			const provider = new VercelMarketplaceResourceProvider();
+			const provider = new MarketplaceResourceProvider();
 
 			const diff = await provider.diff("store_1", olds, olds);
 
@@ -148,7 +148,7 @@ describe("VercelMarketplaceResourceProvider", () => {
 		});
 
 		it("ignores billingPlanId changes (create-time-only; the Update Resource endpoint needs a full billingPlan object this provider doesn't have)", async () => {
-			const provider = new VercelMarketplaceResourceProvider();
+			const provider = new MarketplaceResourceProvider();
 
 			const diff = await provider.diff("store_1", olds, {
 				...olds,

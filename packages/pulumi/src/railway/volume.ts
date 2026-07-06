@@ -2,18 +2,18 @@ import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
-import { RailwayClient } from "./client";
-import type { RailwayEnvironment } from "./environment";
-import type { RailwayProject } from "./project";
-import type { RailwayProvider } from "./provider";
-import type { RailwayService } from "./service";
+import { Client } from "./client";
+import type { Environment } from "./environment";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
+import type { Service } from "./service";
 
 /** Resolved inputs for the Railway volume dynamic provider. */
-interface RailwayVolumeInputs {
+interface VolumeInputs {
 	/** Railway API bearer token. Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
@@ -30,7 +30,7 @@ interface RailwayVolumeInputs {
 }
 
 /** Persisted state for the Railway volume, extending inputs with the Railway-assigned ID. */
-interface RailwayVolumeOutputs extends RailwayVolumeInputs {
+interface VolumeOutputs extends VolumeInputs {
 	/** Railway-assigned volume UUID (set after create or adopt). */
 	volumeId: string;
 }
@@ -89,7 +89,7 @@ const VOLUMES_QUERY = `
  * 2026-07-06) — volume instances are per-environment, and so is adoption.
  */
 async function findAttachedVolume(
-	client: RailwayClient,
+	client: Client,
 	projectId: string,
 	serviceId: string,
 	environmentId: string,
@@ -129,17 +129,15 @@ async function findAttachedVolume(
  * before creating a new one. Volumes are immutable after creation — changing
  * `serviceId`, `mountPath`, `environmentId`, or `projectId` triggers replacement.
  */
-export class RailwayVolumeResourceProvider
-	implements pulumi.dynamic.ResourceProvider
-{
+export class VolumeResourceProvider implements pulumi.dynamic.ResourceProvider {
 	/**
 	 * Validates inputs at plan time. A relative `mountPath` would otherwise
 	 * fail deep inside `volumeCreate` with an opaque GraphQL error.
 	 */
 	async check(
-		_olds: RailwayVolumeInputs,
-		news: RailwayVolumeInputs,
-	): Promise<pulumi.dynamic.CheckResult<RailwayVolumeInputs>> {
+		_olds: VolumeInputs,
+		news: VolumeInputs,
+	): Promise<pulumi.dynamic.CheckResult<VolumeInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (isResolvedString(news.mountPath) && !news.mountPath.startsWith("/")) {
@@ -152,10 +150,8 @@ export class RailwayVolumeResourceProvider
 		return { inputs: news, failures };
 	}
 
-	async create(
-		inputs: RailwayVolumeInputs,
-	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(
+	async create(inputs: VolumeInputs): Promise<pulumi.dynamic.CreateResult> {
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -208,9 +204,9 @@ export class RailwayVolumeResourceProvider
 
 	async read(
 		id: string,
-		props: RailwayVolumeOutputs,
+		props: VolumeOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -247,8 +243,8 @@ export class RailwayVolumeResourceProvider
 		return { id: volumeId, props: { ...props, volumeId } };
 	}
 
-	async delete(id: string, props: RailwayVolumeOutputs): Promise<void> {
-		const client = new RailwayClient(
+	async delete(id: string, props: VolumeOutputs): Promise<void> {
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -268,8 +264,8 @@ export class RailwayVolumeResourceProvider
 
 	async diff(
 		_id: string,
-		olds: RailwayVolumeOutputs,
-		news: RailwayVolumeInputs,
+		olds: VolumeOutputs,
+		news: VolumeInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const replaces: string[] = [];
 
@@ -298,7 +294,7 @@ export class RailwayVolumeResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class RailwayVolumeResource extends pulumi.dynamic.Resource {
+class VolumeResource extends pulumi.dynamic.Resource {
 	constructor(
 		name: string,
 		args: {
@@ -312,7 +308,7 @@ class RailwayVolumeResource extends pulumi.dynamic.Resource {
 		opts?: pulumi.CustomResourceOptions,
 	) {
 		super(
-			new RailwayVolumeResourceProvider(),
+			new VolumeResourceProvider(),
 			name,
 			{ ...args, volumeId: undefined },
 			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
@@ -321,26 +317,23 @@ class RailwayVolumeResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for RailwayVolume — replaces Pulumi's native `provider` field. */
-type RailwayVolumeOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for Volume — replaces Pulumi's native `provider` field. */
+type VolumeOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Railway authentication context. */
-	provider: RailwayProvider;
+	provider: Provider;
 
 	/** Railway project context. */
-	project: RailwayProject;
+	project: Project;
 
 	/** Railway environment context. */
-	environment: RailwayEnvironment;
+	environment: Environment;
 
 	/** Railway service context. */
-	service: RailwayService;
+	service: Service;
 };
 
-/** Args for RailwayVolume. */
-export interface RailwayVolumeArgs {
+/** Args for Volume. */
+export interface VolumeArgs {
 	/** Absolute path inside the container where the volume is mounted. */
 	mountPath: pulumi.Input<string>;
 }
@@ -350,22 +343,18 @@ export interface RailwayVolumeArgs {
  *
  * @example
  * ```typescript
- * new RailwayVolume("api-data", {
+ * new railway.Volume("api-data", {
  *   mountPath: "/data",
  * }, { provider, project, environment, service });
  * ```
  */
-export class RailwayVolume extends pulumi.ComponentResource {
-	constructor(
-		name: string,
-		args: RailwayVolumeArgs,
-		opts: RailwayVolumeOptions,
-	) {
+export class Volume extends pulumi.ComponentResource {
+	constructor(name: string, args: VolumeArgs, opts: VolumeOptions) {
 		const { provider, project, environment, service, ...pulumiOpts } = opts;
 
 		super("infracraft:railway:Volume", name, {}, pulumiOpts);
 
-		new RailwayVolumeResource(
+		new VolumeResource(
 			`${name}-resource`,
 			{
 				token: provider.token,
@@ -378,7 +367,7 @@ export class RailwayVolume extends pulumi.ComponentResource {
 			// Forward the consumer's resource options to the underlying resource. Pulumi
 			// auto-inherits `provider`/`protect` from the parent component, but NOT options
 			// like `retainOnDelete` — without this pass-through, setting `retainOnDelete` on a
-			// RailwayVolume would silently never reach the actual cloud volume.
+			// Volume would silently never reach the actual cloud volume.
 			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 

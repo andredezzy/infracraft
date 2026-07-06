@@ -2,17 +2,17 @@ import * as pulumi from "@pulumi/pulumi";
 import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
-import { RailwayClient } from "./client";
-import type { RailwayEnvironment } from "./environment";
-import type { RailwayProject } from "./project";
-import type { RailwayProvider } from "./provider";
+import { Client } from "./client";
+import type { Environment } from "./environment";
+import type { Project } from "./project";
+import type { Provider } from "./provider";
 
 /** Resolved inputs for the Railway project token dynamic provider. */
-interface RailwayProjectTokenInputs {
+interface ProjectTokenInputs {
 	/** Railway API bearer token (account-scoped, used for API calls). Absent when `tokenEnvVar` is used instead. */
 	token?: string;
 
-	/** Env var name resolved to the account token when `token` is absent (see `RailwayProviderArgs.tokenEnvVar`). */
+	/** Env var name resolved to the account token when `token` is absent (see `ProviderArgs.tokenEnvVar`). */
 	tokenEnvVar?: string;
 
 	/** Railway project UUID. */
@@ -34,7 +34,7 @@ interface RailwayProjectTokenInputs {
 }
 
 /** Persisted state for the Railway project token. */
-interface RailwayProjectTokenOutputs extends RailwayProjectTokenInputs {
+interface ProjectTokenOutputs extends ProjectTokenInputs {
 	/** Minted deploy token secret value. */
 	value: string;
 
@@ -69,7 +69,7 @@ const PROJECT_TOKEN_DELETE = `
  *
  * @internal Exported only for unit testing; not part of the public API surface.
  */
-export class RailwayProjectTokenResourceProvider
+export class ProjectTokenResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
 	/**
@@ -78,9 +78,9 @@ export class RailwayProjectTokenResourceProvider
 	 * in the stale-name cleanup sweep.
 	 */
 	async check(
-		_olds: RailwayProjectTokenInputs,
-		news: RailwayProjectTokenInputs,
-	): Promise<pulumi.dynamic.CheckResult<RailwayProjectTokenInputs>> {
+		_olds: ProjectTokenInputs,
+		news: ProjectTokenInputs,
+	): Promise<pulumi.dynamic.CheckResult<ProjectTokenInputs>> {
 		const failures: pulumi.dynamic.CheckFailure[] = [];
 
 		if (isResolvedString(news.name) && news.name.trim().length === 0) {
@@ -101,9 +101,9 @@ export class RailwayProjectTokenResourceProvider
 	 * @returns Pulumi dynamic create result with `value` (secret) and `tokenId`.
 	 */
 	async create(
-		inputs: RailwayProjectTokenInputs,
+		inputs: ProjectTokenInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 		);
 
@@ -160,7 +160,7 @@ export class RailwayProjectTokenResourceProvider
 
 		const tokenId = found.node.id;
 
-		const outs: RailwayProjectTokenOutputs = {
+		const outs: ProjectTokenOutputs = {
 			...inputs,
 			value,
 			tokenId,
@@ -181,9 +181,9 @@ export class RailwayProjectTokenResourceProvider
 	 */
 	async read(
 		id: string,
-		props: RailwayProjectTokenOutputs,
+		props: ProjectTokenOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -214,12 +214,12 @@ export class RailwayProjectTokenResourceProvider
 	 * @param _id Resource ID (unused).
 	 * @param props Currently stored outputs containing the tokenId.
 	 */
-	async delete(_id: string, props: RailwayProjectTokenOutputs): Promise<void> {
+	async delete(_id: string, props: ProjectTokenOutputs): Promise<void> {
 		if (!props.tokenId) {
 			return;
 		}
 
-		const client = new RailwayClient(
+		const client = new Client(
 			resolveCredential(props.token, props.tokenEnvVar),
 		);
 
@@ -249,8 +249,8 @@ export class RailwayProjectTokenResourceProvider
 	 */
 	async diff(
 		_id: string,
-		olds: RailwayProjectTokenOutputs,
-		news: RailwayProjectTokenInputs,
+		olds: ProjectTokenOutputs,
+		news: ProjectTokenInputs,
 	): Promise<pulumi.dynamic.DiffResult> {
 		const identityReplaces: string[] = [];
 
@@ -283,7 +283,7 @@ export class RailwayProjectTokenResourceProvider
 }
 
 /** Internal dynamic resource — not part of the public API. */
-class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
+class ProjectTokenResource extends pulumi.dynamic.Resource {
 	public declare readonly value: pulumi.Output<string>;
 	public declare readonly tokenId: pulumi.Output<string>;
 
@@ -308,7 +308,7 @@ class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
 		// Pulumi #16041, #3012. `token` (the account API credential) rides along in state
 		// with the outputs, so it is marked secret too.
 		super(
-			new RailwayProjectTokenResourceProvider(),
+			new ProjectTokenResourceProvider(),
 			name,
 			{
 				...args,
@@ -320,23 +320,20 @@ class RailwayProjectTokenResource extends pulumi.dynamic.Resource {
 	}
 }
 
-/** Options type for RailwayProjectToken — replaces Pulumi's native `provider` field. */
-type RailwayProjectTokenOptions = Omit<
-	pulumi.ComponentResourceOptions,
-	"provider"
-> & {
+/** Options type for ProjectToken — replaces Pulumi's native `provider` field. */
+type ProjectTokenOptions = Omit<pulumi.ComponentResourceOptions, "provider"> & {
 	/** Railway authentication context. */
-	provider: RailwayProvider;
+	provider: Provider;
 
 	/** Railway project this token belongs to. */
-	project: RailwayProject;
+	project: Project;
 
 	/** Railway environment this deploy token is scoped to. */
-	environment: RailwayEnvironment;
+	environment: Environment;
 };
 
-/** Args for RailwayProjectToken. */
-export interface RailwayProjectTokenArgs {
+/** Args for ProjectToken. */
+export interface ProjectTokenArgs {
 	/**
 	 * Distinct token name, e.g. `"pulumi-staging"`.
 	 * Each environment should use a unique name so multiple stacks sharing
@@ -357,39 +354,35 @@ export interface RailwayProjectTokenArgs {
  *
  * Each environment gets its own correctly-scoped token with a distinct name,
  * so multiple stacks sharing the same Railway project never collide.
- * The token value is exposed as a secret output for use in {@link RailwayDeploy}.
+ * The token value is exposed as a secret output for use in {@link Deploy}.
  *
  * @example
  * ```typescript
- * const project = new RailwayProject("my-project", { name: "my-app" }, { provider });
- * const staging = new RailwayEnvironment("staging", { name: "staging" }, { provider, project });
+ * const project = new railway.Project("my-project", { name: "my-app" }, { provider });
+ * const staging = new railway.Environment("staging", { name: "staging" }, { provider, project });
  *
- * const stagingToken = new RailwayProjectToken("staging-token", {
+ * const stagingToken = new railway.ProjectToken("staging-token", {
  *   name: "pulumi-staging",
  * }, { provider, project, environment: staging });
  *
- * new RailwayDeploy("api-deploy", {
+ * new railway.Deploy("api-deploy", {
  *   triggers: [sourceHash],
  * }, { provider, project, environment: staging, service, projectToken: stagingToken.token });
  * ```
  */
-export class RailwayProjectToken extends pulumi.ComponentResource {
+export class ProjectToken extends pulumi.ComponentResource {
 	/**
 	 * Environment-scoped Railway deploy token value (secret).
-	 * Pass this to `RailwayDeployOptions.projectToken`.
+	 * Pass this to `DeployOptions.projectToken`.
 	 */
 	public readonly token: pulumi.Output<string>;
 
-	constructor(
-		name: string,
-		args: RailwayProjectTokenArgs,
-		opts: RailwayProjectTokenOptions,
-	) {
+	constructor(name: string, args: ProjectTokenArgs, opts: ProjectTokenOptions) {
 		const { provider, project, environment, ...pulumiOpts } = opts;
 
 		super("infracraft:railway:ProjectToken", name, {}, pulumiOpts);
 
-		const resource = new RailwayProjectTokenResource(
+		const resource = new ProjectTokenResource(
 			`${name}-resource`,
 			{
 				token: provider.token,
