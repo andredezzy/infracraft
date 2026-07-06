@@ -524,6 +524,55 @@ await assertCloudflareTokenScopes({
 
 Every provider client (`RailwayClient`, `NeonClient`, `VercelClient`, `FlyClient`) routes its HTTP through one resilient fetch wrapper: a 15s per-attempt timeout, up to 3 attempts on transient failures (network errors, 5xx, 429), a numeric `Retry-After` honored on 429 (capped at 30s), and exponential backoff otherwise (1s/2s/4s, capped at 20s) — everything else, including non-429 4xx, returns to the caller untouched. The REST clients turn a 404 into a typed `ApiNotFoundError` (carrying the provider and path), and catch sites test `instanceof` rather than matching message strings: adopt-or-create lookups turn it into "create", `read()` turns it into a blank result so `pulumi refresh` reconciles out-of-band deletions, and `delete()` turns it into an idempotent no-op.
 
+## Live integration tests
+
+The mocked unit tests (`bun run test`) prove the providers' logic in isolation, but they cannot catch the truths that only the real platform APIs reveal — a mutation that returns success while silently doing nothing, adoption that is or isn't scoped to an environment, a password rotation that must not trigger a resource replace. Those are the exact bug class that has cost real incidents. The **live tier** runs the resource providers against the real Railway and Neon APIs, creating and then **tearing down** throwaway resources.
+
+It is **opt-in and inert by default.** Every `*.live.test.ts` file self-skips unless `INFRACRAFT_LIVE_TEST=1` **and** its platform credentials are present, using `describe.skipIf` so a missing credential reports as **skipped, never failed**. The tier is excluded from the default `test` script (via `vitest.config.ts`) and from CI, so it never runs — and costs nothing — unless you explicitly provide credentials.
+
+Run it with the platform(s) you have credentials for:
+
+```bash
+# Railway coverage (service + volume)
+INFRACRAFT_LIVE_TEST=1 \
+  RAILWAY_TOKEN=… \
+  RAILWAY_TEST_PROJECT_ID=… \
+  RAILWAY_TEST_ENV_ID=… \
+  bun run test:live
+
+# Neon coverage (role + branch)
+INFRACRAFT_LIVE_TEST=1 \
+  NEON_API_KEY=… \
+  NEON_TEST_PROJECT_ID=… \
+  bun run test:live
+```
+
+With no credentials, `bun run test:live` exits `0` with every file skipped.
+
+### Required environment variables
+
+| Variable | Required by | Purpose |
+|---|---|---|
+| `INFRACRAFT_LIVE_TEST` | all live tests | Master opt-in switch; must equal `1`. |
+| `RAILWAY_TOKEN` | `railway/*.live.test.ts` | Railway account/team API token (not a project token). |
+| `RAILWAY_TEST_PROJECT_ID` | `railway/*.live.test.ts` | A throwaway Railway project the tests may freely mutate. |
+| `RAILWAY_TEST_ENV_ID` | `railway/*.live.test.ts` | A non-default environment UUID in that project. |
+| `NEON_API_KEY` | `neon/*.live.test.ts` | Neon account- or project-scoped API key. |
+| `NEON_TEST_PROJECT_ID` | `neon/*.live.test.ts` | A throwaway Neon project the tests may freely mutate. |
+
+### Coverage
+
+| File | Asserts against the live API |
+|---|---|
+| `railway/service.live.test.ts` | Adopt-or-create is idempotent (second create by name adopts the same service, no duplicate); `ensureServiceInstance` materializes an instance in a non-default environment via the config-patch commit; an image service deploys via `serviceInstanceDeployV2`; `environmentUnskipService` is rejected in a named environment — documenting **why** the patch-commit path exists. |
+| `railway/volume.live.test.ts` | Adoption is environment-scoped — a volume attached to a service in environment A is **not** adopted for the same service in environment B (each gets its own), while re-creating within the same environment adopts the existing one. |
+| `neon/role.live.test.ts` | Adopt-or-create is idempotent; a `passwordVersion` bump rotates the password in place via `reset_password` — an update that returns a fresh secret with **no** replace. Runs on a throwaway branch. |
+| `neon/branch.live.test.ts` | A `parent`-supplied branch is a copy-on-write fork: the created branch's `parent_id` is exactly the resolved parent branch. |
+
+### Throwaway-resource and teardown model
+
+Each test creates uniquely-named resources and registers them for cleanup in an `afterAll` hook. Cleanup is **idempotent and tolerant of partial state**: it deletes what it created, and a cleanup failure is logged loudly (`[live cleanup] …`, naming the resource id to remove manually) but never fails the suite — a botched teardown must not mask the assertion result. Because a Railway service is project-level (its provider `delete()` is intentionally a no-op), the tests tear services down with a raw `serviceDelete`; Neon roles are removed by deleting their throwaway branch, which cascades. Point the `*_TEST_PROJECT_ID` variables at disposable projects only.
+
 ## Why
 
 | Provider | Existing options | Gap |

@@ -5,7 +5,12 @@ export default mergeConfig(
 	unit,
 	defineConfig({
 		test: {
-			exclude: ["**/node_modules/**", "**/dist/**", "**/*.drift.test.ts"],
+			exclude: [
+				"**/node_modules/**",
+				"**/dist/**",
+				"**/*.drift.test.ts",
+				"**/*.live.test.ts",
+			],
 		},
 	}),
 );
