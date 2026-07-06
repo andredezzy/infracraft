@@ -29,7 +29,9 @@
 		"dev": "tsdown --watch",
 		"typecheck": "tsc --noEmit",
 		"test": "vitest run",
-		"lint": "biome check --write"
+		"lint": "biome check --write",
+		"prepack": "node ../../scripts/strip-dev-deps-on-pack.mjs",
+		"postpack": "node ../../scripts/strip-dev-deps-on-pack.mjs --restore"
 	},
 	"dependencies": {
 		"@clack/prompts": "1.5.1",

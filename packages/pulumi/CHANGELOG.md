@@ -1,5 +1,11 @@
 # @infracraft/pulumi
 
+## 2.7.1
+
+### Patch Changes
+
+- Publish without build-only devDependencies (bundled workspace packages like @infracraft/sandbox are no longer declared in the published package, so they are not falsely counted as depended-upon).
+
 ## 2.7.0
 
 ### Minor Changes

@@ -10,3 +10,4 @@ coverage
 
 # Generated fly.toml files (FlyDeploy)
 .fly/
+package.json.packbak
