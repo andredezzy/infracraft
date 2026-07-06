@@ -1,0 +1,52 @@
+name: Leak gate
+
+# Blocks disallowed references from entering this public repository — in
+# tracked files AND in commit messages. The pattern itself is deliberately NOT
+# stored in the repository (a public blocklist would disclose exactly what it
+# protects); it lives in the LEAK_GATE_PATTERN repository secret. On a match,
+# only file paths and counts are reported — never the matched content.
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  leak-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Scan tracked files
+        env:
+          PATTERN: ${{ secrets.LEAK_GATE_PATTERN }}
+        run: |
+          if [ -z "$PATTERN" ]; then
+            echo "Leak gate skipped: LEAK_GATE_PATTERN secret not configured (forks have no secrets)."
+            exit 0
+          fi
+          FILES=$(git grep -ilIE "$PATTERN" -- ':!bun.lock' || true)
+          if [ -n "$FILES" ]; then
+            COUNT=$(echo "$FILES" | wc -l | tr -d ' ')
+            echo "::error::Leak gate: disallowed reference in $COUNT tracked file(s):"
+            echo "$FILES"
+            exit 1
+          fi
+          echo "Tree clean."
+
+      - name: Scan pushed commit messages
+        if: github.event_name == 'push'
+        env:
+          PATTERN: ${{ secrets.LEAK_GATE_PATTERN }}
+        run: |
+          if [ -z "$PATTERN" ]; then exit 0; fi
+          RANGE="${{ github.event.before }}..${{ github.sha }}"
+          git rev-parse --quiet --verify "${{ github.event.before }}" >/dev/null 2>&1 || RANGE="${{ github.sha }} -1"
+          MATCHES=$(git log --format='%H %s %b' $RANGE 2>/dev/null | grep -icE "$PATTERN" || true)
+          if [ "${MATCHES:-0}" -gt 0 ]; then
+            echo "::error::Leak gate: disallowed reference in $MATCHES pushed commit message(s). Inspect locally with git log."
+            exit 1
+          fi
+          echo "Messages clean."
