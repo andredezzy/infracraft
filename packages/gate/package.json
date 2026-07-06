@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/gate",
-	"version": "0.8.2",
+	"version": "0.8.3",
 	"type": "module",
 	"license": "MIT",
 	"description": "Run any Vercel, Railway, or Fly.io CLI command as any account. Real native-CLI switching, per-invocation credential injection, and sandboxed deploys.",
@@ -33,7 +33,7 @@
 	},
 	"dependencies": {
 		"@clack/prompts": "1.5.1",
-		"@infracraft/sandbox": "0.2.0",
+		"@infracraft/sandbox": "0.2.1",
 		"picocolors": "1.1.1",
 		"yaml": "2.9.0"
 	},

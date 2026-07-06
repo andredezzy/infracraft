@@ -1,6 +1,6 @@
 {
 	"name": "@infracraft/sandbox",
-	"version": "0.2.0",
+	"version": "0.2.1",
 	"type": "module",
 	"license": "MIT",
 	"description": "Isolated /tmp working copies for CLI deploys. Sandbox shell-script builders shared by @infracraft/pulumi and @infracraft/gate.",
