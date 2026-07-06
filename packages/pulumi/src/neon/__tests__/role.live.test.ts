@@ -1,11 +1,15 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { NeonBranchResourceProvider } from "../branch";
 import { NeonClient } from "../client";
+import { NeonEndpointResourceProvider } from "../endpoint";
 import { NeonRoleResourceProvider } from "../role";
 
 /**
  * LIVE integration test for the Neon role provider, on a throwaway copy-on-write
- * branch. Encodes two live-API-only truths:
+ * branch. Encodes three live-API-only truths:
+ *  - a branch with no read-write endpoint 404s on role operations
+ *    (`reveal_password`/`reset_password`) — mirroring the real stack, the
+ *    throwaway branch gets a compute endpoint before any role touches it;
  *  - adopt-or-create is idempotent (a second create by name adopts, no duplicate);
  *  - a `passwordVersion` bump rotates the password IN PLACE via `reset_password`
  *    — an UPDATE that returns a fresh password, NOT a replace. Replacing a
@@ -60,10 +64,13 @@ describe.skipIf(!config)("NeonRole (live integration)", () => {
 
 	const client = new NeonClient(config?.apiKey ?? "");
 	const branchProvider = new NeonBranchResourceProvider();
+	const endpointProvider = new NeonEndpointResourceProvider();
 	const roleProvider = new NeonRoleResourceProvider();
 
 	/** A throwaway branch that carries every role created here; deleted in afterAll. */
 	let branchId = "";
+	/** The branch's read-write endpoint, required before any role operation; deleted in afterAll. */
+	let endpointId = "";
 
 	function uniqueRoleName(): string {
 		return `ic_live_role_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 8)}`;
@@ -81,10 +88,46 @@ describe.skipIf(!config)("NeonRole (live integration)", () => {
 		});
 
 		branchId = branch.id;
+
+		// A fresh branch has no compute endpoint, and role operations
+		// (reveal_password/reset_password) 404 without one — mirrors how the
+		// real stack always sequences an endpoint onto a branch before any role
+		// touches it. No extra "wait for ready" step: the real stack proceeds to
+		// create roles right after this call too, relying on Neon accepting role
+		// operations against an existing (not necessarily fully "active") endpoint.
+		const endpoint = await endpointProvider.create({
+			apiKey: live.apiKey,
+			projectId: live.projectId,
+			branchId,
+			minCu: 0.25,
+			maxCu: 0.25,
+			suspendTimeout: 0,
+		});
+
+		endpointId = endpoint.id;
 	});
 
 	afterAll(async () => {
-		if (!config || !branchId) {
+		if (!config) {
+			return;
+		}
+
+		// Endpoint first, branch second — deleting the branch would cascade removal
+		// of its endpoint anyway, but explicit teardown keeps cleanup order
+		// predictable and each step independently retryable/loggable.
+		if (endpointId) {
+			try {
+				await client.delete(
+					`/projects/${live.projectId}/endpoints/${endpointId}`,
+				);
+			} catch (error) {
+				console.warn(
+					`[live cleanup] failed to delete Neon endpoint ${endpointId} — delete it manually: ${String(error)}`,
+				);
+			}
+		}
+
+		if (!branchId) {
 			return;
 		}
 

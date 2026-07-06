@@ -49,6 +49,22 @@ function readLiveConfig(): RailwayLiveConfig | null {
 	return { token, projectId, envId };
 }
 
+/**
+ * Best-effort match for Railway's various capacity/provisioning-limit
+ * rejections (undocumented; deliberately broad — "You've hit the service
+ * creation limit for new accounts (25 services per day)" slipped past an
+ * earlier, narrower version of this pattern and threw uncaught from
+ * `beforeAll`, live-proven 2026-07-06). Matches on the word "limit" alone
+ * (creation limits, resource limits, rate limits, ...), plus a few
+ * capacity-adjacent phrasings that don't happen to say "limit".
+ */
+function isPlanLimitError(error: unknown): boolean {
+	return (
+		error instanceof Error &&
+		/limit|plan|quota|upgrade your account/i.test(error.message)
+	);
+}
+
 const VOLUME_DELETE = `
   mutation($volumeId: String!) { volumeDelete(volumeId: $volumeId) }
 `;
@@ -82,37 +98,54 @@ describe.skipIf(!config)(
 		let envBId = "";
 		const createdVolumeIds = new Set<string>();
 
+		/** Non-null when Railway's plan/resource limit blocked setup — the test below checks this and skips inconclusively (never fails) rather than cascading a false failure. */
+		let planLimitError: string | null = null;
+
 		beforeAll(async () => {
 			if (!config) {
 				return;
 			}
 
-			// A project-level service, materialized in environment A (the test env).
-			const service = await serviceProvider.create({
-				token: live.token,
-				projectId: live.projectId,
-				environmentId: live.envId,
-				name: serviceName,
-			});
+			try {
+				// A project-level service, materialized in environment A (the test env).
+				const service = await serviceProvider.create({
+					token: live.token,
+					projectId: live.projectId,
+					environmentId: live.envId,
+					name: serviceName,
+				});
 
-			serviceId = service.id;
+				serviceId = service.id;
 
-			// A throwaway environment B; adopt the same service into it so it has an
-			// instance in both environments (volumes attach per service instance).
-			const environment = await environmentProvider.create({
-				token: live.token,
-				projectId: live.projectId,
-				name: `ic-live-env-${suffix}`,
-			});
+				// A throwaway environment B; adopt the same service into it so it has an
+				// instance in both environments (volumes attach per service instance).
+				const environment = await environmentProvider.create({
+					token: live.token,
+					projectId: live.projectId,
+					name: `ic-live-env-${suffix}`,
+				});
 
-			envBId = environment.id;
+				envBId = environment.id;
 
-			await serviceProvider.create({
-				token: live.token,
-				projectId: live.projectId,
-				environmentId: envBId,
-				name: serviceName,
-			});
+				await serviceProvider.create({
+					token: live.token,
+					projectId: live.projectId,
+					environmentId: envBId,
+					name: serviceName,
+				});
+			} catch (error) {
+				if (isPlanLimitError(error)) {
+					planLimitError = String(error);
+
+					console.warn(
+						`[live skip] Railway plan/resource limit blocked service/environment setup — this file's test will skip as inconclusive: ${planLimitError}`,
+					);
+
+					return;
+				}
+
+				throw error;
+			}
 		});
 
 		afterAll(async () => {
@@ -151,7 +184,9 @@ describe.skipIf(!config)(
 			}
 		});
 
-		it("does not adopt environment A's volume for the same service in environment B", async () => {
+		it("does not adopt environment A's volume for the same service in environment B", async (ctx) => {
+			ctx.skip(planLimitError !== null, planLimitError ?? undefined);
+
 			const volumeInA = await volumeProvider.create({
 				token: live.token,
 				projectId: live.projectId,
