@@ -1,23 +1,27 @@
 // src/commands/__tests__/deploy.test.ts
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { commandCalls } = vi.hoisted(() => ({
+const { commandCalls, stdoutFixture } = vi.hoisted(() => ({
 	commandCalls: [] as Array<{
 		name: string;
 		args: Record<string, unknown>;
 		opts: unknown;
 	}>,
+	// A URL mid-stream, then trailing non-URL lines (Vercel prints pretty
+	// JSON after the deployment URL) — the last line is "}", not the URL, so
+	// a naive last-line grab would return the brace. Tests can override this
+	// per-case to exercise other stdout shapes (e.g. a URL only ever
+	// appearing quoted inside JSON).
+	stdoutFixture: {
+		value: 'Deploying…\nhttps://x.app\n{\n  "id": "dpl_1"\n}',
+	},
 }));
 
 vi.mock("@pulumi/command", () => ({
 	local: {
 		Command: class {
 			stdout = {
-				// A URL mid-stream, then trailing non-URL lines (Vercel prints
-				// pretty JSON after the deployment URL) — the last line is "}",
-				// not the URL, so a naive last-line grab would return the brace.
-				apply: (fn: (out: string) => string) =>
-					fn('Deploying…\nhttps://x.app\n{\n  "id": "dpl_1"\n}'),
+				apply: (fn: (out: string) => string) => fn(stdoutFixture.value),
 			};
 			constructor(
 				public name: string,
@@ -56,15 +60,22 @@ vi.mock("@pulumi/pulumi", () => {
 			) {}
 			registerOutputs(): void {}
 		},
+		// Matches this file's own fake-Output shape (an object with `.apply`) so
+		// dependsOnList's wrapped-Output detection is testable under the mock.
+		Output: {
+			isInstance: (value: unknown): boolean =>
+				typeof value === "object" && value !== null && "apply" in value,
+		},
 	};
 });
 
 import { GitGuard } from "../../git-guard";
 import { DeploySandbox } from "../../sandbox";
-import { createDeployCommand } from "../deploy";
+import { createDeployCommand, dependsOnList } from "../deploy";
 
 beforeEach(() => {
 	commandCalls.length = 0;
+	stdoutFixture.value = 'Deploying…\nhttps://x.app\n{\n  "id": "dpl_1"\n}';
 });
 
 describe("createDeployCommand", () => {
@@ -112,9 +123,14 @@ describe("createDeployCommand", () => {
 		expect(create).not.toContain("git init");
 	});
 
-	it("neither → raw live-tree script", () => {
+	it("neither, opted in via allowUnsandboxed → raw live-tree script", () => {
 		createDeployCommand(
-			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
+			{
+				name: "nexus",
+				cli: "vercel deploy --prod --yes",
+				triggers: [],
+				allowUnsandboxed: true,
+			},
 			{},
 		);
 
@@ -126,6 +142,15 @@ describe("createDeployCommand", () => {
 
 		expect(create).not.toContain("mktemp");
 		expect(create).toContain('cd "$REPO"');
+	});
+
+	it("throws when no DeploySandbox is present and allowUnsandboxed is not set", () => {
+		expect(() =>
+			createDeployCommand(
+				{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
+				{},
+			),
+		).toThrow(/DeploySandbox.*allowUnsandboxed/i);
 	});
 
 	it("gitGuard without sandbox throws", () => {
@@ -148,6 +173,33 @@ describe("createDeployCommand", () => {
 		expect(deploymentUrl).toBe("https://x.app");
 	});
 
+	it("extracts the deploymentUrl when it only ever appears quoted inside pretty-printed JSON", () => {
+		// Real-shaped `vercel deploy --prod --yes` stdout where the deployment
+		// URL is never printed as a bare line — only as a quoted field inside
+		// the CLI's trailing JSON summary. Proven live: the naive `^https?://`
+		// token match returned "" here, since every token touching the URL
+		// carried a wrapping quote and/or trailing comma.
+		stdoutFixture.value = [
+			"Vercel CLI 39.1.0",
+			"Retrieving project…",
+			"Deploying ~/project",
+			"Uploading [====================] (100%)",
+			"Inspect: /team/project/8VQ3x9k [2s]",
+			"{",
+			'  "id": "dpl_8VQ3x9kAbCdEfGhIjKlMnOpQrSt",',
+			'  "url": "https://my-app-git-main-team.vercel.app",',
+			'  "readyState": "READY"',
+			"}",
+		].join("\n");
+
+		const { deploymentUrl } = createDeployCommand(
+			{ name: "nexus", cli: "vercel deploy --prod --yes", triggers: [] },
+			{ dependsOn: [sandbox] },
+		);
+
+		expect(deploymentUrl).toBe("https://my-app-git-main-team.vercel.app");
+	});
+
 	it("forwards dependsOn, environment, and triggers to the command", () => {
 		createDeployCommand(
 			{
@@ -165,5 +217,33 @@ describe("createDeployCommand", () => {
 		expect(
 			(commandCalls[0].opts as { dependsOn: unknown[] }).dependsOn,
 		).toEqual([sandbox]);
+	});
+});
+
+describe("dependsOnList", () => {
+	const sandbox = new DeploySandbox("deploy-sandbox");
+	const gitGuard = new GitGuard("git-guard");
+
+	it("returns a plain array as-is", () => {
+		expect(dependsOnList({ dependsOn: [sandbox, gitGuard] })).toEqual([
+			sandbox,
+			gitGuard,
+		]);
+	});
+
+	it("wraps a single resource in an array", () => {
+		expect(dependsOnList({ dependsOn: sandbox })).toEqual([sandbox]);
+	});
+
+	it("returns an empty array when dependsOn is absent", () => {
+		expect(dependsOnList({})).toEqual([]);
+	});
+
+	it("throws when dependsOn is a wrapped Output — brands cannot be detected inside one", () => {
+		const wrapped = { apply: () => [sandbox] };
+
+		expect(() => dependsOnList({ dependsOn: wrapped as never })).toThrow(
+			/wrapped Output.*plain array/i,
+		);
 	});
 });

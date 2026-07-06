@@ -18,6 +18,39 @@ describe("NeonEndpointResourceProvider", () => {
 		vi.restoreAllMocks();
 	});
 
+	describe("check", () => {
+		const inputs = {
+			apiKey: "key",
+			projectId: "proj-abc",
+			branchId: "br-main",
+			minCu: 1,
+			maxCu: 0.25,
+			suspendTimeout: 0,
+		};
+
+		it("fails maxCu below minCu, naming the property", async () => {
+			const result = await new NeonEndpointResourceProvider().check(
+				inputs,
+				inputs,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("maxCu");
+			expect(result.failures?.[0].reason).toContain("minCu");
+		});
+
+		it("passes when maxCu is greater than or equal to minCu", async () => {
+			const valid = { ...inputs, minCu: 0.25, maxCu: 1 };
+
+			const result = await new NeonEndpointResourceProvider().check(
+				valid,
+				valid,
+			);
+
+			expect(result.failures).toEqual([]);
+		});
+	});
+
 	describe("create", () => {
 		it("creates a read-write endpoint when none exists", async () => {
 			mockGet.mockResolvedValue({ endpoints: [] });

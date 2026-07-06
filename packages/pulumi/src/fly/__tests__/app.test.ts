@@ -143,14 +143,18 @@ describe("FlyAppResourceProvider", () => {
 			expect(diff.deleteBeforeReplace).toBe(true);
 		});
 
-		it("replaces on an organization change", async () => {
+		it("ignores an organization change — never replaces the app over it", async () => {
+			// organization is create-time only (see FlyAppArgs.organization JSDoc):
+			// forcing a replace here would destroy and recreate the entire app —
+			// everything in it — for a field create() never re-applies on adoption.
 			const diff = await new FlyAppResourceProvider().diff(
 				"my-app",
 				{ ...props, organization: "org-a" },
 				{ ...props, organization: "org-b" },
 			);
 
-			expect(diff.replaces).toEqual(["organization"]);
+			expect(diff.changes).toBe(false);
+			expect(diff.replaces).toEqual([]);
 		});
 
 		it("reports no changes when inputs are identical", async () => {

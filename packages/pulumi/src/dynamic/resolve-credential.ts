@@ -35,6 +35,12 @@ export function resolveCredential(
 		);
 	}
 
+	if (fromEnv.trim() !== fromEnv) {
+		throw new Error(
+			`provider credential env var ${envVarName} has leading/trailing whitespace — a common cause is a Pulumi ESC secret set from piped stdin (e.g. \`pulumi env set -f -\` fed via a bash \`<<<\` here-string), which bakes in a trailing newline. Fix the ESC secret value; it is not trimmed automatically here since that could mask a genuinely wrong value.`,
+		);
+	}
+
 	return fromEnv;
 }
 

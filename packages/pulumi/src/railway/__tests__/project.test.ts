@@ -14,6 +14,32 @@ describe("RailwayProjectResourceProvider", () => {
 		vi.restoreAllMocks();
 	});
 
+	describe("check", () => {
+		it("fails an empty project name, naming the property", async () => {
+			const invalid = { token: "tok", name: "  " };
+
+			const result = await new RailwayProjectResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+			expect(result.failures?.[0].reason).toContain("non-empty");
+		});
+
+		it("passes a non-empty name through untouched", async () => {
+			const valid = { token: "tok", name: "my-app" };
+
+			const result = await new RailwayProjectResourceProvider().check(
+				valid,
+				valid,
+			);
+
+			expect(result.failures).toEqual([]);
+		});
+	});
+
 	describe("create", () => {
 		it("adopts an existing project by name and resolves its production environment", async () => {
 			mockQuery.mockImplementation(async (query: string) => {

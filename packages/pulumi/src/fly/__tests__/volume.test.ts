@@ -37,10 +37,16 @@ describe("FlyVolumeResourceProvider", () => {
 	describe("create", () => {
 		const { volumeId: _ignored, ...inputs } = props;
 
-		it("adopts the first non-destroyed volume matching the name", async () => {
+		it("adopts the first non-destroyed volume matching the name and records its LIVE region/size, not the desired ones", async () => {
 			mockGet.mockResolvedValueOnce([
 				{ id: "vol_dead", name: "data", state: "destroyed" },
-				{ id: "vol_live", name: "data", state: "created" },
+				{
+					id: "vol_live",
+					name: "data",
+					state: "created",
+					region: "lhr",
+					size_gb: 20,
+				},
 				{ id: "vol_other", name: "cache", state: "created" },
 			]);
 
@@ -48,6 +54,8 @@ describe("FlyVolumeResourceProvider", () => {
 
 			expect(result.id).toBe("vol_live");
 			expect(result.outs.volumeId).toBe("vol_live");
+			expect(result.outs.region).toBe("lhr");
+			expect(result.outs.sizeGb).toBe(20);
 			expect(mockPost).not.toHaveBeenCalled();
 		});
 

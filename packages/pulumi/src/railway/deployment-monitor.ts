@@ -127,6 +127,19 @@ export interface MonitorDeps {
 	log: (line: string) => void;
 }
 
+/** Result of {@link parseDeploymentId}: the id and how confidently it was extracted. */
+export interface ParsedDeploymentId {
+	id: string;
+	/**
+	 * True when `id` came from the last-resort bare-UUID scan — no structural
+	 * signal (a JSON key, a `?id=` query param) ties it to a deployment id, so
+	 * it could be any other UUID that happens to appear in the output (e.g. a
+	 * project or environment id). Callers should sanity-check it via the API
+	 * before committing to a long poll loop.
+	 */
+	isBareUuidFallback: boolean;
+}
+
 /**
  * Best-effort extraction of a deployment id from `railway up`'s output. Tries, in order:
  * the JSON trigger payload (whole or per-line), a `?id=<uuid>` Build-Logs URL, then any bare
@@ -134,7 +147,7 @@ export interface MonitorDeps {
  */
 export function parseDeploymentId(
 	output: string | undefined,
-): string | undefined {
+): ParsedDeploymentId | undefined {
 	if (!output) {
 		return undefined;
 	}
@@ -170,26 +183,26 @@ export function parseDeploymentId(
 	const whole = tryJson(output);
 
 	if (whole) {
-		return whole;
+		return { id: whole, isBareUuidFallback: false };
 	}
 
 	for (const line of output.split("\n")) {
 		const fromLine = tryJson(line.trim());
 
 		if (fromLine) {
-			return fromLine;
+			return { id: fromLine, isBareUuidFallback: false };
 		}
 	}
 
 	const fromUrl = output.match(new RegExp(`[?&]id=(${UUID.source})`, "i"));
 
 	if (fromUrl) {
-		return fromUrl[1];
+		return { id: fromUrl[1], isBareUuidFallback: false };
 	}
 
 	const bare = output.match(UUID);
 
-	return bare ? bare[0] : undefined;
+	return bare ? { id: bare[0], isBareUuidFallback: true } : undefined;
 }
 
 interface DeploymentNode {
@@ -409,8 +422,17 @@ export async function monitorRailwayDeployment(
 
 	// 1. Identify the deployment: prefer the captured id, then parse the upload output,
 	//    then resolve the newest deployment created after this run started.
-	let deploymentId =
-		input.deploymentId ?? parseDeploymentId(input.uploadOutput);
+	let deploymentId: string | undefined;
+	let isBareUuidFallback = false;
+
+	if (input.deploymentId) {
+		deploymentId = input.deploymentId;
+	} else {
+		const parsed = parseDeploymentId(input.uploadOutput);
+
+		deploymentId = parsed?.id;
+		isBareUuidFallback = parsed?.isBareUuidFallback ?? false;
+	}
 
 	if (!deploymentId) {
 		const threshold = input.since - DEFAULTS.skewMs;
@@ -441,6 +463,23 @@ export async function monitorRailwayDeployment(
 	}
 
 	deps.log(`[infracraft] monitoring railway deployment ${deploymentId}`);
+
+	// 1b. A bare-UUID match has no structural signal tying it to a deployment id —
+	// it could be a project/environment id that coincidentally appears in the
+	// upload output. Probe it once before committing to the ~20-minute poll loop
+	// below, so a wrong guess fails fast instead of polling a nonexistent
+	// deployment all the way to a timeout.
+	if (isBareUuidFallback && !(await api.deploymentStatus(deploymentId))) {
+		deps.log(
+			`[infracraft] railway deployment ${deploymentId} (parsed as a bare UUID from upload output) does not resolve via the API — failing fast instead of polling a nonexistent deployment`,
+		);
+
+		return {
+			outcome: MonitorOutcome.NO_DEPLOYMENT,
+			failed: true,
+			deploymentId,
+		};
+	}
 
 	// 2. Poll the API to a terminal status — this, not the CLI, decides pass/fail.
 	let lastStatus: string | undefined;

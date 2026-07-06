@@ -170,8 +170,11 @@ export class RailwayProjectTokenResourceProvider
 	}
 
 	/**
-	 * Pass-through read — the token value is a write-once secret that Railway
-	 * never re-exposes via API, so the stored state is the only source of truth.
+	 * Confirms the token still exists via {@link PROJECT_TOKENS_QUERY} (Railway
+	 * never re-exposes a token's value via API — it is write-once — so the stored
+	 * `value` is the only source of truth and is passed through unchanged).
+	 * A tokenId no longer present in the list means it was revoked outside Pulumi
+	 * (e.g. via the dashboard); blank state lets refresh reconcile that as drift.
 	 *
 	 * @param id Resource ID.
 	 * @param props Currently stored outputs.
@@ -180,6 +183,24 @@ export class RailwayProjectTokenResourceProvider
 		id: string,
 		props: RailwayProjectTokenOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
+
+		const result = await client.query<{
+			projectTokens: {
+				edges: Array<{ node: { id: string; name: string } }>;
+			};
+		}>(PROJECT_TOKENS_QUERY, { projectId: props.projectId });
+
+		const stillExists = result.projectTokens.edges.some(
+			(edge) => edge.node.id === props.tokenId,
+		);
+
+		if (!stillExists) {
+			return {};
+		}
+
 		return { id, props };
 	}
 
@@ -378,7 +399,10 @@ export class RailwayProjectToken extends pulumi.ComponentResource {
 				name: args.name,
 				tokenVersion: args.tokenVersion,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.token = resource.value;

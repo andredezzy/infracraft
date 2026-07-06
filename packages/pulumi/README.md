@@ -19,9 +19,9 @@ Native Pulumi providers with adopt-or-create semantics and deploy orchestration.
 - **Resources model single API objects.** Each resource wraps exactly one platform API object, and argument names mirror the platform API's field names (where a name deviates, its JSDoc documents the mapped field).
 - **Context-based.** Resources inherit auth, project, and environment from their options (`{ provider, project, environment }`); no manual ID passing.
 - **Adopt-or-create IS the import principle.** `pulumi import` is unimplemented for dynamic providers, so `create()` looks the object up by name and adopts it before creating a new one. Run `pulumi up` against a pre-existing project and it just works.
-- **Reads reconcile drift.** A resource deleted out of band returns blank on `pulumi refresh` and gets recreated on the next `up`. Write-once secrets and env-var batches are deliberate pass-throughs — their stored state is the source of truth.
+- **Reads reconcile drift.** A resource deleted out of band returns blank on `pulumi refresh` and gets recreated on the next `up`. The one deliberate pass-through left is `RailwayProjectToken.value` — Railway never re-exposes a minted token via its API, so the stored secret is the only source of truth (the token's continued *existence*, though, is re-checked via a live list, and a revoked-via-dashboard token is reconciled like any other out-of-band deletion).
 - **Deletes are conservative — and idempotent.** Shared containers (Railway/Neon projects, Railway services, Fly apps) and data stores (Vercel marketplace resources) are never deleted by Pulumi; deleting an already-gone resource succeeds instead of stranding state. Guard everything else that is shared or production-grade with `protect: true`; volumes honor `retainOnDelete`.
-- **Inputs fail at plan time.** `check()` rejects locally decidable mistakes during preview with the offending property named: `RailwayVolume.mountPath` (must be absolute), `RailwayService.source.image` / `RailwayProjectToken.name` / `NeonBranch.name` / `NeonRole.name` (non-empty), `FlyVolume.sizeGb` (positive integer). Preview-unknown inputs are skipped, never failed.
+- **Inputs fail at plan time.** `check()` rejects locally decidable mistakes during preview with the offending property named: `RailwayVolume.mountPath` (must be absolute), `RailwayService.source.image` / `RailwayProjectToken.name` / `RailwayProject.name` / `RailwayEnvironment.name` / `NeonBranch.name` / `NeonRole.name` (non-empty), `NeonEndpoint` (`maxCu >= minCu`), `FlyVolume.sizeGb` (positive integer). Preview-unknown inputs are skipped, never failed.
 - **Previews stay faithful.** Identity outputs that provably survive an in-place update are declared stable (`RailwayProject.id`, `RailwayService.id`, `NeonProject.id`, `NeonEndpoint.host`, `NeonRole`'s identity, `FlyVolume.id`), so dependents keep known values during preview instead of showing phantom replaces. `NeonRole.password` is deliberately not stable — a rotation must cascade.
 - **One resilient transport.** All HTTP goes through a single fetch wrapper with a per-attempt timeout, bounded retries on transient failures (network errors, 5xx, 429), and `Retry-After` support. See [Transport & errors](#transport--errors).
 - **Secrets stay secret.** Provider credentials and minted values are marked secret in Pulumi state, and deploy tokens travel via stdin — never in command text. Better yet, credentials can stay out of state entirely: every provider accepts the credential as an env var *name* instead of a value — see [Provider credentials](#provider-credentials).
@@ -54,7 +54,7 @@ Peer dependencies: `@pulumi/pulumi` ^3, `@pulumi/command` ^1 (optional)
 
 Every provider takes its API credential in one of two mutually exclusive forms — the constructor throws unless exactly one is set:
 
-- **Env-var-first (recommended)** — `tokenEnvVar` (Neon: `apiKeyEnvVar`): the *name* of an environment variable holding the credential. Resources carry only the plain name; each dynamic-provider operation reads the value from the environment at execution time and fails loudly — naming the variable — when it is unset.
+- **Env-var-first (recommended)** — `tokenEnvVar` (Neon: `apiKeyEnvVar`): the *name* of an environment variable holding the credential. Resources carry only the plain name; each dynamic-provider operation reads the value from the environment at execution time and fails loudly — naming the variable — when it is unset or has leading/trailing whitespace (a common symptom of a secret piped into `pulumi env set -f -` via a shell here-string, which bakes in a trailing newline).
 - **Direct** — `token` (Neon: `apiKey`): a secret `Input<string>`, marked secret in per-resource state via `additionalSecretOutputs`.
 
 ```typescript
@@ -67,6 +67,8 @@ const fly = new FlyProvider("fly", { tokenEnvVar: "FLY_API_TOKEN" })
 Prefer the env-var form. It keeps the credential out of dynamic-resource inputs and per-resource state entirely, which removes the substrate for [pulumi/pulumi#16041](https://github.com/pulumi/pulumi/issues/16041) ("Unexpected struct type": secret Outputs in dynamic-provider inputs intermittently fail engine serialization — closed not-planned upstream) and matches how first-class provider configuration handles credentials. Dynamic-provider operations execute in the Pulumi CLI's plugin process, which inherits the program's environment — so variables provided by the shell or by an ESC environment's `environmentVariables` block reach them.
 
 The deploy components that feed the credential to a CLI (`VercelDeploy`, `FlyDeploy`) resolve the env var at program runtime into a secret Output, so the command env still receives the actual value without it ever becoming a dynamic-resource input.
+
+Neither form of a provider's credential is ever compared in any resource's `diff()` — rotating a credential (or switching between `token`/`tokenEnvVar`) never triggers a replace or an in-place update on its own; it only changes which credential the next operation authenticates with.
 
 ## Railway
 
@@ -296,9 +298,9 @@ new VercelResourceConnection("kv-conn", {
 | Class | Key outputs | Notes |
 |---|---|---|
 | `VercelProvider` | — | `token` or `tokenEnvVar` (see [Provider credentials](#provider-credentials)) + `teamId` |
-| `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes` from an optional [sandbox](#sandbox--git-guard); `projectId` sources the deploy target (e.g. `@pulumiverse/vercel`'s `vercel.Project.id`). `.deploymentUrl` is the last http(s) URL the CLI printed |
+| `VercelDeploy` | `.deploymentUrl` | Runs `vercel deploy --prod --yes` from an optional [sandbox](#sandbox--git-guard); `projectId` sources the deploy target (e.g. `@pulumiverse/vercel`'s `vercel.Project.id`). `.deploymentUrl` is the last http(s) URL token found in the CLI's stdout, after stripping any wrapping quotes/brackets/punctuation — so a URL that only ever appears quoted inside pretty-printed JSON is still found |
 | `VercelIntegration` | `.configurationId` (`icfg_…`) | Resolves an installed marketplace integration by slug (install it once via the dashboard first) |
-| `VercelMarketplaceResource` | `.id`, `.externalResourceId`, `.status` | Provisions a marketplace store; `type` is the integration product ID or slug |
+| `VercelMarketplaceResource` | `.id`, `.externalResourceId`, `.status` | Provisions a marketplace store; `type` is the integration product ID or slug. `metadata` is updatable in place; `billingPlanId` is create-time-only |
 | `VercelResourceConnection` | — | Wires a store to a project; injects env vars into target environments (`makeEnvVarsSensitive` defaults to `true` — then `targets` must not include `development`) |
 | `VercelClient` | — | Typed REST client behind the marketplace resources (`get` / `tryGet` / `post`); appends `teamId` to every request and rides the resilient transport |
 
@@ -375,7 +377,7 @@ new FlyDeploy("api-deploy", {
 | Class | Key outputs | Notes |
 |---|---|---|
 | `FlyProvider` | — | Pass as `provider` option to every Fly resource. `token` or `tokenEnvVar` — see [Provider credentials](#provider-credentials) |
-| `FlyApp` | `.id` (app name) | Adopt-or-create |
+| `FlyApp` | `.id` (app name) | Adopt-or-create; `organization` is create-time only — changing it after the app exists has no effect (Fly only supports moving an app between orgs via `fly apps move`/the dashboard, not this provider's REST API surface) |
 | `FlySecret` | `.version` | Feed into `FlyDeploy` triggers to redeploy on secret changes |
 | `FlyVolume` | `.id` (`vol_…`) | `sizeGb` can only grow |
 | `FlyCertificate` | `.id` (hostname), `.configured`, `.dnsRequirements` | `.dnsRequirements` contains ACME validation records |
@@ -450,6 +452,8 @@ new RailwayDeploy("api-deploy", {
 
 Deploy isolation as `dependsOn` markers. Listing a `DeploySandbox` in a deploy's `dependsOn` runs that deploy's CLI from an isolated copy of the repo's tracked files under `/tmp/infracraft` (stale sandboxes are garbage-collected automatically). Adding a `GitGuard` swaps the copy's `.git` for a fresh stub (`git init` + `git add -A`, unborn HEAD).
 
+Every deploy resource (`RailwayDeploy`, `FlyDeploy`, `VercelDeploy`) REQUIRES a `DeploySandbox` in its own `dependsOn` — without one, a deploy would silently run against the LIVE working tree (uncommitted changes included) instead of a clean, git-tracked copy. Pass `allowUnsandboxed: true` in the deploy's args to opt into the live tree deliberately.
+
 ```typescript
 import { DeploySandbox } from "@infracraft/pulumi/sandbox"
 import { GitGuard } from "@infracraft/pulumi/git-guard"
@@ -468,7 +472,8 @@ new VercelDeploy("web-deploy", {
 
 | `dependsOn` markers | Working copy | `.git` sent to the platform |
 |---|---|---|
-| none | Live repo tree | The real one; whatever the platform CLI picks up |
+| none | — | Throws: no `DeploySandbox` and `allowUnsandboxed` is not set |
+| none + `allowUnsandboxed: true` | Live repo tree | The real one; whatever the platform CLI picks up |
 | `DeploySandbox` | Isolated `/tmp/infracraft` copy | Real `.git` (copy-on-write copy) |
 | `DeploySandbox` + `GitGuard` | Isolated copy, `excludePaths` applied | A fresh stub (`git init` + `git add -A`, unborn HEAD) |
 | `GitGuard` alone | — | Throws: the guard needs a sandbox to act on |

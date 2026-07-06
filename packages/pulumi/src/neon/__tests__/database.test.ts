@@ -64,22 +64,32 @@ describe("NeonDatabaseResourceProvider", () => {
 			expect(result.id).toBe("br-main/neondb");
 		});
 
-		it("adopts an existing database without POSTing", async () => {
-			mockGet.mockResolvedValue({
-				databases: [{ id: 1, name: "neondb", owner_name: "neondb_owner" }],
-			});
+		it("adopts an existing database without POSTing and records its LIVE ownerName, not the desired one", async () => {
+			mockGet
+				.mockResolvedValueOnce({
+					databases: [{ id: 1, name: "neondb", owner_name: "live_owner" }],
+				})
+				.mockResolvedValueOnce({
+					database: {
+						id: 1,
+						name: "neondb",
+						owner_name: "live_owner",
+						branch_id: "br-main",
+					},
+				});
 
 			const provider = new NeonDatabaseResourceProvider();
 
-			await provider.create({
+			const result = await provider.create({
 				apiKey: "key",
 				projectId: "proj-abc",
 				branchId: "br-main",
 				name: "neondb",
-				ownerName: "neondb_owner",
+				ownerName: "desired_owner",
 			});
 
 			expect(mockPost).not.toHaveBeenCalled();
+			expect(result.outs.ownerName).toBe("live_owner");
 		});
 	});
 

@@ -14,6 +14,32 @@ describe("RailwayEnvironmentResourceProvider", () => {
 		vi.restoreAllMocks();
 	});
 
+	describe("check", () => {
+		it("fails an empty environment name, naming the property", async () => {
+			const invalid = { token: "tok", projectId: "proj-abc", name: "  " };
+
+			const result = await new RailwayEnvironmentResourceProvider().check(
+				invalid,
+				invalid,
+			);
+
+			expect(result.failures).toHaveLength(1);
+			expect(result.failures?.[0].property).toBe("name");
+			expect(result.failures?.[0].reason).toContain("non-empty");
+		});
+
+		it("passes a non-empty name through untouched", async () => {
+			const valid = { token: "tok", projectId: "proj-abc", name: "production" };
+
+			const result = await new RailwayEnvironmentResourceProvider().check(
+				valid,
+				valid,
+			);
+
+			expect(result.failures).toEqual([]);
+		});
+	});
+
 	describe("create", () => {
 		it("adopts an existing environment when found by name", async () => {
 			mockQuery.mockResolvedValue({

@@ -242,7 +242,7 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 		});
 
 		const result = await new RailwayVolumeResourceProvider().read(
-			"vol-x",
+			"vol-existing",
 			props,
 		);
 
@@ -250,30 +250,30 @@ describe("RailwayVolumeResourceProvider.read (refresh)", () => {
 		expect(result.props?.volumeId).toBe("vol-found");
 	});
 
-	it("does NOT throw on an inconclusive lookup — falls back to the stored id", async () => {
-		// Volume physically present but the project query returns no matching
-		// instance (eventual consistency / environment-scoped instances).
+	it("returns blank state when the lookup succeeds but finds no matching volume (confirmed gone)", async () => {
+		// Distinct from a lookup ERROR: the query succeeded, and no instance
+		// matches this service+environment — the volume is confirmed deleted
+		// (e.g. via the dashboard), so refresh must reconcile that as drift
+		// rather than silently keep stale state forever.
 		mockQuery.mockResolvedValueOnce({ project: { volumes: { edges: [] } } });
 
 		const result = await new RailwayVolumeResourceProvider().read(
-			"vol-x",
+			"vol-existing",
 			props,
 		);
 
-		expect(result.id).toBe("vol-existing"); // stored volumeId, not a throw
-		expect(result.props?.volumeId).toBe("vol-existing");
+		expect(result).toEqual({});
 	});
 
 	it("does NOT throw when the lookup itself errors — keeps existing state", async () => {
 		mockQuery.mockRejectedValueOnce(new Error("Railway API 500"));
 
 		const result = await new RailwayVolumeResourceProvider().read(
-			"vol-x",
+			"vol-existing",
 			props,
 		);
 
-		expect(result.id).toBe("vol-existing");
-		expect(result.props?.volumeId).toBe("vol-existing");
+		expect(result).toEqual({ id: "vol-existing", props });
 	});
 });
 

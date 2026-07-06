@@ -492,6 +492,37 @@ describe("RailwayServiceResourceProvider", () => {
 		});
 	});
 
+	describe("read", () => {
+		const props = {
+			token: "tok",
+			projectId: "proj-123",
+			environmentId: "env-staging",
+			name: "api",
+			serviceId: "svc-uuid",
+		};
+
+		it("returns a blank result when the service is gone (not-found)", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("Service not found"));
+
+			const result = await new RailwayServiceResourceProvider().read(
+				"svc-uuid",
+				props,
+			);
+
+			expect(result).toEqual({});
+		});
+
+		it("rethrows a real error instead of dropping the service from state", async () => {
+			mockQuery.mockRejectedValueOnce(
+				new Error("Railway API error (401): unauthorized"),
+			);
+
+			await expect(
+				new RailwayServiceResourceProvider().read("svc-uuid", props),
+			).rejects.toThrow("401");
+		});
+	});
+
 	describe("diff", () => {
 		const olds = {
 			token: "tok",
@@ -527,6 +558,19 @@ describe("RailwayServiceResourceProvider", () => {
 
 			expect(diff.replaces).toEqual(["environmentId"]);
 			expect(diff.stables).toEqual([]);
+		});
+
+		it("flags an in-place change (no replace) when the image source bumps", async () => {
+			const provider = new RailwayServiceResourceProvider();
+
+			const diff = await provider.diff(
+				"svc-uuid",
+				{ ...olds, source: { image: "redis:8-alpine" } },
+				{ ...olds, source: { image: "redis:8-alpine-slim" } },
+			);
+
+			expect(diff.changes).toBe(true);
+			expect(diff.replaces).toEqual([]);
 		});
 	});
 

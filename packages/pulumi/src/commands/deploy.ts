@@ -24,6 +24,13 @@ export interface CreateDeployCommandArgs {
 	 * pulumi-command's failure error, which Pulumi does not scrub.
 	 */
 	stdin?: pulumi.Input<string>;
+	/**
+	 * Explicit opt-in to deploy WITHOUT a `DeploySandbox` in `dependsOn`.
+	 * Without this, an unsandboxed deploy throws instead of silently running
+	 * against the live working tree (uncommitted changes included) — this is
+	 * the guard that makes that regression class impossible. Defaults to `false`.
+	 */
+	allowUnsandboxed?: boolean;
 }
 
 export interface CreateDeployCommandResult {
@@ -32,17 +39,34 @@ export interface CreateDeployCommandResult {
 	deploymentUrl: pulumi.Output<string>;
 }
 
-/** Reads a `dependsOn` opt into a flat array of resource instances. */
+/**
+ * Reads a `dependsOn` opt into a flat array of resource instances.
+ *
+ * @throws {Error} When `dependsOn` is a wrapped `Output` (e.g. the result of
+ *   `.apply()` or `pulumi.all()`) rather than a plain array or resource —
+ *   `isDeploySandbox`/`isGitGuard` brand checks cannot see through an Output,
+ *   so a sandbox hidden inside one would silently fail to be detected.
+ */
 export function dependsOnList(
 	opts: pulumi.ComponentResourceOptions,
 ): unknown[] {
 	const dep = opts.dependsOn;
 
+	if (dep === undefined) {
+		return [];
+	}
+
 	if (Array.isArray(dep)) {
 		return dep;
 	}
 
-	return dep ? [dep] : [];
+	if (pulumi.Output.isInstance(dep)) {
+		throw new Error(
+			"[infracraft] dependsOn was passed as a wrapped Output (e.g. from .apply() or pulumi.all()) — DeploySandbox/GitGuard brands cannot be detected inside one. Pass dependsOn as a plain array of resources instead.",
+		);
+	}
+
+	return [dep];
 }
 
 /**
@@ -61,6 +85,12 @@ export function createDeployCommand(
 	if (gitGuard && !sandbox) {
 		throw new Error(
 			`[infracraft] ${args.name}: GitGuard has no effect without a DeploySandbox in dependsOn`,
+		);
+	}
+
+	if (!sandbox && !args.allowUnsandboxed) {
+		throw new Error(
+			`[infracraft] ${args.name}: no DeploySandbox in dependsOn — this would deploy the LIVE working tree (uncommitted changes included) instead of a clean, git-tracked copy. Fix: add a DeploySandbox to this deploy's own dependsOn, or set allowUnsandboxed: true to opt in deliberately.`,
 		);
 	}
 
@@ -94,14 +124,18 @@ export function createDeployCommand(
 		opts,
 	);
 
-	// The deploy CLI prints its URL somewhere in stdout, but not always as the
-	// final line — Vercel, for one, follows it with pretty-printed JSON whose
-	// closing brace would win a naive last-line grab. Take the last whitespace-
-	// delimited token that is an http(s) URL instead; "" when there is none (the
-	// command never ran, errored early, or emitted no URL).
+	// The deploy CLI prints its URL somewhere in stdout, but not always as a
+	// clean bare token on the final line — Vercel, for one, can interleave
+	// JSON-formatted build/event logs whose URL field arrives wrapped in
+	// quotes/braces/commas (e.g. `"https://app.vercel.app"},`), which a naive
+	// `^https?://` match on the raw token would miss entirely. Strip wrapping
+	// quote/bracket/punctuation characters from each whitespace-delimited
+	// token first, then take the last one that is an http(s) URL; "" when
+	// there is none (the command never ran, errored early, or emitted no URL).
 	const deploymentUrl = cmd.stdout.apply((out) => {
 		const urls = (out ?? "")
 			.split(/\s+/)
+			.map((token) => token.replace(/^["'`([{]+|["'`)\]},;.]+$/g, ""))
 			.filter((token) => /^https?:\/\//.test(token));
 
 		return urls.at(-1) ?? "";

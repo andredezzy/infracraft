@@ -224,20 +224,27 @@ export class RailwayVolumeResourceProvider
 				props.environmentId,
 			);
 		} catch (error) {
+			// The lookup itself errored (network hiccup, transient API failure,
+			// eventual consistency) — we don't actually know whether the volume
+			// still exists, so keep the existing state rather than reporting a
+			// false deletion. This is distinct from a successful lookup that
+			// finds no match, which means the volume is confirmed gone.
 			pulumi.log.warn(
 				`Railway volume refresh lookup failed; keeping existing state: ${String(error)}`,
 			);
+
+			return { id, props };
 		}
 
-		// A project-level service's volume can be momentarily unresolvable at
-		// refresh (eventual consistency / environment-scoped volume instances), so
-		// fall back to the stored id rather than throwing — that turned a healthy
-		// volume into a refresh error. A genuinely-deleted volume is re-adopted or
-		// recreated on the next `up` (create is adopt-or-create). `read` never
-		// fabricates drift and never hard-fails.
-		const resolvedId = volumeId ?? props.volumeId ?? id;
+		if (!volumeId) {
+			// The lookup succeeded and found no matching volume instance —
+			// confirmed gone (e.g. deleted via the dashboard). Blank state lets
+			// refresh reconcile the deletion; create()'s adopt-or-create then
+			// recreates it on the next `up` if the resource is still declared.
+			return {};
+		}
 
-		return { id: resolvedId, props: { ...props, volumeId: resolvedId } };
+		return { id: volumeId, props: { ...props, volumeId } };
 	}
 
 	async delete(id: string, props: RailwayVolumeOutputs): Promise<void> {

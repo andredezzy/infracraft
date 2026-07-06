@@ -70,16 +70,36 @@ async function findConnection(
 export class VercelResourceConnectionProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. Vercel itself rejects sensitive env vars on
+	 * the `development` target, so catching this before `create()` surfaces it as
+	 * a preview failure instead of a mid-apply GraphQL/HTTP error.
+	 */
+	async check(
+		_olds: VercelResourceConnectionInputs,
+		news: VercelResourceConnectionInputs,
+	): Promise<pulumi.dynamic.CheckResult<VercelResourceConnectionInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (
+			Array.isArray(news.targets) &&
+			typeof news.makeEnvVarsSensitive === "boolean" &&
+			news.makeEnvVarsSensitive &&
+			news.targets.includes("development")
+		) {
+			failures.push({
+				property: "targets",
+				reason:
+					"disallows sensitive env vars on the 'development' target (Vercel itself rejects them there) — either drop 'development' from targets or set makeEnvVarsSensitive to false",
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(
 		inputs: VercelResourceConnectionInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
-		if (inputs.makeEnvVarsSensitive && inputs.targets.includes("development")) {
-			throw new Error(
-				"VercelResourceConnection disallows sensitive env vars on the 'development' target (Vercel itself rejects them there). " +
-					"Either drop 'development' from targets or set makeEnvVarsSensitive to false.",
-			);
-		}
-
 		const client = new VercelClient(
 			resolveCredential(inputs.token, inputs.tokenEnvVar),
 			inputs.teamId,
@@ -120,8 +140,23 @@ export class VercelResourceConnectionProvider
 		id: string,
 		props: VercelResourceConnectionOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
+		const client = new VercelClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+			props.teamId,
+		);
+
 		// The connection list endpoint exposes presence but not the targeted environments,
 		// so env-var drift is not refreshed here — only the connection's existence.
+		const existing = await findConnection(
+			client,
+			props.storeId,
+			props.projectId,
+		);
+
+		if (!existing) {
+			return {};
+		}
+
 		return { id, props };
 	}
 
@@ -277,7 +312,10 @@ export class VercelResourceConnection extends pulumi.ComponentResource {
 				targets: args.targets,
 				makeEnvVarsSensitive: args.makeEnvVarsSensitive ?? true,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.registerOutputs({});

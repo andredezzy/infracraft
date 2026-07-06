@@ -26,9 +26,60 @@ interface NeonProjectOutputs extends NeonProjectInputs {
 	projectId: string;
 }
 
-/** Neon API response for listing projects. */
+/** Neon API response for listing projects, with cursor-pagination info. */
 interface ProjectListResponse {
 	projects: Array<{ id: string; name: string }>;
+	pagination?: { cursor?: string };
+}
+
+/** Safety bound on pagination follow-through — a genuinely wedged cursor must fail loudly, not hang forever. */
+const MAX_PROJECT_LIST_PAGES = 100;
+
+/**
+ * Finds a Neon project by exact name, following cursor pagination across
+ * `GET /projects` until a match is found or the account's projects are
+ * exhausted. Without `?search=<name>`, the endpoint's default page size (10)
+ * silently misses any project beyond the first page — Neon's `search` is a
+ * substring match, not exact, so an exact-name check still runs client-side.
+ */
+async function findProjectByName(
+	client: NeonClient,
+	name: string,
+	orgId?: string,
+): Promise<string | undefined> {
+	let cursor: string | undefined;
+
+	for (let page = 0; page < MAX_PROJECT_LIST_PAGES; page++) {
+		const params = new URLSearchParams({ search: name });
+
+		if (orgId) {
+			params.set("org_id", orgId);
+		}
+
+		if (cursor) {
+			params.set("cursor", cursor);
+		}
+
+		const result = await client.get<ProjectListResponse>(
+			`/projects?${params.toString()}`,
+		);
+
+		const match = result.projects.find((p) => p.name === name);
+
+		if (match) {
+			return match.id;
+		}
+
+		if (result.projects.length === 0 || !result.pagination?.cursor) {
+			return undefined;
+		}
+
+		cursor = result.pagination.cursor;
+	}
+
+	throw new Error(
+		`Neon project search for "${name}" did not converge after ${MAX_PROJECT_LIST_PAGES} pages — the account may have an unexpectedly large number of projects, or Neon's pagination cursor is not advancing.`,
+	);
 }
 
 /** Neon API response for project creation. */
@@ -80,22 +131,20 @@ export class NeonProjectResourceProvider
 			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
 		);
 
-		const query = inputs.orgId
-			? `/projects?org_id=${inputs.orgId}&search=${encodeURIComponent(inputs.name)}`
-			: "/projects";
-
-		const result = await client.get<ProjectListResponse>(query);
-
-		const existing = result.projects.find((p) => p.name === inputs.name);
+		const existingId = await findProjectByName(
+			client,
+			inputs.name,
+			inputs.orgId,
+		);
 
 		let projectId: string;
 
-		if (existing) {
+		if (existingId) {
 			pulumi.log.info(
-				`Adopting existing Neon project "${inputs.name}" (${existing.id})`,
+				`Adopting existing Neon project "${inputs.name}" (${existingId})`,
 			);
 
-			projectId = existing.id;
+			projectId = existingId;
 		} else {
 			pulumi.log.info(`Neon project "${inputs.name}" not found — creating...`);
 
@@ -256,7 +305,10 @@ export class NeonProject extends pulumi.ComponentResource {
 				name: args.name,
 				orgId: provider.orgId,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.projectId;

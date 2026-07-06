@@ -1,6 +1,12 @@
+import * as pulumi from "@pulumi/pulumi";
+import { MockMonitor } from "@pulumi/pulumi/runtime/mocks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { RailwayClient } from "../client";
-import { RailwayVariableResourceProvider } from "../variable";
+import type { RailwayEnvironment } from "../environment";
+import type { RailwayProject } from "../project";
+import type { RailwayProvider } from "../provider";
+import type { RailwayService } from "../service";
+import { RailwayVariable, RailwayVariableResourceProvider } from "../variable";
 
 describe("RailwayVariableResourceProvider", () => {
 	let mockQuery: ReturnType<typeof vi.fn>;
@@ -87,14 +93,47 @@ describe("RailwayVariableResourceProvider", () => {
 	});
 
 	describe("read", () => {
-		it("passes persisted state through (Railway has no single-call variable read API)", async () => {
+		it("reads current values via the variables query", async () => {
+			const liveVariables = { DATABASE_URL: "postgres://db-live" };
+			mockQuery.mockResolvedValueOnce({ variables: liveVariables });
+
 			const result = await new RailwayVariableResourceProvider().read(
 				"svc-1:variables",
 				props,
 			);
 
-			expect(result).toEqual({ id: "svc-1:variables", props });
-			expect(mockQuery).not.toHaveBeenCalled();
+			expect(result).toEqual({
+				id: "svc-1:variables",
+				props: { ...props, variables: liveVariables },
+			});
+
+			const [query, variables] = mockQuery.mock.calls[0];
+			expect(query).toContain("variables(");
+
+			expect(variables).toEqual({
+				projectId: "proj-1",
+				environmentId: "env-1",
+				serviceId: "svc-1",
+			});
+		});
+
+		it("returns blank state when the service/environment/project is gone (not-found)", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("Service not found"));
+
+			const result = await new RailwayVariableResourceProvider().read(
+				"svc-1:variables",
+				props,
+			);
+
+			expect(result).toEqual({});
+		});
+
+		it("rethrows a real error", async () => {
+			mockQuery.mockRejectedValueOnce(new Error("forbidden"));
+
+			await expect(
+				new RailwayVariableResourceProvider().read("svc-1:variables", props),
+			).rejects.toThrow("forbidden");
 		});
 	});
 
@@ -172,5 +211,61 @@ describe("RailwayVariableResourceProvider", () => {
 
 			expect(diff.changes).toBe(false);
 		});
+	});
+});
+
+describe("RailwayVariable component", () => {
+	let capturedAdditionalSecretOutputs: string[];
+	let originalRegisterResource: typeof MockMonitor.prototype.registerResource;
+
+	beforeEach(async () => {
+		capturedAdditionalSecretOutputs = [];
+		originalRegisterResource = MockMonitor.prototype.registerResource;
+
+		MockMonitor.prototype.registerResource = function (req, callback) {
+			if (req.getType() === "pulumi-nodejs:dynamic:Resource") {
+				capturedAdditionalSecretOutputs = req.getAdditionalsecretoutputsList();
+			}
+
+			return originalRegisterResource.call(this, req, callback);
+		};
+
+		await pulumi.runtime.setMocks({
+			newResource: (args) => ({ id: `${args.name}-id`, state: args.inputs }),
+			call: (args) => args.inputs,
+		});
+	});
+
+	afterEach(() => {
+		MockMonitor.prototype.registerResource = originalRegisterResource;
+	});
+
+	it("marks both token and variables as additionalSecretOutputs on the underlying dynamic resource", async () => {
+		const provider = {
+			token: pulumi.output("tok"),
+			tokenEnvVar: undefined,
+		} as unknown as RailwayProvider;
+
+		const project = {
+			id: pulumi.output("proj-1"),
+		} as unknown as RailwayProject;
+
+		const environment = {
+			id: pulumi.output("env-1"),
+		} as unknown as RailwayEnvironment;
+
+		const service = { id: pulumi.output("svc-1") } as unknown as RailwayService;
+
+		new RailwayVariable(
+			"api-vars",
+			{ variables: { DATABASE_URL: "postgres://db" } },
+			{ provider, project, environment, service },
+		);
+
+		await new Promise((resolve) => setImmediate(resolve));
+
+		expect(capturedAdditionalSecretOutputs).toEqual(
+			expect.arrayContaining(["token", "variables"]),
+		);
 	});
 });

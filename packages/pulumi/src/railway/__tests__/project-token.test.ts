@@ -135,6 +135,51 @@ describe("RailwayProjectTokenResourceProvider", () => {
 		});
 	});
 
+	describe("read", () => {
+		const props = {
+			token: "provider-tok",
+			projectId: "proj-1",
+			environmentId: "env-staging",
+			name: "pulumi-staging",
+			value: "minted-tok",
+			tokenId: "tok-id-1",
+		};
+
+		it("keeps the stored state when the token still exists in the list", async () => {
+			mockQuery.mockResolvedValueOnce({
+				projectTokens: {
+					edges: [{ node: { id: "tok-id-1", name: "pulumi-staging" } }],
+				},
+			});
+
+			const result = await new RailwayProjectTokenResourceProvider().read(
+				"proj-1:pulumi-staging",
+				props,
+			);
+
+			expect(result).toEqual({ id: "proj-1:pulumi-staging", props });
+
+			const [query, vars] = mockQuery.mock.calls[0];
+			expect(query).toContain("projectTokens");
+			expect(vars).toEqual({ projectId: "proj-1" });
+		});
+
+		it("returns blank state when the tokenId is absent from the list (revoked via dashboard)", async () => {
+			mockQuery.mockResolvedValueOnce({
+				projectTokens: {
+					edges: [{ node: { id: "tok-other", name: "pulumi-production" } }],
+				},
+			});
+
+			const result = await new RailwayProjectTokenResourceProvider().read(
+				"proj-1:pulumi-staging",
+				props,
+			);
+
+			expect(result).toEqual({});
+		});
+	});
+
 	describe("diff (rotation)", () => {
 		const olds = {
 			token: "provider-tok",

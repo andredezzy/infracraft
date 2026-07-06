@@ -69,6 +69,15 @@ interface RoleListResponse {
 	}>;
 }
 
+/** Neon API response for reading a single role. */
+interface RoleResponse {
+	role: {
+		name: string;
+		/** True for a protected/default system role (e.g. `neondb_owner`) — Neon refuses to delete these. */
+		protected: boolean;
+	};
+}
+
 /**
  * Checks if a role exists by name on a branch.
  */
@@ -238,6 +247,32 @@ export class NeonRoleResourceProvider
 		const client = new NeonClient(
 			resolveCredential(props.apiKey, props.apiKeyEnvVar),
 		);
+
+		// Neon refuses to delete a protected/default role (the carve-out this
+		// file's own JSDoc already promises — mirrors branch.ts's default-branch
+		// carve-out). Checked via a GET rather than matching the refusal's error
+		// message (brittle).
+		try {
+			const current = await client.get<RoleResponse>(
+				`/projects/${props.projectId}/branches/${props.branchId}/roles/${props.name}`,
+			);
+
+			if (current.role.protected) {
+				pulumi.log.warn(
+					`Neon role "${props.name}" is protected — Neon refuses to delete it; skipping`,
+				);
+
+				return;
+			}
+		} catch (error) {
+			if (error instanceof ApiNotFoundError) {
+				pulumi.log.warn(`Neon role "${props.name}" already deleted`);
+
+				return;
+			}
+
+			throw error;
+		}
 
 		try {
 			await client.delete(
@@ -417,7 +452,10 @@ export class NeonRole extends pulumi.ComponentResource {
 				resetPassword: args.resetPassword ?? false,
 				passwordVersion: args.passwordVersion,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.password = resource.password;

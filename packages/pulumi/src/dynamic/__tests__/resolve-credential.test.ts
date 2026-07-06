@@ -49,4 +49,24 @@ describe("resolveCredential", () => {
 			"provider credential is missing",
 		);
 	});
+
+	it("throws a loud error naming the env var when its value has a trailing newline", () => {
+		vi.stubEnv("INFRACRAFT_TEST_CREDENTIAL", "env-tok\n");
+
+		expect(() =>
+			resolveCredential(undefined, "INFRACRAFT_TEST_CREDENTIAL"),
+		).toThrow(
+			"provider credential env var INFRACRAFT_TEST_CREDENTIAL has leading/trailing whitespace",
+		);
+	});
+
+	it("throws a loud error naming the env var when its value has leading whitespace", () => {
+		vi.stubEnv("INFRACRAFT_TEST_CREDENTIAL", " env-tok");
+
+		expect(() =>
+			resolveCredential(undefined, "INFRACRAFT_TEST_CREDENTIAL"),
+		).toThrow(
+			"provider credential env var INFRACRAFT_TEST_CREDENTIAL has leading/trailing whitespace",
+		);
+	});
 });

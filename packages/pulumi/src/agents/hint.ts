@@ -22,7 +22,7 @@ export enum AgentHintChannel {
 	PULUMI_LOG = "PULUMI_LOG",
 }
 
-/** Options for {@link agentHint}. */
+/** Options for {@link hint}. */
 export interface AgentHintOptions {
 	/** Project-specific reminders appended after the infracraft defaults. */
 	project?: string[];

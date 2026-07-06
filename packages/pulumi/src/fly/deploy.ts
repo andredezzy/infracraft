@@ -22,6 +22,8 @@ export interface FlyDeployArgs {
 	releaseCommandTimeout?: number;
 	/** `fly deploy --ha` (default false). */
 	highAvailability?: boolean;
+	/** Explicit opt-in to deploy without a `DeploySandbox` in `dependsOn`. Defaults to `false`. */
+	allowUnsandboxed?: boolean;
 }
 
 /**
@@ -33,7 +35,7 @@ export interface FlyDeployArgs {
  * with an install hint instead of mid-deploy.
  */
 export class FlyDeploy extends pulumi.ComponentResource {
-	/** The deploy CLI's final stdout line (the Fly app URL when emitted). */
+	/** The last http(s) URL token found in the deploy CLI's stdout (the Fly app URL when emitted). */
 	public readonly deploymentUrl: pulumi.Output<string>;
 
 	constructor(name: string, args: FlyDeployArgs, opts: FlyDeployOptions) {
@@ -66,6 +68,7 @@ export class FlyDeploy extends pulumi.ComponentResource {
 				cli,
 				triggers,
 				setup,
+				allowUnsandboxed: args.allowUnsandboxed,
 				environment: {
 					// Resolved at program runtime (secret) so the CLI still gets the
 					// actual value when the provider is configured via tokenEnvVar —

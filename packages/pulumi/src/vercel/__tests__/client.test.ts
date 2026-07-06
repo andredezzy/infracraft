@@ -82,6 +82,27 @@ describe("VercelClient", () => {
 		expect(JSON.parse(call[1].body)).toEqual({ name: "my-app" });
 	});
 
+	it("sends PATCH request with body", async () => {
+		globalThis.fetch = vi.fn().mockResolvedValue({
+			ok: true,
+			status: 200,
+			json: () => Promise.resolve({ name: "my-app" }),
+		});
+
+		const client = new VercelClient("test-token", "team_1");
+
+		const result = await client.patch<{ name: string }>(
+			"/v1/installations/icfg_1/resources/res_1",
+			{ metadata: { plan: "pro" } },
+		);
+
+		expect(result.name).toBe("my-app");
+
+		const call = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0];
+		expect(call[1].method).toBe("PATCH");
+		expect(JSON.parse(call[1].body)).toEqual({ metadata: { plan: "pro" } });
+	});
+
 	it("throws ApiNotFoundError on 404", async () => {
 		globalThis.fetch = vi.fn().mockResolvedValue({
 			ok: false,

@@ -108,10 +108,10 @@ export class FlyAppResourceProvider implements pulumi.dynamic.ResourceProvider {
 			replaces.push("name");
 		}
 
-		if (olds.organization !== news.organization) {
-			replaces.push("organization");
-		}
-
+		// organization is evaluated only at creation time (see FlyAppArgs.organization)
+		// and is deliberately NOT compared here: forcing a replace would destroy and
+		// recreate the entire app — everything it contains — just because the config
+		// value changed, even though create() never re-applies it to an adopted app.
 		return {
 			changes: replaces.length > 0,
 			replaces,
@@ -160,8 +160,10 @@ export interface FlyAppArgs {
 
 	/**
 	 * Org slug for app creation. Overrides `FlyProvider.organization`.
-	 * Ignored when the app already exists (adoption).
-	 * Maps to the Fly Machines API field `org_slug`.
+	 * Evaluated only at creation time — changing `organization` after the app
+	 * exists has no effect (an existing app is never moved between orgs; Fly
+	 * only supports that via `fly apps move`/the dashboard, not this provider's
+	 * REST API surface). Maps to the Fly Machines API field `org_slug`.
 	 */
 	organization?: pulumi.Input<string>;
 }
@@ -191,7 +193,10 @@ export class FlyApp extends pulumi.ComponentResource {
 				name: args.name,
 				organization: args.organization ?? provider.organization,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.appId;

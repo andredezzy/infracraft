@@ -19,6 +19,8 @@ export interface VercelDeployArgs {
 	triggers: pulumi.Input<pulumi.Input<string>[]>;
 	/** Paths excluded from the upload when running with `DeploySandbox` + `GitGuard`. */
 	excludePaths?: string[];
+	/** Explicit opt-in to deploy without a `DeploySandbox` in `dependsOn`. Defaults to `false`. */
+	allowUnsandboxed?: boolean;
 }
 
 /**
@@ -71,6 +73,7 @@ export class VercelDeploy extends pulumi.ComponentResource {
 				cli: "vercel deploy --prod --yes",
 				triggers: args.triggers,
 				excludePaths: args.excludePaths,
+				allowUnsandboxed: args.allowUnsandboxed,
 				environment,
 			},
 			{ parent: this, ...pulumiOpts },

@@ -103,6 +103,36 @@ export class VercelMarketplaceResourceProvider
 		return { id: store.id, outs };
 	}
 
+	/**
+	 * Updates `metadata` in place via Vercel's Update Resource endpoint
+	 * (`PATCH /v1/installations/{integrationConfigurationId}/resources/{resourceId}`).
+	 * Identity fields (name, teamId, integrationConfigurationId, type, externalId)
+	 * never reach here — `diff()` replaces the resource for those instead.
+	 */
+	async update(
+		id: string,
+		olds: VercelMarketplaceResourceOutputs,
+		news: VercelMarketplaceResourceInputs,
+	): Promise<pulumi.dynamic.UpdateResult> {
+		const client = new VercelClient(
+			resolveCredential(news.token, news.tokenEnvVar),
+			news.teamId,
+		);
+
+		await client.patch(
+			`/v1/installations/${news.integrationConfigurationId}/resources/${id}`,
+			{ metadata: news.metadata ?? {} },
+		);
+
+		const outs: VercelMarketplaceResourceOutputs = {
+			...olds,
+			...news,
+			storeId: id,
+		};
+
+		return { outs };
+	}
+
 	async read(
 		id: string,
 		props: VercelMarketplaceResourceOutputs,
@@ -145,8 +175,16 @@ export class VercelMarketplaceResourceProvider
 			replaces.push("externalId");
 		}
 
+		// metadata is updatable in place via the Update Resource endpoint (see
+		// update()); billingPlanId is NOT — that endpoint only accepts a full
+		// billingPlan object (id + type + name + ...), a materially different
+		// shape than the plain string this provider exposes, so billingPlanId
+		// stays create-time-only (see its JSDoc on VercelMarketplaceResourceArgs).
+		const metadataChanged =
+			JSON.stringify(olds.metadata) !== JSON.stringify(news.metadata);
+
 		return {
-			changes: replaces.length > 0,
+			changes: replaces.length > 0 || metadataChanged,
 			replaces,
 			deleteBeforeReplace: true,
 		};
@@ -232,6 +270,13 @@ export interface VercelMarketplaceResourceArgs {
 	/**
 	 * Optional billing plan ID. Omit to auto-select the free plan for the
 	 * integration product.
+	 *
+	 * Create-time only: Vercel's Update Resource endpoint
+	 * (`PATCH /v1/installations/{id}/resources/{id}`) requires a full
+	 * `billingPlan` object (`id` + `type` + `name` + ...), a materially
+	 * different shape than the plain string ID accepted at creation — so
+	 * this provider does not attempt to apply plan changes in place.
+	 * Changing this value after creation has no effect.
 	 */
 	billingPlanId?: pulumi.Input<string>;
 }
@@ -286,7 +331,10 @@ export class VercelMarketplaceResource extends pulumi.ComponentResource {
 				teamId: provider.teamId,
 				...args,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.storeId;

@@ -243,7 +243,10 @@ export class FlyCertificate extends pulumi.ComponentResource {
 				appName: app.id,
 				hostname: args.hostname,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = pulumi.output(args.hostname);

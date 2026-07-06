@@ -541,7 +541,10 @@ export class RailwayDomain extends pulumi.ComponentResource {
 				environmentId: environment.id,
 				customDomain: args.customDomain,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.fqdn = resource.fqdn;

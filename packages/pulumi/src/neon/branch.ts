@@ -279,8 +279,6 @@ export class NeonBranchResourceProvider
 
 /** Internal dynamic resource — not part of the public API. */
 class NeonBranchResource extends pulumi.dynamic.Resource {
-	public declare readonly branchId: pulumi.Output<string>;
-
 	constructor(
 		name: string,
 		args: {
@@ -360,7 +358,10 @@ export class NeonBranch extends pulumi.ComponentResource {
 				name: args.name,
 				parentName: args.parent,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.id;

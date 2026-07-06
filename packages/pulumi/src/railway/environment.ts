@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { isGraphqlNotFoundError } from "../http/is-graphql-not-found-error";
 import { RailwayClient } from "./client";
@@ -88,6 +89,26 @@ async function findEnvironmentId(
 export class RailwayEnvironmentResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. An empty environment name would otherwise
+	 * fail deep inside the Railway API call — and never match on the adopt lookup.
+	 */
+	async check(
+		_olds: RailwayEnvironmentInputs,
+		news: RailwayEnvironmentInputs,
+	): Promise<pulumi.dynamic.CheckResult<RailwayEnvironmentInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.name) && news.name.trim().length === 0) {
+			failures.push({
+				property: "name",
+				reason: 'name must be a non-empty environment name (e.g. "production")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	/**
 	 * Adopts an existing Railway environment when found by name, or creates a new
 	 * one (optionally forked from a source environment) when not found.
@@ -332,7 +353,10 @@ export class RailwayEnvironment extends pulumi.ComponentResource {
 				name: args.name,
 				source: args.source,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.environmentId;

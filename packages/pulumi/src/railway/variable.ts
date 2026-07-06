@@ -43,6 +43,17 @@ const VARIABLE_DELETE = `
   }
 `;
 
+const VARIABLES_QUERY = `
+  query($projectId: String!, $environmentId: String!, $serviceId: String) {
+    variables(projectId: $projectId, environmentId: $environmentId, serviceId: $serviceId)
+  }
+`;
+
+/** Railway API response from the `variables` query — a flat key-value map. */
+interface VariablesResponse {
+	variables: Record<string, string>;
+}
+
 /**
  * Dynamic provider implementing CRUD for Railway service environment variables.
  *
@@ -122,14 +133,36 @@ export class RailwayVariableResourceProvider
 	}
 
 	/**
-	 * Reads current state for `pulumi refresh`.
-	 * Returns persisted props since Railway has no single-call variable read API.
+	 * Reads current state for `pulumi refresh` via Railway's `variables` query
+	 * (scoped by projectId/environmentId/serviceId, returning a flat key-value map).
 	 */
 	async read(
 		id: string,
 		props: RailwayVariableOutputs,
 	): Promise<pulumi.dynamic.ReadResult> {
-		return { id, props };
+		const client = new RailwayClient(
+			resolveCredential(props.token, props.tokenEnvVar),
+		);
+
+		try {
+			const result = await client.query<VariablesResponse>(VARIABLES_QUERY, {
+				projectId: props.projectId,
+				environmentId: props.environmentId,
+				serviceId: props.serviceId,
+			});
+
+			return {
+				id,
+				props: { ...props, variables: result.variables },
+			};
+		} catch (error) {
+			// Resource (service/environment/project) gone → blank id lets refresh reconcile the deletion.
+			if (isGraphqlNotFoundError(error)) {
+				return {};
+			}
+
+			throw error;
+		}
 	}
 
 	/**
@@ -202,8 +235,9 @@ class RailwayVariableResource extends pulumi.dynamic.Resource {
 			new RailwayVariableResourceProvider(),
 			name,
 			{ ...args },
-			// The API token flows into dynamic-provider state with the outputs — mark it secret there.
-			{ ...opts, additionalSecretOutputs: ["token"] },
+			// The API token AND the variable values themselves flow into
+			// dynamic-provider state with the outputs — mark both secret there.
+			{ ...opts, additionalSecretOutputs: ["token", "variables"] },
 		);
 	}
 }
@@ -262,7 +296,10 @@ export class RailwayVariable extends pulumi.ComponentResource {
 				environmentId: environment.id,
 				variables: args.variables,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.registerOutputs({});

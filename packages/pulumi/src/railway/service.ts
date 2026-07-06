@@ -54,7 +54,13 @@ interface RailwayServiceInputs {
 	/** Human-readable service name used for adopt-or-create matching. */
 	name: string;
 
-	/** SVG icon URL displayed in the Railway dashboard. */
+	/**
+	 * SVG icon URL displayed in the Railway dashboard.
+	 * Set-only: Railway's `serviceInstanceUpdate`/`serviceUpdate` mutations have
+	 * no documented null-clearing semantics, so removing this from Pulumi config
+	 * does not clear a previously-set icon on Railway — clear it via the
+	 * dashboard/CLI if that's the intent.
+	 */
 	icon?: string;
 
 	/** Docker image source for image-based services. */
@@ -66,13 +72,25 @@ interface RailwayServiceInputs {
 	/** Shell command executed during the build phase. */
 	buildCommand?: string;
 
-	/** Shell command executed to start the service at runtime. */
+	/**
+	 * Shell command executed to start the service at runtime.
+	 * Set-only: Railway's `serviceInstanceUpdate` mutation has no documented
+	 * null-clearing semantics, so removing this from Pulumi config does not
+	 * clear a previously-set start command on Railway — clear it via the
+	 * dashboard/CLI if that's the intent.
+	 */
 	startCommand?: string;
 
 	/** Restart behavior for the service container. */
 	restartPolicyType?: RailwayRestartPolicy;
 
-	/** HTTP path polled for health checks (e.g. `"/health-check"`). */
+	/**
+	 * HTTP path polled for health checks (e.g. `"/healthcheck"`).
+	 * Set-only: Railway's `serviceInstanceUpdate` mutation has no documented
+	 * null-clearing semantics, so removing this from Pulumi config does not
+	 * clear a previously-set healthcheck path on Railway — clear it via the
+	 * dashboard/CLI if that's the intent.
+	 */
 	healthcheckPath?: string;
 
 	/** Seconds to wait for a healthy response before marking unhealthy. */
@@ -249,7 +267,7 @@ async function ensureServiceInstance(
 
 	if (!(await exists())) {
 		throw new Error(
-			`Railway service ${serviceId} still has no instance in environment ${environmentId} after the config-patch commit — cannot configure or deploy it`,
+			`Railway service ${serviceId} still has no instance in environment ${environmentId} after the config-patch commit — cannot configure or deploy it. Railway account/plan capacity limits can silently block provisioning (live-proven) — check the account's plan limits before assuming a code defect.`,
 		);
 	}
 }
@@ -536,6 +554,12 @@ export class RailwayServiceResourceProvider
 
 	/**
 	 * Updates service name/icon and re-applies instance configuration.
+	 *
+	 * `icon`, `startCommand`, and `healthcheckPath` are set-only here: Railway's
+	 * `serviceInstanceUpdate`/`serviceUpdate` mutations have no documented
+	 * null-clearing semantics, so a key present in `olds` but absent from `news`
+	 * is simply never re-sent, leaving Railway's stored value untouched rather
+	 * than cleared.
 	 */
 	async update(
 		id: string,
@@ -602,9 +626,15 @@ export class RailwayServiceResourceProvider
 				SERVICE_QUERY,
 				{ serviceId: id },
 			);
-		} catch {
+		} catch (error) {
 			// Resource gone → blank id lets refresh reconcile the deletion.
-			return {};
+			if (isGraphqlNotFoundError(error)) {
+				return {};
+			}
+
+			// A real failure (401/5xx/...) must never be read as "deleted" — that
+			// would drop a live service from state on a transient or auth error.
+			throw error;
 		}
 
 		return { id, props: { ...props, serviceId: id } };
@@ -645,6 +675,13 @@ export class RailwayServiceResourceProvider
 
 		if (olds.environmentId !== news.environmentId) {
 			replaces.push("environmentId");
+		}
+
+		// RailwayServiceSource currently models only `image` — compare that
+		// (undefined-safe on either side) rather than the whole object, whose
+		// identity always differs across separate inputs.
+		if (olds.source?.image !== news.source?.image) {
+			changes.push("source");
 		}
 
 		if (olds.builder !== news.builder) {
@@ -746,7 +783,13 @@ export interface RailwayServiceArgs {
 	/** Human-readable service name used for adopt-or-create matching. */
 	name: pulumi.Input<string>;
 
-	/** SVG icon URL displayed in the Railway dashboard. */
+	/**
+	 * SVG icon URL displayed in the Railway dashboard.
+	 * Set-only: Railway's `serviceInstanceUpdate`/`serviceUpdate` mutations have
+	 * no documented null-clearing semantics, so removing this from Pulumi config
+	 * does not clear a previously-set icon on Railway — clear it via the
+	 * dashboard/CLI if that's the intent.
+	 */
 	icon?: pulumi.Input<string>;
 
 	/** Docker image source for image-based services. */
@@ -758,13 +801,25 @@ export interface RailwayServiceArgs {
 	/** Shell command executed during the build phase. */
 	buildCommand?: pulumi.Input<string>;
 
-	/** Shell command executed to start the service at runtime. */
+	/**
+	 * Shell command executed to start the service at runtime.
+	 * Set-only: Railway's `serviceInstanceUpdate` mutation has no documented
+	 * null-clearing semantics, so removing this from Pulumi config does not
+	 * clear a previously-set start command on Railway — clear it via the
+	 * dashboard/CLI if that's the intent.
+	 */
 	startCommand?: pulumi.Input<string>;
 
 	/** Restart behavior for the service container. */
 	restartPolicyType?: pulumi.Input<RailwayRestartPolicy>;
 
-	/** HTTP path polled for health checks (e.g. `"/health-check"`). */
+	/**
+	 * HTTP path polled for health checks (e.g. `"/healthcheck"`).
+	 * Set-only: Railway's `serviceInstanceUpdate` mutation has no documented
+	 * null-clearing semantics, so removing this from Pulumi config does not
+	 * clear a previously-set healthcheck path on Railway — clear it via the
+	 * dashboard/CLI if that's the intent.
+	 */
 	healthcheckPath?: pulumi.Input<string>;
 
 	/** Seconds to wait for a healthy response before marking unhealthy. */
@@ -814,7 +869,10 @@ export class RailwayService extends pulumi.ComponentResource {
 				environmentId: environment.id,
 				...args,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.serviceId;

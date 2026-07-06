@@ -308,7 +308,26 @@ describe("NeonRoleResourceProvider", () => {
 			password: "pw",
 		};
 
-		it("deletes the role", async () => {
+		it("skips a protected role without attempting DELETE", async () => {
+			mockGet.mockResolvedValueOnce({
+				role: { name: "neondb_owner", protected: true },
+			});
+
+			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+
+			await new NeonRoleResourceProvider().delete(
+				"br-main/neondb_owner",
+				props,
+			);
+
+			expect(mockDelete).not.toHaveBeenCalled();
+		});
+
+		it("deletes a non-protected role", async () => {
+			mockGet.mockResolvedValueOnce({
+				role: { name: "neondb_owner", protected: false },
+			});
+
 			const mockDelete = vi
 				.spyOn(NeonClient.prototype, "delete")
 				.mockResolvedValue(undefined);
@@ -323,20 +342,36 @@ describe("NeonRoleResourceProvider", () => {
 			);
 		});
 
-		it("tolerates an already-deleted role (not-found)", async () => {
-			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
+		it("tolerates an already-deleted role (pre-delete GET 404)", async () => {
+			mockGet.mockRejectedValueOnce(
 				new ApiNotFoundError(
 					"neon",
 					"/projects/proj-abc/branches/br-main/roles/neondb_owner",
 				),
 			);
 
+			const mockDelete = vi.spyOn(NeonClient.prototype, "delete");
+
 			await expect(
 				new NeonRoleResourceProvider().delete("br-main/neondb_owner", props),
 			).resolves.toBeUndefined();
+
+			expect(mockDelete).not.toHaveBeenCalled();
 		});
 
-		it("rethrows a real error", async () => {
+		it("rethrows a real error from the pre-delete GET", async () => {
+			mockGet.mockRejectedValueOnce(new Error("Neon API error (500): boom"));
+
+			await expect(
+				new NeonRoleResourceProvider().delete("br-main/neondb_owner", props),
+			).rejects.toThrow("500");
+		});
+
+		it("rethrows a real error from DELETE itself", async () => {
+			mockGet.mockResolvedValueOnce({
+				role: { name: "neondb_owner", protected: false },
+			});
+
 			vi.spyOn(NeonClient.prototype, "delete").mockRejectedValue(
 				new Error("Neon API error (403): forbidden"),
 			);

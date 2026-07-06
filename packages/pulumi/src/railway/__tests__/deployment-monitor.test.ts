@@ -106,20 +106,37 @@ const baseInput = {
 
 describe("parseDeploymentId", () => {
 	it("reads the id from `railway up --json` object output", () => {
-		expect(parseDeploymentId('{"deploymentId":"abc-123"}')).toBe("abc-123");
+		expect(parseDeploymentId('{"deploymentId":"abc-123"}')).toEqual({
+			id: "abc-123",
+			isBareUuidFallback: false,
+		});
 	});
 
 	it("reads a nested deployment.id", () => {
-		expect(parseDeploymentId('{"deployment":{"id":"nested-9"}}')).toBe(
-			"nested-9",
-		);
+		expect(parseDeploymentId('{"deployment":{"id":"nested-9"}}')).toEqual({
+			id: "nested-9",
+			isBareUuidFallback: false,
+		});
 	});
 
 	it("extracts the id from a Build Logs URL query param", () => {
 		const out =
 			"Build Logs: https://railway.com/project/p/service/s?id=11111111-2222-3333-4444-555555555555&";
 
-		expect(parseDeploymentId(out)).toBe("11111111-2222-3333-4444-555555555555");
+		expect(parseDeploymentId(out)).toEqual({
+			id: "11111111-2222-3333-4444-555555555555",
+			isBareUuidFallback: false,
+		});
+	});
+
+	it("flags a bare UUID scan match as a fallback, unlike the other extraction paths", () => {
+		const out =
+			"Some unrelated log line mentioning 11111111-2222-3333-4444-555555555555 in passing";
+
+		expect(parseDeploymentId(out)).toEqual({
+			id: "11111111-2222-3333-4444-555555555555",
+			isBareUuidFallback: true,
+		});
 	});
 
 	it("returns undefined when no id is present", () => {
@@ -239,6 +256,74 @@ describe("monitorRailwayDeployment", () => {
 
 		expect(result.deploymentId).toBe("new");
 		expect(result.failed).toBe(false);
+	});
+
+	it("fails fast (without polling) when a bare-UUID fallback id does not resolve via the API", async () => {
+		const fetchMock = makeFetch({ deployment: [null] });
+		const { deps } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(
+			{
+				...baseInput,
+				deploymentId: undefined,
+				uploadOutput:
+					"Some unrelated log line mentioning 11111111-2222-3333-4444-555555555555 in passing",
+				pollAttempts: 5,
+			},
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.NO_DEPLOYMENT);
+		expect(result.failed).toBe(true);
+
+		const deploymentStatusCalls = (
+			fetchMock as unknown as {
+				mock: { calls: Array<[string, { body: string }]> };
+			}
+		).mock.calls.filter(([, init]) =>
+			String(init.body).includes("deployment("),
+		);
+
+		// Probe only — never entered the ~20-minute poll loop for a guessed id.
+		expect(deploymentStatusCalls).toHaveLength(1);
+	});
+
+	it("probes a bare-UUID fallback id once, then proceeds to poll normally when it resolves", async () => {
+		const fetchMock = makeFetch({
+			deployment: [{ status: "BUILDING" }, { status: "SUCCESS" }],
+		});
+
+		const { deps } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(
+			{
+				...baseInput,
+				deploymentId: undefined,
+				uploadOutput:
+					"Some unrelated log line mentioning 11111111-2222-3333-4444-555555555555 in passing",
+			},
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
+		expect(result.failed).toBe(false);
+	});
+
+	it("does NOT add an extra probe call when the deployment id was captured directly (not a bare-UUID fallback)", async () => {
+		const fetchMock = makeFetch({ deployment: [{ status: "SUCCESS" }] });
+		const { deps } = makeDeps(fetchMock);
+
+		await monitorRailwayDeployment(baseInput, deps);
+
+		const deploymentStatusCalls = (
+			fetchMock as unknown as {
+				mock: { calls: Array<[string, { body: string }]> };
+			}
+		).mock.calls.filter(([, init]) =>
+			String(init.body).includes("deployment("),
+		);
+
+		expect(deploymentStatusCalls).toHaveLength(1);
 	});
 
 	it("FAILS when no deployment can be resolved AND the upload itself failed", async () => {

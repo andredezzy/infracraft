@@ -73,4 +73,89 @@ describe("VercelMarketplaceResourceProvider", () => {
 			}),
 		).rejects.toThrow(/402/);
 	});
+
+	const olds = {
+		token: "tok",
+		teamId: "team_xyz",
+		integrationConfigurationId: "icfg_abc",
+		name: "rby-humanes-kv",
+		type: "upstash-kv",
+		externalId: "rby-humanes-kv",
+		metadata: { plan: "free" },
+		storeId: "store_1",
+		externalResourceId: "res_1",
+		status: "available",
+	};
+
+	describe("update", () => {
+		it("PATCHes metadata to the Update Resource endpoint", async () => {
+			mockFetch.mockResolvedValue({
+				ok: true,
+				json: () => Promise.resolve({ name: "rby-humanes-kv" }),
+			});
+
+			const provider = new VercelMarketplaceResourceProvider();
+
+			const result = await provider.update("store_1", olds, {
+				...olds,
+				metadata: { plan: "pro" },
+			});
+
+			const [url, init] = mockFetch.mock.calls[0];
+			expect(url).toContain("/v1/installations/icfg_abc/resources/store_1");
+			expect(init.method).toBe("PATCH");
+			expect(JSON.parse(init.body)).toEqual({ metadata: { plan: "pro" } });
+
+			expect(result.outs.metadata).toEqual({ plan: "pro" });
+			expect(result.outs.storeId).toBe("store_1");
+			// Fields untouched by this update are preserved from prior state.
+			expect(result.outs.externalResourceId).toBe("res_1");
+		});
+	});
+
+	describe("diff", () => {
+		it("flags a metadata change as an in-place update, not a replace", async () => {
+			const provider = new VercelMarketplaceResourceProvider();
+
+			const diff = await provider.diff("store_1", olds, {
+				...olds,
+				metadata: { plan: "pro" },
+			});
+
+			expect(diff.changes).toBe(true);
+			expect(diff.replaces).toEqual([]);
+		});
+
+		it("flags a name change as a replace", async () => {
+			const provider = new VercelMarketplaceResourceProvider();
+
+			const diff = await provider.diff("store_1", olds, {
+				...olds,
+				name: "renamed",
+			});
+
+			expect(diff.changes).toBe(true);
+			expect(diff.replaces).toEqual(["name"]);
+		});
+
+		it("reports no changes when nothing differs", async () => {
+			const provider = new VercelMarketplaceResourceProvider();
+
+			const diff = await provider.diff("store_1", olds, olds);
+
+			expect(diff.changes).toBe(false);
+			expect(diff.replaces).toEqual([]);
+		});
+
+		it("ignores billingPlanId changes (create-time-only; the Update Resource endpoint needs a full billingPlan object this provider doesn't have)", async () => {
+			const provider = new VercelMarketplaceResourceProvider();
+
+			const diff = await provider.diff("store_1", olds, {
+				...olds,
+				billingPlanId: "plan_pro",
+			});
+
+			expect(diff.changes).toBe(false);
+		});
+	});
 });

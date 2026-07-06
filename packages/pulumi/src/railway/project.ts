@@ -1,4 +1,5 @@
 import * as pulumi from "@pulumi/pulumi";
+import { isResolvedString } from "../dynamic/is-resolved-string";
 import { resolveCredential } from "../dynamic/resolve-credential";
 import { RailwayClient } from "./client";
 import type { RailwayProvider } from "./provider";
@@ -119,6 +120,26 @@ async function fetchProjectEnvironments(
 export class RailwayProjectResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. An empty project name would otherwise fail
+	 * deep inside the Railway API call — and never match on the adopt lookup.
+	 */
+	async check(
+		_olds: RailwayProjectInputs,
+		news: RailwayProjectInputs,
+	): Promise<pulumi.dynamic.CheckResult<RailwayProjectInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (isResolvedString(news.name) && news.name.trim().length === 0) {
+			failures.push({
+				property: "name",
+				reason: 'name must be a non-empty project name (e.g. "my-app")',
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(
 		inputs: RailwayProjectInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -376,7 +397,10 @@ export class RailwayProject extends pulumi.ComponentResource {
 				name: args.name,
 				description: args.description,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.projectId;

@@ -91,31 +91,38 @@ export class FlyVolumeResourceProvider
 			(volume) => volume.name === inputs.name && volume.state !== "destroyed",
 		);
 
-		let volumeId: string;
-
 		if (existing) {
 			pulumi.log.info(
 				`Adopting existing Fly volume "${inputs.name}" (${existing.id})`,
 			);
 
-			volumeId = existing.id;
-		} else {
-			const created = await client.post<FlyVolumeResponse>(
-				`/v1/apps/${inputs.appName}/volumes`,
-				{
-					name: inputs.name,
-					region: inputs.region,
-					size_gb: inputs.sizeGb,
-					encrypted: true,
-				},
-			);
+			// Record the LIVE region/size, not the desired ones: adopting never
+			// moves or resizes the volume, so writing the desired values here
+			// would make Pulumi believe an unapplied change already landed,
+			// masking real drift on the very next diff.
+			const outs: FlyVolumeOutputs = {
+				...inputs,
+				region: existing.region,
+				sizeGb: existing.size_gb,
+				volumeId: existing.id,
+			};
 
-			volumeId = created.id;
+			return { id: existing.id, outs };
 		}
 
-		const outs: FlyVolumeOutputs = { ...inputs, volumeId };
+		const created = await client.post<FlyVolumeResponse>(
+			`/v1/apps/${inputs.appName}/volumes`,
+			{
+				name: inputs.name,
+				region: inputs.region,
+				size_gb: inputs.sizeGb,
+				encrypted: true,
+			},
+		);
 
-		return { id: volumeId, outs };
+		const outs: FlyVolumeOutputs = { ...inputs, volumeId: created.id };
+
+		return { id: created.id, outs };
 	}
 
 	async read(
@@ -298,7 +305,10 @@ export class FlyVolume extends pulumi.ComponentResource {
 				appName: app.id,
 				...args,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.volumeId;

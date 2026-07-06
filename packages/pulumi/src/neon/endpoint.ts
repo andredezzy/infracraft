@@ -86,6 +86,30 @@ async function findEndpointByBranch(
 export class NeonEndpointResourceProvider
 	implements pulumi.dynamic.ResourceProvider
 {
+	/**
+	 * Validates inputs at plan time. An inverted range would otherwise fail
+	 * deep inside the Neon API call with an opaque error.
+	 */
+	async check(
+		_olds: NeonEndpointInputs,
+		news: NeonEndpointInputs,
+	): Promise<pulumi.dynamic.CheckResult<NeonEndpointInputs>> {
+		const failures: pulumi.dynamic.CheckFailure[] = [];
+
+		if (
+			typeof news.minCu === "number" &&
+			typeof news.maxCu === "number" &&
+			news.maxCu < news.minCu
+		) {
+			failures.push({
+				property: "maxCu",
+				reason: `maxCu (${news.maxCu}) must be greater than or equal to minCu (${news.minCu})`,
+			});
+		}
+
+		return { inputs: news, failures };
+	}
+
 	async create(
 		inputs: NeonEndpointInputs,
 	): Promise<pulumi.dynamic.CreateResult> {
@@ -331,7 +355,10 @@ export class NeonEndpoint extends pulumi.ComponentResource {
 				branchId: branch.id,
 				...args,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.host = resource.host;

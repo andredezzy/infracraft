@@ -1,6 +1,13 @@
 import * as pulumi from "@pulumi/pulumi";
 
-/** Args for NeonProvider. Exactly one of `apiKey` and `apiKeyEnvVar` must be set. */
+/**
+ * Args for NeonProvider. Exactly one of `apiKey` and `apiKeyEnvVar` must be set.
+ *
+ * Neither `apiKey` nor `apiKeyEnvVar` is ever compared in any Neon resource's
+ * `diff()` — rotating the credential (or switching between the two forms)
+ * never triggers a replace or an in-place update on its own; it only changes
+ * which credential the next operation authenticates with.
+ */
 export interface NeonProviderArgs {
 	/** Neon API key. Mutually exclusive with `apiKeyEnvVar`. */
 	apiKey?: pulumi.Input<string>;

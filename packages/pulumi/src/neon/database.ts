@@ -51,9 +51,9 @@ interface DatabaseListResponse {
 }
 
 /**
- * Finds an existing database by name on a branch.
+ * Checks whether a database with this name already exists on a branch.
  */
-async function findDatabaseByName(
+async function databaseExists(
 	client: NeonClient,
 	projectId: string,
 	branchId: string,
@@ -104,7 +104,7 @@ export class NeonDatabaseResourceProvider
 			resolveCredential(inputs.apiKey, inputs.apiKeyEnvVar),
 		);
 
-		const exists = await findDatabaseByName(
+		const exists = await databaseExists(
 			client,
 			inputs.projectId,
 			inputs.branchId,
@@ -113,12 +113,25 @@ export class NeonDatabaseResourceProvider
 
 		if (exists) {
 			pulumi.log.info(`Adopting existing Neon database "${inputs.name}"`);
-		} else {
-			await client.post(
-				`/projects/${inputs.projectId}/branches/${inputs.branchId}/databases`,
-				{ database: { name: inputs.name, owner_name: inputs.ownerName } },
+
+			// Record the LIVE owner, not the desired one: adopting never PATCHes
+			// the owner, so writing the desired value here would make Pulumi
+			// believe an unapplied change already landed, masking real drift on
+			// the very next diff.
+			const live = await client.get<DatabaseResponse>(
+				`/projects/${inputs.projectId}/branches/${inputs.branchId}/databases/${inputs.name}`,
 			);
+
+			return {
+				id: `${inputs.branchId}/${inputs.name}`,
+				outs: { ...inputs, ownerName: live.database.owner_name },
+			};
 		}
+
+		await client.post(
+			`/projects/${inputs.projectId}/branches/${inputs.branchId}/databases`,
+			{ database: { name: inputs.name, owner_name: inputs.ownerName } },
+		);
 
 		return {
 			id: `${inputs.branchId}/${inputs.name}`,
@@ -290,7 +303,10 @@ export class NeonDatabase extends pulumi.ComponentResource {
 				name: args.name,
 				ownerName: args.ownerName,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.registerOutputs({});

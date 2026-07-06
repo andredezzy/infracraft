@@ -1,6 +1,13 @@
 import * as pulumi from "@pulumi/pulumi";
 
-/** Args for FlyProvider. Exactly one of `token` and `tokenEnvVar` must be set. */
+/**
+ * Args for FlyProvider. Exactly one of `token` and `tokenEnvVar` must be set.
+ *
+ * Neither `token` nor `tokenEnvVar` is ever compared in any Fly resource's
+ * `diff()` — rotating the credential (or switching between the two forms)
+ * never triggers a replace or an in-place update on its own; it only changes
+ * which credential the next operation authenticates with.
+ */
 export interface FlyProviderArgs {
 	/**
 	 * Fly API token (e.g. from `fly tokens create deploy`).

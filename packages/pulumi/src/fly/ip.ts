@@ -321,7 +321,10 @@ export class FlyIp extends pulumi.ComponentResource {
 				type: args.type,
 				region: args.region,
 			},
-			{ parent: this },
+			// Forward the consumer's resource options (e.g. `retainOnDelete`) to the
+			// underlying resource — Pulumi auto-inherits provider/protect from the
+			// parent component, but not everything else.
+			pulumi.mergeOptions(pulumiOpts, { parent: this }),
 		);
 
 		this.id = resource.address;

@@ -38,6 +38,8 @@ export interface RailwayDeployArgs {
 	healthcheckPath?: pulumi.Input<string>;
 	/** Seconds to wait for a healthy response; applied alongside `healthcheckPath`. */
 	healthcheckTimeout?: pulumi.Input<number>;
+	/** Explicit opt-in to deploy without a `DeploySandbox` in `dependsOn`. Defaults to `false`. */
+	allowUnsandboxed?: boolean;
 }
 
 type RailwayDeployOptions = Omit<
@@ -77,7 +79,7 @@ const MONITOR_BIN = fileURLToPath(
  * ```
  */
 export class RailwayDeploy extends pulumi.ComponentResource {
-	/** The deploy CLI's final stdout line (Railway service URL when emitted). */
+	/** The last http(s) URL token found in the deploy CLI's stdout (Railway service URL when emitted). */
 	public readonly deploymentUrl: pulumi.Output<string>;
 
 	constructor(
@@ -164,6 +166,7 @@ export class RailwayDeploy extends pulumi.ComponentResource {
 				excludePaths: args.excludePaths,
 				setup,
 				stdin: projectToken,
+				allowUnsandboxed: args.allowUnsandboxed,
 			},
 			{ parent: this, ...pulumiOpts },
 		);

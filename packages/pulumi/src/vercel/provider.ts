@@ -1,6 +1,13 @@
 import * as pulumi from "@pulumi/pulumi";
 
-/** Args for VercelProvider. Exactly one of `token` and `tokenEnvVar` must be set. */
+/**
+ * Args for VercelProvider. Exactly one of `token` and `tokenEnvVar` must be set.
+ *
+ * Neither `token` nor `tokenEnvVar` is ever compared in any Vercel resource's
+ * `diff()` — rotating the credential (or switching between the two forms)
+ * never triggers a replace or an in-place update on its own; it only changes
+ * which credential the next operation authenticates with.
+ */
 export interface VercelProviderArgs {
 	/** Vercel API bearer token. Mutually exclusive with `tokenEnvVar`. */
 	token?: pulumi.Input<string>;
