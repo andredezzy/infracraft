@@ -1,5 +1,11 @@
 # @infracraft/gate
 
+## 0.8.4
+
+### Patch Changes
+
+- Bundle @infracraft/sandbox instead of depending on it at runtime (matches @infracraft/pulumi), so gate is self-contained and carries no workspace runtime dependency.
+
 ## 0.8.3
 
 ### Patch Changes

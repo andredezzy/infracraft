@@ -55,13 +55,12 @@
     },
     "packages/gate": {
       "name": "@infracraft/gate",
-      "version": "0.8.2",
+      "version": "0.8.4",
       "bin": {
         "gate": "./dist/cli.mjs",
       },
       "dependencies": {
         "@clack/prompts": "1.5.1",
-        "@infracraft/sandbox": "0.1.1",
         "picocolors": "1.1.1",
         "yaml": "2.9.0",
       },
@@ -76,7 +75,7 @@
     },
     "packages/pulumi": {
       "name": "@infracraft/pulumi",
-      "version": "2.3.0",
+      "version": "2.6.0",
       "devDependencies": {
         "@infracraft/config-test": "workspace:*",
         "@infracraft/config-tsdown": "workspace:*",
@@ -98,7 +97,7 @@
     },
     "packages/sandbox": {
       "name": "@infracraft/sandbox",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "devDependencies": {
         "@infracraft/config-test": "workspace:*",
         "@infracraft/config-tsdown": "workspace:*",
