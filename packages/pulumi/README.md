@@ -131,13 +131,15 @@ new railway.Deploy("api-deploy", {
 | `railway.Variable` | — | Batch upsert; uses `skipDeploys` to avoid snapshot errors |
 | `railway.Volume` | — | Persistent volume; `mountPath` must be absolute. Adoption matches BOTH service and environment (never a sibling environment's volume); a newly attached volume redeploys its service so the mount lands |
 | `railway.ProjectToken` | `.token` (secret) | Environment-scoped deploy token; feed into `railway.Deploy`. Bump `tokenVersion` to rotate — see [Rotating credentials](#rotating-credentials) |
-| `railway.Deploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API (the API, not the CLI exit code, decides pass/fail). Also accepts `excludePaths`, `railpackConfig`, and `healthcheckPath` / `healthcheckTimeout` (applied by the monitor post-deploy) |
+| `railway.Deploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API (the API, not the CLI exit code, decides pass/fail). Recovers deployments Railway wedges in `INITIALIZING` (see [Stuck-deploy recovery](#railway-api-surface)). Also accepts `excludePaths`, `railpackConfig`, and `healthcheckPath` / `healthcheckTimeout` (applied by the monitor post-deploy) |
 
 **Enums:** `railway.Builder` (`RAILPACK`, `NIXPACKS`, `DOCKERFILE`, `HEROKU`, `PAKETO`), `railway.RestartPolicy` (`ON_FAILURE`, `ALWAYS`, `NEVER`)
 
 **Deploy token security:** `railway.Deploy` pipes the project token to `railway up` via the command's stdin — never in the script text. pulumi-command embeds the executed command verbatim in its failure error and Pulumi does not scrub secrets from provider diagnostics, so an inlined token would print in plaintext exactly when a deploy fails.
 
 **Healthcheck config:** Railway rejects healthcheck fields on a fresh service instance with no deployment (`serviceInstanceUpdate` fails with "Invalid input"), so a from-zero `up` cannot set them at configure time. `railway.Service` still sends them on the first attempt — an instance with existing deployments accepts them in one call — and when the API rejects, drops them for the retry and guarantees they land later instead of silently losing them: for image services the provider re-applies them right after its own `serviceInstanceDeployV2`; for code services pass `healthcheckPath` / `healthcheckTimeout` to `railway.Deploy` too, and its monitor applies them once the deployment reaches a live status. Either re-apply failing fails the resource loudly — healthcheck config is never dropped silently.
+
+**Stuck-deploy recovery:** Railway occasionally wedges a deployment in `INITIALIZING` — it never advances to `BUILDING`. Rather than burn the whole poll timeout on a deployment that will never move, the monitor detects a continuous `INITIALIZING` stretch (default 5 minutes) and redeploys from the same source onto a fresh build slot, cancels the wedged deployment, and watches the new one — the recovery an operator would otherwise do by hand. Bounded (default one attempt) so a genuinely broken deploy still fails fast rather than looping.
 
 ## Neon
 

@@ -20,6 +20,14 @@ const DEFAULTS = {
 	/** Attempts × interval to poll a resolved deployment to a terminal status. */
 	pollAttempts: 120,
 	pollIntervalMs: 10_000,
+	/**
+	 * Railway occasionally wedges a deployment in INITIALIZING (it never reaches
+	 * BUILDING). After this long stuck there, redeploy from the same source onto a
+	 * fresh build slot, then cancel it — the recovery the operator would do by hand.
+	 */
+	stuckInitializingMs: 300_000,
+	/** Cap on stuck-INITIALIZING cancel+redeploy cycles before deferring to the normal timeout. */
+	maxRedeploys: 1,
 	/** Per-request abort timeout so a hung connection can't stall the loop. */
 	requestTimeoutMs: 15_000,
 	/** Build + deploy log lines surfaced on failure. */
@@ -36,6 +44,8 @@ const QUERIES = {
 	resolveDeployments:
 		"query($p:String!,$e:String!,$s:String!){deployments(first:10,input:{projectId:$p,environmentId:$e,serviceId:$s}){edges{node{id status createdAt}}}}",
 	deploymentStatus: "query($d:String!){deployment(id:$d){status}}",
+	cancelDeployment: "mutation($d:String!){deploymentCancel(id:$d)}",
+	redeployDeployment: "mutation($d:String!){deploymentRedeploy(id:$d){id}}",
 	buildLogs:
 		"query($d:String!,$n:Int!){buildLogs(deploymentId:$d,limit:$n){message severity timestamp}}",
 	deploymentLogs:
@@ -118,6 +128,8 @@ export interface MonitorInput {
 	pollIntervalMs?: number;
 	requestTimeoutMs?: number;
 	failureLogLimit?: number;
+	stuckInitializingMs?: number;
+	maxRedeploys?: number;
 }
 
 /** Injected side-effecting collaborators (real impls in the bin, fakes in tests). */
@@ -299,6 +311,23 @@ function createRailwayApi(
 			return data?.deployment?.status;
 		},
 
+		/** Cancels a deployment (best-effort — used to clear a wedged INITIALIZING one). */
+		async cancelDeployment(id: string): Promise<void> {
+			await call<{ deploymentCancel: boolean }>(QUERIES.cancelDeployment, {
+				d: id,
+			});
+		},
+
+		/** Redeploys from a deployment's source; returns the new deployment id (undefined on failure). */
+		async redeployDeployment(id: string): Promise<string | undefined> {
+			const data = await call<{ deploymentRedeploy: { id: string } | null }>(
+				QUERIES.redeployDeployment,
+				{ d: id },
+			);
+
+			return data?.deploymentRedeploy?.id;
+		},
+
 		/** Applies healthcheck fields via `serviceInstanceUpdate`; false on any failure. */
 		async applyHealthcheck(fields: HealthcheckFields): Promise<boolean> {
 			const data = await call<{ serviceInstanceUpdate: boolean }>(
@@ -346,6 +375,11 @@ export async function monitorRailwayDeployment(
 	const pollAttempts = input.pollAttempts ?? DEFAULTS.pollAttempts;
 	const pollIntervalMs = input.pollIntervalMs ?? DEFAULTS.pollIntervalMs;
 	const failureLogLimit = input.failureLogLimit ?? DEFAULTS.failureLogLimit;
+
+	const stuckInitializingMs =
+		input.stuckInitializingMs ?? DEFAULTS.stuckInitializingMs;
+
+	const maxRedeploys = input.maxRedeploys ?? DEFAULTS.maxRedeploys;
 
 	const api = createRailwayApi(deps, {
 		apiUrl: input.apiUrl ?? DEFAULTS.apiUrl,
@@ -483,6 +517,8 @@ export async function monitorRailwayDeployment(
 
 	// 2. Poll the API to a terminal status — this, not the CLI, decides pass/fail.
 	let lastStatus: string | undefined;
+	let initializingElapsedMs = 0;
+	let redeploysUsed = 0;
 
 	for (let attempt = 0; attempt < pollAttempts; attempt++) {
 		const status = await api.deploymentStatus(deploymentId);
@@ -537,6 +573,50 @@ export async function monitorRailwayDeployment(
 					deploymentId,
 					status,
 				};
+			}
+
+			// Railway occasionally wedges a deployment in INITIALIZING — it never
+			// advances to BUILDING. After stuckInitializingMs of continuous
+			// INITIALIZING, redeploy from the same source onto a fresh build slot,
+			// cancel the wedged one, and watch the new deployment instead. Bounded
+			// by maxRedeploys; past that, fall through to the normal poll timeout.
+			if (status === "INITIALIZING") {
+				initializingElapsedMs += pollIntervalMs;
+
+				if (
+					initializingElapsedMs >= stuckInitializingMs &&
+					redeploysUsed < maxRedeploys
+				) {
+					// Reset the streak on every attempt so a failed redeploy waits
+					// another full window before retrying, not each poll.
+					initializingElapsedMs = 0;
+
+					deps.log(
+						`[infracraft] railway deployment ${deploymentId} stuck in INITIALIZING for ~${Math.round(stuckInitializingMs / 1000)}s — redeploying`,
+					);
+
+					const newDeploymentId = await api.redeployDeployment(deploymentId);
+
+					if (newDeploymentId) {
+						await api.cancelDeployment(deploymentId);
+						// Only a real redeploy consumes the budget — `call()` swallows a
+						// transient blip as `undefined`, and counting that as a used
+						// attempt would let one hiccup disable recovery for the run.
+						redeploysUsed++;
+
+						deps.log(
+							`[infracraft] redeployed ${deploymentId} → ${newDeploymentId} (${redeploysUsed}/${maxRedeploys}); monitoring the new deployment`,
+						);
+
+						deploymentId = newDeploymentId;
+					} else {
+						deps.log(
+							`[infracraft] redeploy of stuck deployment ${deploymentId} failed — will retry after another stuck window`,
+						);
+					}
+				}
+			} else {
+				initializingElapsedMs = 0;
 			}
 		}
 

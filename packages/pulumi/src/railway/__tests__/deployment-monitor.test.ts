@@ -17,10 +17,17 @@ function makeFetch(routes: {
 	deploymentLogs?: Array<{ message: string }>;
 	/** Scripted `serviceInstanceUpdate` results (one per call; last one repeats). */
 	serviceInstanceUpdate?: Array<boolean | null>;
+	/** Scripted `deploymentRedeploy` results (one per call; last one repeats). */
+	deploymentRedeploy?: Array<{ id: string } | null>;
 	/** Calls that should reject before resolving (transient network errors). */
 	rejectFirst?: number;
 }) {
-	const cursors = { deployment: 0, deployments: 0, serviceInstanceUpdate: 0 };
+	const cursors = {
+		deployment: 0,
+		deployments: 0,
+		serviceInstanceUpdate: 0,
+		deploymentRedeploy: 0,
+	};
 	let rejectsLeft = routes.rejectFirst ?? 0;
 
 	const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
@@ -42,6 +49,18 @@ function makeFetch(routes: {
 				cursors.serviceInstanceUpdate++;
 
 				return { serviceInstanceUpdate: result };
+			}
+
+			if (body.includes("deploymentRedeploy")) {
+				const seq = routes.deploymentRedeploy ?? [];
+				const node = seq[Math.min(cursors.deploymentRedeploy, seq.length - 1)];
+				cursors.deploymentRedeploy++;
+
+				return { deploymentRedeploy: node ?? null };
+			}
+
+			if (body.includes("deploymentCancel")) {
+				return { deploymentCancel: true };
 			}
 
 			if (body.includes("deploymentLogs")) {
@@ -463,5 +482,161 @@ describe("monitorRailwayDeployment", () => {
 
 		expect(result.outcome).toBe(MonitorOutcome.TIMED_OUT);
 		expect(result.failed).toBe(true);
+	});
+});
+
+describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
+	// pollIntervalMs feeds the streak accumulator; 3 INITIALIZING polls (10×3)
+	// reach the 30ms stuck threshold and trigger a redeploy.
+	const stuckInput = {
+		...baseInput,
+		pollIntervalMs: 10,
+		stuckInitializingMs: 30,
+	};
+
+	const bodiesOf = (fetchMock: typeof fetch): string[] =>
+		(fetchMock as unknown as { mock: { calls: unknown[][] } }).mock.calls.map(
+			(call) => String((call[1] as { body: string }).body),
+		);
+
+	it("redeploys a deployment wedged in INITIALIZING, cancels that one, and watches the fresh one", async () => {
+		const fetchMock = makeFetch({
+			deployment: [
+				{ status: "INITIALIZING" },
+				{ status: "INITIALIZING" },
+				{ status: "INITIALIZING" },
+				{ status: "SUCCESS" },
+			],
+			deploymentRedeploy: [{ id: "dep-2" }],
+		});
+		const { deps, lines } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(
+			{ ...stuckInput, maxRedeploys: 1 },
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
+		expect(result.deploymentId).toBe("dep-2");
+		expect(lines.some((line) => line.includes("stuck in INITIALIZING"))).toBe(
+			true,
+		);
+		expect(
+			lines.some((line) => line.includes("redeployed dep-1 → dep-2")),
+		).toBe(true);
+		// The cancel targets the WEDGED deployment (dep-1), not the fresh one.
+		expect(
+			bodiesOf(fetchMock).some(
+				(body) => body.includes("deploymentCancel") && body.includes("dep-1"),
+			),
+		).toBe(true);
+	});
+
+	it("resets the streak when INITIALIZING is interrupted by BUILDING (no redeploy)", async () => {
+		const fetchMock = makeFetch({
+			deployment: [
+				{ status: "INITIALIZING" },
+				{ status: "INITIALIZING" },
+				{ status: "BUILDING" },
+				{ status: "INITIALIZING" },
+				{ status: "INITIALIZING" },
+				{ status: "SUCCESS" },
+			],
+			deploymentRedeploy: [{ id: "dep-2" }],
+		});
+		const { deps, lines } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(
+			{ ...stuckInput, maxRedeploys: 1 },
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
+		expect(result.deploymentId).toBe("dep-1");
+		expect(lines.some((line) => line.includes("stuck in INITIALIZING"))).toBe(
+			false,
+		);
+		expect(
+			bodiesOf(fetchMock).some((body) => body.includes("deploymentRedeploy")),
+		).toBe(false);
+	});
+
+	it("does not cancel or switch when the redeploy call fails", async () => {
+		const fetchMock = makeFetch({
+			deployment: [
+				{ status: "INITIALIZING" },
+				{ status: "INITIALIZING" },
+				{ status: "INITIALIZING" },
+				{ status: "SUCCESS" },
+			],
+			deploymentRedeploy: [null],
+		});
+		const { deps, lines } = makeDeps(fetchMock);
+
+		const result = await monitorRailwayDeployment(
+			{ ...stuckInput, maxRedeploys: 1 },
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
+		expect(result.deploymentId).toBe("dep-1");
+		expect(
+			lines.some((line) => line.includes("redeploy of stuck deployment")),
+		).toBe(true);
+		// A failed redeploy must not cancel the deployment it couldn't replace.
+		expect(
+			bodiesOf(fetchMock).some((body) => body.includes("deploymentCancel")),
+		).toBe(false);
+	});
+
+	it("does not spend the budget on a transient redeploy failure — it retries the next window", async () => {
+		const { deps, lines } = makeDeps(
+			makeFetch({
+				deployment: [
+					{ status: "INITIALIZING" },
+					{ status: "INITIALIZING" },
+					{ status: "INITIALIZING" },
+					{ status: "INITIALIZING" },
+					{ status: "INITIALIZING" },
+					{ status: "INITIALIZING" },
+					{ status: "SUCCESS" },
+				],
+				// First redeploy call fails (transient); the second succeeds.
+				deploymentRedeploy: [null, { id: "dep-2" }],
+			}),
+		);
+
+		const result = await monitorRailwayDeployment(
+			{ ...stuckInput, maxRedeploys: 1 },
+			deps,
+		);
+
+		// maxRedeploys is 1, yet the transient failure did NOT burn it: the second
+		// stuck window still recovers onto dep-2.
+		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
+		expect(result.deploymentId).toBe("dep-2");
+		expect(
+			lines.filter((line) => line.includes("stuck in INITIALIZING")),
+		).toHaveLength(2);
+		expect(lines.some((line) => line.includes("will retry"))).toBe(true);
+	});
+
+	it("redeploys at most maxRedeploys times, then times out", async () => {
+		const { deps, lines } = makeDeps(
+			makeFetch({
+				deployment: [{ status: "INITIALIZING" }],
+				deploymentRedeploy: [{ id: "dep-2" }],
+			}),
+		);
+
+		const result = await monitorRailwayDeployment(
+			{ ...stuckInput, maxRedeploys: 1, pollAttempts: 8 },
+			deps,
+		);
+
+		expect(result.outcome).toBe(MonitorOutcome.TIMED_OUT);
+		expect(
+			lines.filter((line) => line.includes("stuck in INITIALIZING")),
+		).toHaveLength(1);
 	});
 });
