@@ -8,6 +8,19 @@ import type { Project } from "./project";
 import type { Provider } from "./provider";
 import { Builder, type Service } from "./service";
 
+/**
+ * `railway up`'s upload REQUEST occasionally fails at the transport level
+ * ("error sending request for url …/up"). Usually the request never reached
+ * Railway (no deployment created), so re-running is safe. A rarer post-send
+ * response timeout renders the SAME error yet MAY have created a deployment, so a
+ * retry can duplicate it — but the monitor watches the NEWEST deployment and a new
+ * `railway up` supersedes the older, bounding the worst case to a wasted build.
+ * A flaky post-upload CLI exit is a DIFFERENT error and is deliberately NOT retried.
+ */
+const UPLOAD_ATTEMPTS = 3;
+/** Seconds between upload retries. */
+const UPLOAD_BACKOFF_SECONDS = 5;
+
 export interface DeployConfig {
 	builder?: Builder;
 	startCommand?: string;
@@ -113,6 +126,13 @@ export class Deploy extends pulumi.ComponentResource {
 		// — swallowing the CLI's error entirely (live incident: a failed production
 		// `railway up` left zero diagnostics).
 		//
+		// A transport-level upload failure ("error sending request …/up") is retried up
+		// to UPLOAD_ATTEMPTS times with backoff — usually the request never reached
+		// Railway (no deployment); a rare post-send timeout could duplicate, but the
+		// monitor watches the newest deployment and Railway supersedes the older. Any
+		// other non-zero exit is left to the monitor (a flaky exit can mean the deploy
+		// DID start).
+		//
 		// IC_HC_PATH / IC_HC_TIMEOUT ride into the monitor only when the consumer
 		// configured them — the monitor applies the healthcheck post-deploy (a
 		// fresh instance rejects it pre-deploy) and fails loudly if that errors.
@@ -143,7 +163,7 @@ export class Deploy extends pulumi.ComponentResource {
 				return bindings.length > 0 ? `${bindings.join(" ")} ` : "";
 			});
 
-		const cli = pulumi.interpolate`IFS= read -r IC_TOK || true; IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); if IC_UP_OUT=$(RAILWAY_TOKEN="$IC_TOK" railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); then IC_UP_EXIT=0; else IC_UP_EXIT=$?; fi; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK="$IC_TOK" IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE ${healthcheckBindings}node "${MONITOR_BIN}"`;
+		const cli = pulumi.interpolate`IFS= read -r IC_TOK || true; IC_SINCE=$(node -e "process.stdout.write(String(Date.now()))"); IC_UP_EXIT=0; IC_TRY=1; while [ "$IC_TRY" -le ${UPLOAD_ATTEMPTS} ]; do if IC_UP_OUT=$(RAILWAY_TOKEN="$IC_TOK" railway up --detach --json --project ${project.id} --service ${service.id} --environment ${environment.id} 2>&1); then IC_UP_EXIT=0; break; else IC_UP_EXIT=$?; fi; case "$IC_UP_OUT" in *"error sending request"*) if [ "$IC_TRY" -lt ${UPLOAD_ATTEMPTS} ]; then IC_TRY=$((IC_TRY+1)); sleep ${UPLOAD_BACKOFF_SECONDS}; continue; fi;; esac; break; done; printf '%s\\n' "$IC_UP_OUT"; if [ -n "$INFRACRAFT_SKIP_DEPLOY_WAIT" ]; then exit "$IC_UP_EXIT"; fi; IC_UP_OUT="$IC_UP_OUT" IC_UP_EXIT=$IC_UP_EXIT IC_TOK="$IC_TOK" IC_PROJ=${project.id} IC_ENV=${environment.id} IC_SVC=${service.id} IC_SINCE=$IC_SINCE ${healthcheckBindings}node "${MONITOR_BIN}"`;
 
 		// `printf '%s'` (not a bare format string) so railpack values containing %
 		// are literal; the JSON is single-quote-escaped the POSIX way (' -> '\'').

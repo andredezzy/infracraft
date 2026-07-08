@@ -131,7 +131,7 @@ new railway.Deploy("api-deploy", {
 | `railway.Variable` | — | Batch upsert; uses `skipDeploys` to avoid snapshot errors |
 | `railway.Volume` | — | Persistent volume; `mountPath` must be absolute. Adoption matches BOTH service and environment (never a sibling environment's volume); a newly attached volume redeploys its service so the mount lands |
 | `railway.ProjectToken` | `.token` (secret) | Environment-scoped deploy token; feed into `railway.Deploy`. Bump `tokenVersion` to rotate — see [Rotating credentials](#rotating-credentials) |
-| `railway.Deploy` | `.deploymentUrl` | Runs `railway up --detach`, then monitors the deployment via the Railway API (the API, not the CLI exit code, decides pass/fail). Recovers deployments Railway wedges in `INITIALIZING` (see [Stuck-deploy recovery](#railway-api-surface)). Also accepts `excludePaths`, `railpackConfig`, and `healthcheckPath` / `healthcheckTimeout` (applied by the monitor post-deploy) |
+| `railway.Deploy` | `.deploymentUrl` | Runs `railway up --detach` (retrying a transient upload failure), then monitors the deployment via the Railway API (the API, not the CLI exit code, decides pass/fail). Recovers deployments Railway wedges in `INITIALIZING` (see [Stuck-deploy recovery](#railway-api-surface)). Also accepts `excludePaths`, `railpackConfig`, and `healthcheckPath` / `healthcheckTimeout` (applied by the monitor post-deploy) |
 
 **Enums:** `railway.Builder` (`RAILPACK`, `NIXPACKS`, `DOCKERFILE`, `HEROKU`, `PAKETO`), `railway.RestartPolicy` (`ON_FAILURE`, `ALWAYS`, `NEVER`)
 

@@ -107,8 +107,23 @@ describe("railway.Deploy", () => {
 		// The capture is if/else-guarded: under `set -e`, a bare VAR=$(cmd); EXIT=$?
 		// dies at the assignment on failure and swallows the CLI's error output.
 		expect(create).toContain("if IC_UP_OUT=$(");
-		expect(create).toContain("then IC_UP_EXIT=0; else IC_UP_EXIT=$?; fi");
+		// The else is load-bearing: `IC_UP_EXIT=$?` after `if…fi` would capture the
+		// if-statement's exit (0 on a false condition), not the CLI's failure code.
+		expect(create).toContain(
+			"then IC_UP_EXIT=0; break; else IC_UP_EXIT=$?; fi",
+		);
 		expect(create).not.toContain('IC_UP_OUT=$("');
+		// A transport-level upload failure ("error sending request" — no deployment
+		// created) is retried, bounded + with backoff; NO other exit is retried, so a
+		// flaky post-upload exit (deployment may exist) can never double-deploy.
+		expect(create).toContain('IC_TRY=1; while [ "$IC_TRY" -le 3 ]');
+		expect(create).toContain("IC_TRY=$((IC_TRY+1))");
+		// No `seq` dependency: a missing/failed `seq` would expand empty, run zero
+		// iterations, never invoke `railway up`, and falsely report success.
+		expect(create).not.toContain("seq ");
+		expect(create).toContain('case "$IC_UP_OUT" in *"error sending request"*)');
+		expect(create).toContain('[ "$IC_TRY" -lt 3 ]');
+		expect(create).toContain("sleep 5");
 		expect(create).toContain("bin/monitor-deployment.mjs");
 		expect(create).not.toContain("railway up --ci");
 		expect(create).not.toContain("node -e '"); // poller is a real module now, not inline
