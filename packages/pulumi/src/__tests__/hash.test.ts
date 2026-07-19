@@ -4,7 +4,7 @@ import * as path from "node:path";
 import * as pulumi from "@pulumi/pulumi";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
-import { hash, hashApp } from "../hash";
+import { hash } from "../hash";
 
 function resolve(output: pulumi.Output<string>): Promise<string> {
 	return new Promise((res) => {
@@ -72,7 +72,7 @@ describe("hash", () => {
 		});
 	});
 
-	describe("hashApp (app + transitive workspace deps)", () => {
+	describe("path collections", () => {
 		let root: string;
 
 		const write = (rel: string, body: string) => {
@@ -82,52 +82,72 @@ describe("hash", () => {
 		};
 
 		beforeEach(() => {
-			root = fs.mkdtempSync(path.join(os.tmpdir(), "hashapp-"));
-
-			// web -> @acme/ui -> @acme/core ; @acme/other is unrelated.
-			write(
-				"apps/web/package.json",
-				'{"name":"@acme/web","dependencies":{"@acme/ui":"workspace:*"}}',
-			);
-
-			write("apps/web/index.ts", "export const web = 1;");
-
-			write(
-				"packages/ui/package.json",
-				'{"name":"@acme/ui","dependencies":{"@acme/core":"workspace:*"}}',
-			);
-
-			write("packages/ui/ui.ts", "export const ui = 1;");
-			write("packages/core/package.json", '{"name":"@acme/core"}');
-			write("packages/core/core.ts", "export const core = 1;");
-			write("packages/other/package.json", '{"name":"@acme/other"}');
-			write("packages/other/other.ts", "export const other = 1;");
+			root = fs.mkdtempSync(path.join(os.tmpdir(), "hash-paths-"));
+			write("a/one.ts", "one");
+			write("b/two.ts", "two");
 		});
 
 		afterEach(() => {
 			fs.rmSync(root, { recursive: true, force: true });
 		});
 
-		it("is deterministic", () => {
-			expect(hashApp(root, "apps/web")).toBe(hashApp(root, "apps/web"));
+		it("is deterministic across calls", () => {
+			const dirs = [path.join(root, "a"), path.join(root, "b")];
+
+			expect(hash(dirs, { base: root })).toBe(hash(dirs, { base: root }));
 		});
 
-		it("retriggers when a TRANSITIVE dep (@acme/core via @acme/ui) changes", () => {
-			const before = hashApp(root, "apps/web");
-			write("packages/core/core.ts", "export const core = 2;");
-			expect(hashApp(root, "apps/web")).not.toBe(before);
+		it("treats caller order as semantic", () => {
+			const forward = hash([path.join(root, "a"), path.join(root, "b")], {
+				base: root,
+			});
+
+			const reversed = hash([path.join(root, "b"), path.join(root, "a")], {
+				base: root,
+			});
+
+			expect(forward).not.toBe(reversed);
 		});
 
-		it("does NOT retrigger when an unrelated package (@acme/other) changes", () => {
-			const before = hashApp(root, "apps/web");
-			write("packages/other/other.ts", "export const other = 2;");
-			expect(hashApp(root, "apps/web")).toBe(before);
+		it("labels entries relative to base, so moving content between entries changes the digest", () => {
+			const dirs = [path.join(root, "a"), path.join(root, "b")];
+			const before = hash(dirs, { base: root });
+
+			// Same bytes, different owning entry.
+			fs.rmSync(path.join(root, "a", "one.ts"));
+			write("b/one.ts", "one");
+			fs.rmSync(path.join(root, "b", "two.ts"));
+			write("a/two.ts", "two");
+
+			expect(hash(dirs, { base: root })).not.toBe(before);
 		});
 
-		it("retriggers when the app's own source changes", () => {
-			const before = hashApp(root, "apps/web");
-			write("apps/web/index.ts", "export const web = 2;");
-			expect(hashApp(root, "apps/web")).not.toBe(before);
+		it("digest never contains the absolute base prefix", () => {
+			const copy = fs.mkdtempSync(path.join(os.tmpdir(), "hash-paths-copy-"));
+			fs.cpSync(root, copy, { recursive: true });
+
+			const original = hash([path.join(root, "a")], { base: root });
+			const relocated = hash([path.join(copy, "a")], { base: copy });
+
+			fs.rmSync(copy, { recursive: true, force: true });
+
+			expect(original).toBe(relocated);
+		});
+
+		it("accepts single-file entries", () => {
+			const file = path.join(root, "a", "one.ts");
+			const labeled = hash([file], { base: root });
+
+			expect(labeled).toHaveLength(64);
+			expect(labeled).toBe(hash([file], { base: root }));
+
+			write("a/one.ts", "changed");
+
+			expect(hash([file], { base: root })).not.toBe(labeled);
+		});
+
+		it("throws on a missing path instead of silently hashing nothing", () => {
+			expect(() => hash(path.join(root, "missing"))).toThrow();
 		});
 	});
 

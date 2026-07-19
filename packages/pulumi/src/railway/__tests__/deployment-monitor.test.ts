@@ -28,6 +28,7 @@ function makeFetch(routes: {
 		serviceInstanceUpdate: 0,
 		deploymentRedeploy: 0,
 	};
+
 	let rejectsLeft = routes.rejectFirst ?? 0;
 
 	const fetchMock = vi.fn(async (_url: string, init: { body: string }) => {
@@ -509,6 +510,7 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 			],
 			deploymentRedeploy: [{ id: "dep-2" }],
 		});
+
 		const { deps, lines } = makeDeps(fetchMock);
 
 		const result = await monitorRailwayDeployment(
@@ -518,12 +520,15 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 
 		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
 		expect(result.deploymentId).toBe("dep-2");
+
 		expect(lines.some((line) => line.includes("stuck in INITIALIZING"))).toBe(
 			true,
 		);
+
 		expect(
 			lines.some((line) => line.includes("redeployed dep-1 → dep-2")),
 		).toBe(true);
+
 		// The cancel targets the WEDGED deployment (dep-1), not the fresh one.
 		expect(
 			bodiesOf(fetchMock).some(
@@ -544,6 +549,7 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 			],
 			deploymentRedeploy: [{ id: "dep-2" }],
 		});
+
 		const { deps, lines } = makeDeps(fetchMock);
 
 		const result = await monitorRailwayDeployment(
@@ -553,9 +559,11 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 
 		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
 		expect(result.deploymentId).toBe("dep-1");
+
 		expect(lines.some((line) => line.includes("stuck in INITIALIZING"))).toBe(
 			false,
 		);
+
 		expect(
 			bodiesOf(fetchMock).some((body) => body.includes("deploymentRedeploy")),
 		).toBe(false);
@@ -571,6 +579,7 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 			],
 			deploymentRedeploy: [null],
 		});
+
 		const { deps, lines } = makeDeps(fetchMock);
 
 		const result = await monitorRailwayDeployment(
@@ -580,9 +589,11 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 
 		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
 		expect(result.deploymentId).toBe("dep-1");
+
 		expect(
 			lines.some((line) => line.includes("redeploy of stuck deployment")),
 		).toBe(true);
+
 		// A failed redeploy must not cancel the deployment it couldn't replace.
 		expect(
 			bodiesOf(fetchMock).some((body) => body.includes("deploymentCancel")),
@@ -615,9 +626,11 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 		// stuck window still recovers onto dep-2.
 		expect(result.outcome).toBe(MonitorOutcome.SUCCESS);
 		expect(result.deploymentId).toBe("dep-2");
+
 		expect(
 			lines.filter((line) => line.includes("stuck in INITIALIZING")),
 		).toHaveLength(2);
+
 		expect(lines.some((line) => line.includes("will retry"))).toBe(true);
 	});
 
@@ -635,6 +648,7 @@ describe("monitorRailwayDeployment — stuck-INITIALIZING recovery", () => {
 		);
 
 		expect(result.outcome).toBe(MonitorOutcome.TIMED_OUT);
+
 		expect(
 			lines.filter((line) => line.includes("stuck in INITIALIZING")),
 		).toHaveLength(1);

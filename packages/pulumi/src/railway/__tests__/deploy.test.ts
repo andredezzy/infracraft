@@ -107,11 +107,13 @@ describe("railway.Deploy", () => {
 		// The capture is if/else-guarded: under `set -e`, a bare VAR=$(cmd); EXIT=$?
 		// dies at the assignment on failure and swallows the CLI's error output.
 		expect(create).toContain("if IC_UP_OUT=$(");
+
 		// The else is load-bearing: `IC_UP_EXIT=$?` after `if…fi` would capture the
 		// if-statement's exit (0 on a false condition), not the CLI's failure code.
 		expect(create).toContain(
 			"then IC_UP_EXIT=0; break; else IC_UP_EXIT=$?; fi",
 		);
+
 		expect(create).not.toContain('IC_UP_OUT=$("');
 		// A transport-level upload failure ("error sending request" — no deployment
 		// created) is retried, bounded + with backoff; NO other exit is retried, so a

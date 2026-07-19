@@ -13,15 +13,30 @@ const DEFAULT_IGNORE = new Set([
 ]);
 
 interface HashOptions {
+	/** Directory walks only: entry names to skip. Overrides the default build/VCS skip set. */
 	ignore?: Set<string>;
+	/**
+	 * When set, every path entry is labeled inside the digest by its path
+	 * RELATIVE to this base (`\0<relative>\0` framing) before its content —
+	 * so moving content between entries changes the hash, while absolute
+	 * machine-specific prefixes never enter it. Callers hashing a multi-path
+	 * collection should pass their stable root here.
+	 */
+	base?: string;
 }
 
 /**
  * Produces a stable SHA-256 hex digest for use as a resource/deploy trigger,
- * from either a source directory or an environment map.
+ * from filesystem paths or an environment map.
  *
- * - **Directory** (`string`): recursively hashes file names + contents (build
- *   and VCS directories skipped). Synchronous — returns a plain `string`.
+ * - **Path(s)** (`string | string[]`): each entry may be a directory
+ *   (recursively hashed: file names + contents, build and VCS directories
+ *   skipped) or a single file (content; name when unlabeled). Entries fold
+ *   into the digest in CALLER order — pass a sorted collection when order is
+ *   not semantic. With `options.base`, each entry is prefixed by its relative
+ *   path (see {@link HashOptions.base}). Synchronous — returns a plain
+ *   `string`. A missing path throws: a trigger silently hashing nothing would
+ *   mask the very changes it exists to detect.
  * - **Env map** (`Record<string, Input<string>>`): resolves the values, sorts
  *   by key, and hashes them into a single non-secret `Output<string>`. Passing
  *   secret `Output`s straight into a dynamic resource's inputs intermittently
@@ -32,21 +47,24 @@ interface HashOptions {
  *   parallelism. Exposing the digest is safe: it is a one-way hash of
  *   high-entropy secrets.
  *
- * @param input A source directory path, or a map of env var name to value.
- * @param options Directory mode only: `ignore` overrides the default skip set.
- * @returns `string` for a directory, `Output<string>` for an env map.
+ * @param input A path, an ordered collection of paths, or an env map.
+ * @param options Path mode only: `ignore` and `base` — see {@link HashOptions}.
+ * @returns `string` for paths, `Output<string>` for an env map.
  * @example
  * triggers: [hash(appDir), hash(env)]
+ * @example
+ * // A dependency closure the CALLER resolved, labeled relative to the root:
+ * hash(closureDirectories.sort(), { base: monorepoRoot })
  */
-export function hash(directory: string, options?: HashOptions): string;
+export function hash(paths: string | string[], options?: HashOptions): string;
 export function hash(
 	env: Record<string, pulumi.Input<string>>,
 ): pulumi.Output<string>;
 export function hash(
-	input: string | Record<string, pulumi.Input<string>>,
+	input: string | string[] | Record<string, pulumi.Input<string>>,
 	options?: HashOptions,
 ): string | pulumi.Output<string> {
-	if (typeof input !== "string") {
+	if (typeof input !== "string" && !Array.isArray(input)) {
 		const keys = Object.keys(input).sort();
 
 		return pulumi.unsecret(
@@ -62,10 +80,28 @@ export function hash(
 		);
 	}
 
+	const entries = typeof input === "string" ? [input] : input;
 	const ignore = options?.ignore ?? DEFAULT_IGNORE;
 	const digest = crypto.createHash("sha256");
 
-	hashDirInto(digest, input, ignore);
+	for (const entry of entries) {
+		if (options?.base !== undefined) {
+			digest.update(`\0${path.relative(options.base, entry)}\0`);
+		}
+
+		const stats = fs.statSync(entry);
+
+		if (stats.isDirectory()) {
+			hashDirInto(digest, entry, ignore);
+		} else if (options?.base !== undefined) {
+			// The label above already identifies the file.
+			digest.update(fs.readFileSync(entry));
+		} else {
+			// Unlabeled file: name + content, mirroring the walk's framing.
+			digest.update(path.basename(entry));
+			digest.update(fs.readFileSync(entry));
+		}
+	}
 
 	return digest.digest("hex");
 }
@@ -92,119 +128,4 @@ function hashDirInto(
 			digest.update(fs.readFileSync(fullPath));
 		}
 	}
-}
-
-interface WorkspacePackage {
-	name?: string;
-	dependencies?: Record<string, string>;
-	devDependencies?: Record<string, string>;
-}
-
-function readWorkspacePackage(directory: string): WorkspacePackage | undefined {
-	try {
-		return JSON.parse(
-			fs.readFileSync(path.join(directory, "package.json"), "utf8"),
-		) as WorkspacePackage;
-	} catch {
-		return undefined;
-	}
-}
-
-/**
- * Indexes every workspace package by its `package.json` `name` -> directory, by
- * scanning `apps/*` and `packages/*`. Robust to a package whose directory name
- * differs from its published name.
- */
-function buildWorkspaceIndex(monorepoRoot: string): Map<string, string> {
-	const index = new Map<string, string>();
-
-	for (const group of ["apps", "packages"]) {
-		const base = path.join(monorepoRoot, group);
-
-		let entries: fs.Dirent[];
-
-		try {
-			entries = fs.readdirSync(base, { withFileTypes: true });
-		} catch {
-			continue;
-		}
-
-		for (const entry of entries) {
-			if (!entry.isDirectory()) {
-				continue;
-			}
-
-			const directory = path.join(base, entry.name);
-			const pkg = readWorkspacePackage(directory);
-
-			if (pkg?.name) {
-				index.set(pkg.name, directory);
-			}
-		}
-	}
-
-	return index;
-}
-
-/**
- * Hashes an app's source AND every workspace package it depends on
- * (transitively), for use as a redeploy trigger. Resolving the dependency
- * closure from each `package.json` means a change to a shared `packages/*` an
- * app depends on correctly retriggers that app's deploy — and adding a new app
- * needs no hand-maintained list of which packages to hash.
- *
- * @param monorepoRoot Absolute repo root (holds `apps/` and `packages/`).
- * @param appDirectory The app to hash, relative to the root (e.g. `apps/api`).
- * @example
- * triggers: [hashApp(monorepoRoot, "apps/api"), hash(env)]
- */
-export function hashApp(
-	monorepoRoot: string,
-	appDirectory: string,
-	options?: HashOptions,
-): string {
-	const ignore = options?.ignore ?? DEFAULT_IGNORE;
-	const index = buildWorkspaceIndex(monorepoRoot);
-
-	const start = path.join(monorepoRoot, appDirectory);
-	const visited = new Set<string>();
-	const queue = [start];
-
-	while (queue.length > 0) {
-		const directory = queue.pop();
-
-		if (!directory || visited.has(directory)) {
-			continue;
-		}
-
-		visited.add(directory);
-
-		const pkg = readWorkspacePackage(directory);
-
-		if (!pkg) {
-			continue;
-		}
-
-		const deps = { ...pkg.dependencies, ...pkg.devDependencies };
-
-		for (const depName of Object.keys(deps)) {
-			const depDirectory = index.get(depName);
-
-			// Only workspace packages are in the index — external deps are ignored.
-			if (depDirectory && !visited.has(depDirectory)) {
-				queue.push(depDirectory);
-			}
-		}
-	}
-
-	const digest = crypto.createHash("sha256");
-
-	// Sort by directory so the digest is independent of traversal order; include
-	// the relative path so moving content between packages changes the hash.
-	for (const directory of [...visited].sort()) {
-		digest.update(`\0${path.relative(monorepoRoot, directory)}\0`);
-		hashDirInto(digest, directory, ignore);
-	}
-
-	return digest.digest("hex");
 }
