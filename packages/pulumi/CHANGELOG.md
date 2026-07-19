@@ -1,5 +1,11 @@
 # @infracraft/pulumi
 
+## 3.0.0
+
+### Major Changes
+
+- 230a28c: Generalize `hash` to ordered path collections (directories AND single files, with a `base` option labeling entries by relative path) and remove `hashApp` — dependency-closure resolution is consumer domain knowledge, not library concern. Migrate `hashApp(root, dir)` to closure resolution in your own code feeding `hash(sortedDirs, { base: root })`; the digest framing is unchanged, so identically-fed collections produce identical hashes.
+
 ## 2.9.0
 
 ### Minor Changes
